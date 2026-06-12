@@ -19,7 +19,7 @@ export function buildFacturasWhatsAppMessage(
   tenantName: string,
   razonsocial: string,
   cuentaCorriente: number,
-  facturas: Pick<Factura, "id" | "tipo" | "importe" | "estado">[],
+  facturas: Pick<Factura, "id" | "tipo" | "importe" | "estado" | "pagado">[],
   formatCurrency: (n: number) => string,
 ): string {
   const header = `Hola ${tenantName}, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
@@ -27,10 +27,15 @@ export function buildFacturasWhatsAppMessage(
     intent === "pagar"
       ? "Quiero coordinar el pago de los siguientes comprobantes:"
       : "Tengo una consulta sobre los siguientes comprobantes:"
+  const saldoDe = (f: Pick<Factura, "importe" | "pagado">) => f.importe - (f.pagado ?? 0)
   const lines = facturas
-    .map((f) => `• ${f.id} — ${f.tipo} — ${formatCurrency(f.importe)} (${FACTURA_ESTADO_LABELS[f.estado]})`)
+    .map((f) => {
+      const parcial = f.pagado && f.pagado > 0 && f.pagado < f.importe
+      const monto = parcial ? `saldo ${formatCurrency(saldoDe(f))}` : formatCurrency(f.importe)
+      return `• ${f.id} — ${f.tipo} — ${monto} (${FACTURA_ESTADO_LABELS[f.estado]})`
+    })
     .join("\n")
-  const total = facturas.reduce((sum, f) => sum + f.importe, 0)
+  const total = facturas.reduce((sum, f) => sum + saldoDe(f), 0)
   const footer = intent === "consulta" ? "\n\nMi consulta: " : ""
   return `${header}\n\n${intro}\n${lines}\n\nTotal: ${formatCurrency(total)}${footer}`
 }

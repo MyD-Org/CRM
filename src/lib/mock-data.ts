@@ -13,7 +13,7 @@ export const mockCliente: Cliente = {
 
 export const mockFacturas: Factura[] = [
   { id: "FA-0001-00012876", tipo: "Factura A", emision: "28/05/2026", vencimiento: "27/06/2026", importe: 98252, estado: "pendiente" },
-  { id: "FA-0001-00012740", tipo: "Factura A", emision: "12/05/2026", vencimiento: "11/06/2026", importe: 189728, estado: "pendiente" },
+  { id: "FA-0001-00012740", tipo: "Factura A", emision: "12/05/2026", vencimiento: "11/06/2026", importe: 189728, estado: "pendiente", pagado: 100000 },
   { id: "FA-0001-00012588", tipo: "Factura A", emision: "22/04/2026", vencimiento: "22/05/2026", importe: 151250, estado: "vencida" },
   { id: "FA-0001-00012511", tipo: "Factura A", emision: "15/04/2026", vencimiento: "15/05/2026", importe: 105959.70, estado: "vencida" },
   { id: "FA-0001-00012390", tipo: "Factura A", emision: "28/03/2026", vencimiento: "27/04/2026", importe: 90750, estado: "pagada" },

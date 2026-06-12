@@ -70,6 +70,17 @@ function isoToLocal(iso: string): Date {
   return new Date(y, m - 1, d)
 }
 
+// ── Pagos parciales ──────────────────────────────────────────────────────────
+
+function esPagoParcial(f: Factura) {
+  return Boolean(f.pagado && f.pagado > 0 && f.pagado < f.importe)
+}
+
+/** Lo que realmente se adeuda de la factura (importe menos pagos registrados) */
+function saldoDe(f: Factura) {
+  return f.importe - (f.pagado ?? 0)
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -333,7 +344,7 @@ function SummaryCard({
             style={{ borderTop: "1px solid var(--border)", cursor: "pointer" }}
           >
             <span className="truncate max-w-[120px]" style={{ color: "var(--ink-soft)" }}>{f.id}</span>
-            <span className="font-medium" style={{ color: "var(--ink)" }}>{fmt(f.importe)}</span>
+            <span className="font-medium" style={{ color: "var(--ink)" }}>{fmt(saldoDe(f))}</span>
           </button>
         ))}
         {count > 2 && (
@@ -449,7 +460,7 @@ function FacturasTable({
 
   const allSelected = filtered.length > 0 && filtered.every((f) => selected.has(f.id))
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
-  const selectedTotal = selectedFacturas.reduce((s, f) => s + f.importe, 0)
+  const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
 
   function toggleAll() {
     if (allSelected) {
@@ -552,9 +563,32 @@ function FacturasTable({
                   </td>
                   <td className="py-2.5 px-3 hidden sm:table-cell text-xs" style={{ color: "var(--ink-soft)" }}>{f.emision}</td>
                   <td className="py-2.5 px-3 text-xs" style={{ color: "var(--ink-soft)" }}>{f.vencimiento}</td>
-                  <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--ink)" }}>{fmt(f.importe)}</td>
+                  <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                    {esPagoParcial(f) ? (
+                      <div className="inline-flex flex-col items-end gap-1">
+                        <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{fmt(f.importe)}</span>
+                        <span className="block rounded-full overflow-hidden" style={{ width: 92, height: 4, background: "var(--border)" }}>
+                          <span
+                            className="block h-full rounded-full"
+                            style={{ width: `${Math.round(((f.pagado ?? 0) / f.importe) * 100)}%`, background: "var(--blue)" }}
+                          />
+                        </span>
+                        <span className="font-bold" style={{ fontSize: 12.5 }}>Saldo {fmt(saldoDe(f))}</span>
+                      </div>
+                    ) : (
+                      fmt(f.importe)
+                    )}
+                  </td>
                   <td className="py-2.5 px-3 hidden md:table-cell">
-                    <FacturaBadge estado={f.estado} />
+                    <div className="inline-flex flex-col items-start gap-1">
+                      <FacturaBadge estado={f.estado} />
+                      {esPagoParcial(f) && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--blue)" }}>
+                          <span className="rounded-full" style={{ width: 5, height: 5, background: "var(--blue)" }} />
+                          Pago parcial
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5 px-3">
                     <div className="flex items-center justify-end gap-2">
@@ -1816,6 +1850,21 @@ function FacturaModal({
               <span>Total</span>
               <span className="tabular-nums">{fmt(factura.importe)}</span>
             </div>
+            {esPagoParcial(factura) && (
+              <>
+                <div className="flex justify-between text-xs" style={{ color: "var(--green)" }}>
+                  <span>Pagos registrados</span>
+                  <span className="tabular-nums">−{fmt(factura.pagado ?? 0)}</span>
+                </div>
+                <div
+                  className="flex justify-between text-sm font-bold pt-2"
+                  style={{ borderTop: "2px solid var(--border)", color: "var(--blue)" }}
+                >
+                  <span>Saldo pendiente</span>
+                  <span className="tabular-nums">{fmt(saldoDe(factura))}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

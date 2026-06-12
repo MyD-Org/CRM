@@ -18,6 +18,8 @@ export interface Factura {
   vencimiento: string
   importe: number
   estado: FacturaEstado
+  /** Monto ya pagado — si es > 0 y < importe, la factura tiene pago parcial */
+  pagado?: number
 }
 
 export interface Pago {
