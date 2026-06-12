@@ -1434,6 +1434,17 @@ function Toolbar(props: ToolbarProps) {
               className="text-xs outline-none bg-transparent"
               style={{ width: 160, color: "var(--ink)" }}
             />
+            {search && (
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setSearch(""); searchRef.current?.focus() }}
+                aria-label="Limpiar búsqueda"
+                className="flex items-center justify-center shrink-0 transition-opacity hover:opacity-70"
+                style={{ color: "var(--blue)" }}
+              >
+                <X size={11} strokeWidth={2.5} />
+              </button>
+            )}
           </div>
         ) : (
           <button
