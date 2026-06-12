@@ -12,7 +12,7 @@ import {
   type WhatsAppFacturaIntent,
   type WhatsAppPresupuestoIntent,
 } from "@/lib/whatsapp"
-import { ShoppingCart, LogOut, CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown } from "lucide-react"
+import { ShoppingCart, LogOut, CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown, CheckSquare } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,12 @@ function parseLocalDate(value: string | null | undefined) {
   const [day, month, year] = value.split("/").map(Number)
   if (!day || !month || !year) return null
   return new Date(year, month - 1, day)
+}
+
+// ISO "2026-06-15" → local midnight (evita el bug de UTC que resta un día en Argentina)
+function isoToLocal(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number)
+  return new Date(y, m - 1, d)
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -429,8 +435,8 @@ function FacturasTable({
   }
 
   const filtered = useMemo(() => {
-    const desde = fromDate ? new Date(fromDate) : null
-    const hasta = toDate ? new Date(toDate) : null
+    const desde = fromDate ? isoToLocal(fromDate) : null
+    const hasta = toDate ? isoToLocal(toDate) : null
     return facturas.filter((f) => {
       const matchSearch = !search || f.id.toLowerCase().includes(search.toLowerCase()) || f.tipo.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(f.estado)
@@ -499,6 +505,7 @@ function FacturasTable({
           onClear={() => setSelected(new Set())}
           onDownload={() => alert("Descarga de facturas: próximamente")}
           onWhatsapp={() => openWhatsAppModal("pagar")}
+          itemLabel="factura"
         />
       )}
 
@@ -572,11 +579,6 @@ function FacturasTable({
           tenantName={tenantName}
           logoSrc={logoSrc}
           onClose={() => setModalFactura(null)}
-          onWhatsapp={(intent) => {
-            const f = modalFactura
-            setModalFactura(null)
-            setWhatsappModal({ facturas: [f], intent })
-          }}
         />
       )}
 
@@ -610,8 +612,8 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
   const searchRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
-    const desde = fromDate ? new Date(fromDate) : null
-    const hasta = toDate ? new Date(toDate) : null
+    const desde = fromDate ? isoToLocal(fromDate) : null
+    const hasta = toDate ? isoToLocal(toDate) : null
     return pagos.filter((p) => {
       const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturaAsociada.toLowerCase().includes(search.toLowerCase())
       const field = p.fecha
@@ -647,7 +649,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
 
   return (
     <>
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-2">
         <Toolbar
           searchOpen={searchOpen}
           setSearchOpen={(v) => { setSearchOpen(v); if (v) setTimeout(() => searchRef.current?.focus(), 50) }}
@@ -664,17 +666,19 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           filterValue="todos"
           setFilterValue={() => {}}
           hideFilter
+          extraActions={
+            <button
+              onClick={() => setShowAdjuntar(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium transition-all shrink-0"
+              style={{ background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue-soft)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue)"; e.currentTarget.style.color = "white" }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--blue-soft)"; e.currentTarget.style.color = "var(--blue)" }}
+            >
+              <Plus size={14} strokeWidth={1.6} color="currentColor" />
+              Adjuntar comprobante
+            </button>
+          }
         />
-        <button
-          onClick={() => setShowAdjuntar(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium transition-all"
-          style={{ background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue-soft)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue)"; e.currentTarget.style.color = "white" }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--blue-soft)"; e.currentTarget.style.color = "var(--blue)" }}
-        >
-          <Plus size={14} strokeWidth={1.6} color="currentColor" />
-          Adjuntar comprobante
-        </button>
       </div>
 
       {(
@@ -684,6 +688,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           onClear={() => setSelected(new Set())}
           onDownload={() => alert("Descarga de recibos: próximamente")}
           onWhatsapp={() => setWspModal(true)}
+          itemLabel="recibo"
         />
       )}
 
@@ -817,8 +822,8 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
   }
 
   const filtered = useMemo(() => {
-    const desde = fromDate ? new Date(fromDate) : null
-    const hasta = toDate ? new Date(toDate) : null
+    const desde = fromDate ? isoToLocal(fromDate) : null
+    const hasta = toDate ? isoToLocal(toDate) : null
     return presupuestos.filter((p) => {
       const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(p.estado)
@@ -883,6 +888,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
           onClear={() => setSelected(new Set())}
           onDownload={() => alert("Descarga: próximamente")}
           onWhatsapp={() => setWspModal("avanzar")}
+          itemLabel="presupuesto"
         />
       )}
 
@@ -990,6 +996,7 @@ interface ToolbarProps {
   onToDateChange?: (v: string) => void
   dateFilterField?: "emision" | "vencimiento"
   onDateFilterFieldChange?: (field: "emision" | "vencimiento") => void
+  extraActions?: React.ReactNode
 }
 
 function Toolbar(props: ToolbarProps) {
@@ -1013,11 +1020,48 @@ function Toolbar(props: ToolbarProps) {
     onToDateChange,
     dateFilterField,
     onDateFilterFieldChange,
+    extraActions,
   } = props
 
   const [dateOpen, setDateOpen] = useState(false)
+  const [datePanelPos, setDatePanelPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   const dateButtonRef = useRef<HTMLButtonElement | null>(null)
   const datePanelRef = useRef<HTMLDivElement | null>(null)
+
+  function computeDatePanelPos() {
+    if (!dateButtonRef.current) return
+    const rect = dateButtonRef.current.getBoundingClientRect()
+    const panelWidth = 252
+    const panelHeight = datePanelRef.current?.offsetHeight ?? 380
+    const left = Math.min(rect.left, window.innerWidth - panelWidth - 12)
+    // Si no entra abajo, abrir hacia arriba; si tampoco, clavar al borde inferior
+    let top = rect.bottom + 8
+    if (top + panelHeight > window.innerHeight - 8) {
+      top = rect.top - panelHeight - 8
+      if (top < 8) top = window.innerHeight - panelHeight - 8
+    }
+    setDatePanelPos({ top: Math.max(8, top), left: Math.max(8, left) })
+  }
+
+  function toggleDateOpen() {
+    if (!dateOpen) computeDatePanelPos()
+    setDateOpen((prev) => !prev)
+  }
+
+  useEffect(() => {
+    if (!dateOpen) return
+    function handleReposition() {
+      computeDatePanelPos()
+    }
+    handleReposition()
+    window.addEventListener("scroll", handleReposition, true)
+    window.addEventListener("resize", handleReposition)
+    return () => {
+      window.removeEventListener("scroll", handleReposition, true)
+      window.removeEventListener("resize", handleReposition)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateOpen])
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -1049,8 +1093,8 @@ function Toolbar(props: ToolbarProps) {
   const activeDateField = dateFilterField ?? "emision"
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
 
-  const selectedFrom = fromDate ? new Date(fromDate) : null
-  const selectedTo = toDate ? new Date(toDate) : null
+  const selectedFrom = fromDate ? isoToLocal(fromDate) : null
+  const selectedTo = toDate ? isoToLocal(toDate) : null
   const rangeStart = selectedFrom && selectedTo && selectedFrom <= selectedTo ? selectedFrom : selectedTo && selectedFrom ? selectedTo : selectedFrom
   const rangeEnd = selectedFrom && selectedTo && selectedFrom <= selectedTo ? selectedTo : selectedFrom && selectedTo ? selectedFrom : selectedTo
 
@@ -1105,11 +1149,12 @@ function Toolbar(props: ToolbarProps) {
   }
 
   return (
-    <div className="flex items-center gap-2 flex-wrap justify-between">
-      <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2">
+      {/* Chips row — scrollable, but overflow clips absolute children */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 flex-1 min-w-0" style={{ scrollbarWidth: "none" }}>
         {/* Multi-select filter chips */}
         {!hideFilter && multiFilterOptions && multiFilterOptions.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="flex gap-1.5 shrink-0">
             <button
               onClick={onClearFilters}
               className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
@@ -1143,7 +1188,7 @@ function Toolbar(props: ToolbarProps) {
 
         {/* Single-select filter tabs (para pagos/presupuestos) */}
         {!hideFilter && filterOptions && filterOptions.length > 0 && (
-          <div className="flex gap-1 rounded-[var(--radius)] p-0.5" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+          <div className="flex gap-1 rounded-[var(--radius)] p-0.5 shrink-0" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
             {filterOptions.map((opt) => (
               <button
                 key={opt.value}
@@ -1161,39 +1206,56 @@ function Toolbar(props: ToolbarProps) {
           </div>
         )}
 
-        {/* Date range filter dropdown */}
-        {hasDateFilter && (
-          <div className="relative">
-            <button
-              ref={dateButtonRef}
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={dateOpen}
-              onClick={() => setDateOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-semibold transition-all"
-              style={{
-                borderColor: dateOpen ? "var(--blue)" : "var(--border)",
-                background: "var(--card)",
-                color: "var(--ink)",
-              }}
-            >
-              <Calendar size={16} strokeWidth={2} />
-              <span>Filtrar por fecha</span>
-              <ChevronDown size={14} strokeWidth={2} style={{ transform: dateOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }} />
-            </button>
-
-            {dateOpen && (
-              <div
-                ref={datePanelRef}
-                className="absolute right-0 mt-2 w-[320px] rounded-[14px] border border-[var(--border)] bg-white shadow-[0_18px_44px_rgba(16,24,40,0.18)] p-4"
-                role="dialog"
-                aria-label="Seleccionar fecha o rango"
+      {/* Date filter — popup renders position:fixed so overflow doesn't clip it */}
+      {hasDateFilter && (
+        <div className="shrink-0">
+          <button
+            ref={dateButtonRef}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={dateOpen}
+            onClick={toggleDateOpen}
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-all"
+            style={
+              fromDate
+                ? { background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue)" }
+                : { background: "var(--bg)", color: "var(--ink-soft)", border: "1px solid var(--border)" }
+            }
+          >
+            <Calendar size={12} strokeWidth={2} />
+            <span>{(() => {
+              if (!fromDate) return "Fecha"
+              const prefix = activeDateField === "vencimiento" ? "Vence: " : "Emit.: "
+              const fmt2 = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}` }
+              return toDate && toDate !== fromDate
+                ? `${prefix}${fmt2(fromDate)} – ${fmt2(toDate)}`
+                : `${prefix}${fmt2(fromDate)}`
+            })()}</span>
+            {fromDate && (
+              <span
+                role="button"
+                onClick={(e) => { e.stopPropagation(); clearDates() }}
+                aria-label="Limpiar filtro de fecha"
+                className="flex items-center justify-center"
               >
-                <div className="flex gap-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius)] p-1 mb-3">
+                <X size={11} strokeWidth={2.5} />
+              </span>
+            )}
+          </button>
+
+          {dateOpen && (
+            <div
+              ref={datePanelRef}
+              className="fixed w-[252px] rounded-[12px] border border-[var(--border)] bg-white shadow-[0_12px_32px_rgba(16,24,40,0.14)] p-3 z-50"
+              style={{ top: datePanelPos.top, left: datePanelPos.left }}
+              role="dialog"
+              aria-label="Seleccionar fecha o rango"
+            >
+                <div className="flex gap-1 bg-[var(--bg)] border border-[var(--border)] rounded-[8px] p-0.5 mb-2.5">
                   <button
                     type="button"
                     onClick={() => onDateFilterFieldChange?.("emision")}
-                    className="flex-1 rounded-[8px] px-3 py-2 text-xs font-semibold transition-all"
+                    className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
                     style={
                       activeDateField === "emision"
                         ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
@@ -1205,7 +1267,7 @@ function Toolbar(props: ToolbarProps) {
                   <button
                     type="button"
                     onClick={() => onDateFilterFieldChange?.("vencimiento")}
-                    className="flex-1 rounded-[8px] px-3 py-2 text-xs font-semibold transition-all"
+                    className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
                     style={
                       activeDateField === "vencimiento"
                         ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
@@ -1216,35 +1278,39 @@ function Toolbar(props: ToolbarProps) {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2">
                   <button
                     type="button"
                     onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                    className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--border)] text-sm"
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-sm transition-all"
                     style={{ color: "var(--ink-soft)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
                   >
                     ‹
                   </button>
-                  <span className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                  <span className="text-xs font-semibold capitalize" style={{ color: "var(--ink)" }}>
                     {formatMonthLabel(calendarMonth)}
                   </span>
                   <button
                     type="button"
                     onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                    className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--border)] text-sm"
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-sm transition-all"
                     style={{ color: "var(--ink-soft)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
                   >
                     ›
                   </button>
                 </div>
 
-                <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-soft)] mb-2">
+                <div className="grid grid-cols-7 text-center text-[10px] font-semibold mb-1" style={{ color: "var(--ink-faint)" }}>
                   {weekDayLabels.map((label) => (
                     <div key={label}>{label}</div>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-0.5">
                   {days.map((day) => {
                     const isCurrentMonth = day.getMonth() === calendarMonth.getMonth()
                     const isSelected = sameDate(day, selectedFrom) || sameDate(day, selectedTo)
@@ -1254,11 +1320,11 @@ function Toolbar(props: ToolbarProps) {
                         key={day.toISOString()}
                         type="button"
                         onClick={() => selectDay(day)}
-                        className="h-9 rounded-[10px] text-sm transition-all"
+                        className="h-7 rounded-[6px] text-xs transition-all"
                         style={{
-                          background: isSelected ? "var(--blue)" : inRange ? "rgba(59,130,246,0.12)" : "transparent",
-                          color: isSelected ? "white" : isCurrentMonth ? "var(--ink)" : "var(--ink-soft)",
-                          opacity: isCurrentMonth ? 1 : 0.5,
+                          background: isSelected ? "var(--blue)" : inRange ? "var(--blue-soft)" : "transparent",
+                          color: isSelected ? "white" : isCurrentMonth ? "var(--ink)" : "var(--ink-faint)",
+                          opacity: isCurrentMonth ? 1 : 0.4,
                         }}
                       >
                         {day.getDate()}
@@ -1267,19 +1333,21 @@ function Toolbar(props: ToolbarProps) {
                   })}
                 </div>
 
-                <div className="flex items-center justify-between mt-4 text-sm text-[var(--ink-soft)]">
+                <div className="flex items-center justify-between mt-2.5">
                   <button
                     type="button"
                     onClick={clearDates}
-                    className="font-semibold"
-                    style={{ color: "var(--ink)" }}
+                    className="text-xs font-medium px-2 py-1 rounded-[6px] transition-all"
+                    style={{ color: "var(--ink-soft)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
                   >
                     Limpiar
                   </button>
                   <button
                     type="button"
                     onClick={() => setDateOpen(false)}
-                    className="rounded-[var(--radius)] bg-[var(--blue)] px-4 py-2 text-sm font-semibold text-white"
+                    className="rounded-[7px] bg-[var(--blue)] px-3 py-1.5 text-xs font-semibold text-white"
                   >
                     Aplicar
                   </button>
@@ -1288,37 +1356,39 @@ function Toolbar(props: ToolbarProps) {
             )}
           </div>
         )}
+
+      {/* Search — icon inside input, closes on blur if empty */}
+      <div className="relative shrink-0 flex items-center">
+        {searchOpen ? (
+          <div
+            className="flex items-center gap-1.5 rounded-full px-2.5"
+            style={{ border: "1px solid var(--blue)", background: "var(--card)", height: 26 }}
+          >
+            <Search size={13} strokeWidth={1.4} style={{ color: "var(--blue)", flexShrink: 0 }} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false) }}
+              placeholder="Buscar..."
+              className="text-xs outline-none bg-transparent"
+              style={{ width: 160, color: "var(--ink)" }}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="flex items-center justify-center rounded-full px-2.5 transition-all"
+            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "var(--bg)", height: 26 }}
+          >
+            <Search size={12} strokeWidth={2} color="currentColor" />
+          </button>
+        )}
       </div>
 
-      {/* Search toggle */}
-      <div className="flex items-center gap-0 shrink-0">
-        <button
-          onClick={() => setSearchOpen(!searchOpen)}
-          className="flex items-center justify-center w-8 h-8 rounded-[var(--radius)] transition-all"
-          style={{
-            border: "1px solid var(--border)",
-            background: searchOpen ? "var(--blue-soft)" : "transparent",
-            color: searchOpen ? "var(--blue)" : "var(--ink-soft)",
-          }}
-        >
-          <Search size={14} strokeWidth={1.4} color="currentColor" />
-        </button>
-        {searchOpen && (
-          <input
-            ref={searchRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar..."
-            className="ml-2 text-sm px-3 py-1 rounded-[var(--radius)] outline-none transition-all"
-            style={{
-              border: "1px solid var(--blue)",
-              color: "var(--ink)",
-              background: "var(--card)",
-              width: 180,
-            }}
-          />
-        )}
+      {/* Extra actions (e.g. "Adjuntar comprobante") — extremo derecho */}
+      {extraActions && <div className="ml-auto shrink-0 flex items-center">{extraActions}</div>}
       </div>
     </div>
   )
@@ -1326,53 +1396,6 @@ function Toolbar(props: ToolbarProps) {
 
 // ── Facturas Selection Bar ────────────────────────────────────────────────────
 
-function FacturasSelectionBar({
-  count,
-  total,
-  onPagar,
-  onWhatsapp,
-}: {
-  count: number
-  total: number
-  onPagar: () => void
-  onWhatsapp: () => void
-}) {
-  return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-30"
-      style={{ boxShadow: "0 -4px 20px rgba(0,0,0,0.12)" }}
-    >
-      <div
-        className="max-w-7xl mx-auto flex items-center gap-3 px-4 sm:px-6 py-3 flex-wrap"
-        style={{ background: "var(--blue)", color: "white" }}
-      >
-        <span className="text-sm font-medium flex-1">
-          {count} factura{count !== 1 ? "s" : ""} seleccionada{count !== 1 ? "s" : ""} · Total: {fmt(total)}
-        </span>
-        <button
-          onClick={onPagar}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
-          style={{ background: "rgba(255,255,255,0.95)", color: "var(--blue)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "white" }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.95)" }}
-        >
-          <CreditCard size={15} strokeWidth={1.6} />
-          Pagar
-        </button>
-        <button
-          onClick={onWhatsapp}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all text-white"
-          style={{ background: "var(--wsp)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--wsp)" }}
-        >
-          <WspIcon />
-          Enviar a WhatsApp
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ── WhatsApp Facturas Modal ─────────────────────────────────────────────────
 
@@ -1559,60 +1582,86 @@ function SelectionBar({
   onClear,
   onDownload,
   onWhatsapp,
+  itemLabel = "factura",
 }: {
   count: number
   total: number
   onClear: () => void
   onDownload: () => void
   onWhatsapp?: () => void
+  itemLabel?: string
 }) {
+  const hasSelection = count > 0
+
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2.5 rounded-[var(--radius)] mt-2 flex-wrap"
-      style={{ background: count > 0 ? "var(--blue)" : "var(--bg)", color: count > 0 ? "white" : "var(--ink-soft)", border: count > 0 ? "none" : "1px solid var(--border)" }}
+      className="rounded-[10px] mt-3 mb-3 overflow-hidden"
+      style={{
+        background: hasSelection ? "var(--blue)" : "var(--bg)",
+        border: `1px solid ${hasSelection ? "var(--blue)" : "var(--border)"}`,
+        transition: "background 0.2s, border-color 0.2s",
+      }}
     >
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {count > 0 && (
+      {/* Fila info */}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5">
+        {hasSelection ? (
           <button
             onClick={onClear}
-            className="flex items-center justify-center w-7 h-7 rounded-full transition-all"
-            style={{ background: "rgba(255,255,255,0.14)", color: "white" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.22)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.14)" }}
+            className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+            style={{ background: "rgba(255,255,255,0.2)" }}
             aria-label="Limpiar selección"
           >
-            <X size={12} strokeWidth={1.5} color="white" />
+            <X size={11} strokeWidth={2.5} color="white" />
           </button>
+        ) : (
+          <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center" style={{ background: "var(--border)" }}>
+            <CheckSquare size={12} strokeWidth={1.8} style={{ color: "var(--ink-faint)" }} />
+          </div>
         )}
-        <span className="text-sm font-medium truncate">
-          {count > 0 ? `${count} seleccionado${count !== 1 ? "s" : ""} · Total: ${fmt(total)}` : "Seleccioná comprobantes para operar"}
-        </span>
-      </div>
-      {count > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
+
+        <div className="flex flex-col flex-1 min-w-0">
+          {hasSelection ? (
+            <>
+              <span className="text-sm font-bold text-white">{count} {itemLabel}{count !== 1 ? "s" : ""} seleccionada{count !== 1 ? "s" : ""}</span>
+              <span className="text-xs text-white/80">Total: {fmt(total)}</span>
+            </>
+          ) : (
+            <span className="text-sm" style={{ color: "var(--ink-soft)" }}>Seleccioná para descargar o consultar</span>
+          )}
+        </div>
+
+        {/* Botones — en pantallas angostas bajan a su propia fila */}
+        <div className={`${hasSelection ? "flex" : "hidden sm:flex"} items-center gap-2 shrink-0 basis-full sm:basis-auto order-last sm:order-none`}>
           <button
             onClick={onDownload}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-[6px] text-xs font-medium transition-all"
-            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.26)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.18)" }}
+            disabled={!hasSelection}
+            className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all"
+            style={
+              hasSelection
+                ? { background: "rgba(255,255,255,0.18)", color: "white" }
+                : { background: "var(--border)", color: "var(--ink-faint)", cursor: "not-allowed" }
+            }
           >
             <DownloadIcon />
             Descargar
           </button>
-          <button
-            onClick={count > 0 ? onWhatsapp : undefined}
-            disabled={count === 0}
-            className="flex items-center gap-1.5 px-4 py-1 rounded-[6px] text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: count > 0 ? "var(--wsp)" : "var(--border)", color: "white" }}
-            onMouseEnter={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp-strong)" }}
-            onMouseLeave={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp)" }}
-          >
-            <WspIcon />
-            Consultar
-          </button>
+          {onWhatsapp && (
+            <button
+              onClick={onWhatsapp}
+              disabled={!hasSelection}
+              className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all"
+              style={
+                hasSelection
+                  ? { background: "var(--wsp)", color: "white" }
+                  : { background: "var(--border)", color: "var(--ink-faint)", cursor: "not-allowed" }
+              }
+            >
+              <WspIcon size={14} />
+              Consultar
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -1661,13 +1710,11 @@ function Modal({ onClose, title, children }: { onClose: () => void; title: strin
 function FacturaModal({
   factura,
   onClose,
-  onWhatsapp,
   tenantName,
   logoSrc,
 }: {
   factura: Factura
   onClose: () => void
-  onWhatsapp: (intent: WhatsAppFacturaIntent) => void
   tenantName: string
   logoSrc: string
 }) {
@@ -1790,7 +1837,7 @@ function FacturaModal({
         </div>
 
         {/* Acciones */}
-        <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
             onClick={() => alert("Descarga: próximamente")}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
@@ -1801,18 +1848,6 @@ function FacturaModal({
             <DownloadIcon />
             Descargar PDF
           </button>
-          {(factura.estado === "pendiente" || factura.estado === "vencida") && (
-            <button
-              onClick={() => onWhatsapp("consulta")}
-              className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all text-white"
-              style={{ background: "var(--wsp)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--wsp)" }}
-            >
-              <WspIcon />
-              Enviar a WhatsApp
-            </button>
-          )}
         </div>
       </div>
     </Modal>
