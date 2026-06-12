@@ -1,6 +1,6 @@
-import type { Cliente, Factura, Pago, Presupuesto } from "@/types"
+import type { Cliente, CondicionesComerciales, Factura, Pago, Presupuesto } from "@/types"
 import type { TenantConfig } from "./tenants"
-import { mockCliente, mockFacturas, mockPagos, mockPresupuestos } from "./mock-data"
+import { mockCliente, mockCondiciones, mockFacturas, mockPagos, mockPresupuestos } from "./mock-data"
 
 async function apiFetch(config: TenantConfig, path: string, params?: Record<string, string>) {
   const url = new URL(`${config.flexxusBaseUrl}${path}`)
@@ -31,4 +31,9 @@ export async function getPagos(config: TenantConfig, codigocliente: string): Pro
 export async function getPresupuestos(config: TenantConfig, codigocliente: string): Promise<Presupuesto[]> {
   if (config.flexxusMock) return mockPresupuestos
   return apiFetch(config, "/presupuestos", { codigocliente })
+}
+
+export async function getCondiciones(config: TenantConfig, codigocliente: string): Promise<CondicionesComerciales> {
+  if (config.flexxusMock) return mockCondiciones
+  return apiFetch(config, `/clientes/${codigocliente}/condiciones`)
 }

@@ -1,4 +1,4 @@
-import type { Cliente, Factura, Pago, Presupuesto } from "@/types"
+import type { Cliente, CondicionesComerciales, Factura, Pago, Presupuesto } from "@/types"
 
 export const mockCliente: Cliente = {
   codigocliente: "CLI001",
@@ -25,6 +25,26 @@ export const mockPagos: Pago[] = [
   { id: "RC-0001-00000205", fecha: "24/04/2026", facturaAsociada: "FA-0001-00012390", medio: "Transferencia", monto: 90750 },
   { id: "RC-0001-00000191", fecha: "08/04/2026", facturaAsociada: "FA-0001-00012245", medio: "Cheque", monto: 233989.80 },
 ]
+
+export const mockCondiciones: CondicionesComerciales = {
+  condicionPago: "Cuenta corriente 30 días",
+  plazoDias: 30,
+  listaPrecios: "Lista 2 — Mayorista",
+  descuentos: [
+    { concepto: "Iluminación LED", porcentaje: 12 },
+    { concepto: "Cables y conductores", porcentaje: 8 },
+    { concepto: "Pago contado", porcentaje: 5 },
+  ],
+  vendedor: {
+    nombre: "Martín Gutiérrez",
+    telefono: "+54 9 3757 30-1122",
+    email: "mgutierrez@central-led.com",
+  },
+  transporte: {
+    modalidad: "Expreso a cargo del cliente",
+    observaciones: "Despachos lunes y jueves. Pedidos mayores a $500.000 con envío bonificado.",
+  },
+}
 
 export const mockPresupuestos: Presupuesto[] = [
   { id: "PR-0001-00000045", fecha: "01/06/2026", validoHasta: "15/06/2026", total: 245000, estado: "vigente" },

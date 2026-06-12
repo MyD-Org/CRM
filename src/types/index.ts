@@ -40,6 +40,24 @@ export interface Presupuesto {
   estado: PresupuestoEstado
 }
 
+export interface CondicionesComerciales {
+  /** Ej. "Cuenta corriente 30 días" */
+  condicionPago: string
+  /** Días de plazo de pago */
+  plazoDias: number
+  listaPrecios: string
+  descuentos: { concepto: string; porcentaje: number }[]
+  vendedor: {
+    nombre: string
+    telefono: string
+    email: string
+  }
+  transporte: {
+    modalidad: string
+    observaciones: string
+  }
+}
+
 export interface SessionData {
   codigocliente?: string
   razonsocial?: string

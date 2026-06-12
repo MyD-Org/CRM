@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Logo } from "./Logo"
+import { PortalHeader } from "./PortalHeader"
 import type { Cliente, Factura, Pago, Presupuesto, FacturaEstado, PresupuestoEstado } from "@/types"
 import {
   buildFacturasWhatsAppMessage,
@@ -12,7 +12,7 @@ import {
   type WhatsAppFacturaIntent,
   type WhatsAppPresupuestoIntent,
 } from "@/lib/whatsapp"
-import { ShoppingCart, LogOut, CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown, CheckSquare } from "lucide-react"
+import { CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown, CheckSquare } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -46,15 +46,6 @@ function Tooltip({ text, white = false }: { text: string; white?: boolean }) {
 
 function fmt(n: number) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 }).format(n)
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
 }
 
 function parseLocalDate(value: string | null | undefined) {
@@ -100,17 +91,9 @@ type Tab = "facturas" | "pagos" | "presupuestos"
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle }: Props) {
-  const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("facturas")
   const [facturasFilter, setFacturasFilter] = useState<FacturaEstado | "todos">("todos")
   const [facturasSearch, setFacturasSearch] = useState("")
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  async function handleLogout() {
-    setLoggingOut(true)
-    await fetch("/api/auth/logout", { method: "POST" })
-    router.push("/portal")
-  }
 
   const vencidasCount = facturas.filter((f) => f.estado === "vencida").length
   const pendientesCount = facturas.filter((f) => f.estado === "pendiente").length
@@ -119,59 +102,7 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      {/* Topbar */}
-      <header
-        className="sticky top-0 z-40 flex items-center justify-between px-6 h-14"
-        style={{
-          background: "var(--card)",
-          borderBottom: "1px solid var(--border)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <Logo size="sm" src={logoSrc} name={tenantName} />
-          {logoSubtitle && (
-            <>
-              <div className="w-px h-5" style={{ background: "var(--border)" }} />
-              <span className="text-xs font-medium hidden sm:block" style={{ color: "var(--ink-soft)" }}>
-                {logoSubtitle}
-              </span>
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Tienda chip disabled */}
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-not-allowed"
-            style={{ background: "var(--bg)", color: "var(--ink-faint)", border: "1px solid var(--border)" }}
-          >
-            <ShoppingCart size={12} strokeWidth={1.2} color="currentColor" />
-            Tienda · Pronto
-          </div>
-
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-            style={{ background: "var(--blue)" }}
-          >
-            {initials(razonsocial)}
-          </div>
-
-          {/* Salir */}
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium transition-all disabled:opacity-50"
-            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
-          >
-            <LogOut size={14} strokeWidth={1.4} color="currentColor" />
-            Salir
-          </button>
-        </div>
-      </header>
+      <PortalHeader logoSrc={logoSrc} tenantName={tenantName} logoSubtitle={logoSubtitle} razonsocial={razonsocial} />
 
       {/* Content */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
