@@ -4,6 +4,7 @@ export const mockCliente: Cliente = {
   codigocliente: "CLI001",
   razonsocial: "Ferretería Sol S.R.L.",
   cuit: "30-71045887-3",
+  email: "dalilacabeza@gmail.com",
   numerocuentacorriente: 1042,
   limitecredito: 800000,
   deudatotal: 533761.70,

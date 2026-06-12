@@ -2,6 +2,8 @@ export interface Cliente {
   codigocliente: string
   razonsocial: string
   cuit: string
+  /** Email de contacto — destino de las notificaciones de cobranza */
+  email?: string
   numerocuentacorriente: number
   limitecredito: number
   deudatotal: number

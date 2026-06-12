@@ -1,5 +1,5 @@
 import { headers } from "next/headers"
-import { getTenantById, type TenantConfig } from "./tenants"
+import { getTenantByIdFromDb, type TenantConfig } from "./tenants"
 
 export async function getTenantConfig(): Promise<TenantConfig> {
   const headersList = await headers()
@@ -7,7 +7,7 @@ export async function getTenantConfig(): Promise<TenantConfig> {
 
   if (!tenantId) throw new Error("No x-tenant-id header — middleware may not be running")
 
-  const config = getTenantById(tenantId)
+  const config = await getTenantByIdFromDb(tenantId)
   if (!config) throw new Error(`Tenant not found: ${tenantId}`)
 
   return config

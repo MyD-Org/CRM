@@ -10,5 +10,6 @@ export const aiChatEnabled = flag<boolean>({
   defaultValue: false,
   description: "Muestra la burbuja de chat con el agente de soporte post-venta",
   origin: "https://vercel.com/docs/workflow-collaboration/feature-flags",
-  decide: () => false,
+  // Hasta conectar el adapter de Vercel: se controla por env (true en dev local)
+  decide: () => process.env.AI_CHAT_ENABLED === "true",
 })

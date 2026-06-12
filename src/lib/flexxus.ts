@@ -18,6 +18,12 @@ export async function getCliente(config: TenantConfig, codigocliente: string): P
   return apiFetch(config, `/clientes/${codigocliente}`)
 }
 
+/** Todos los clientes del tenant — usado por el gestor de cobranza */
+export async function getClientes(config: TenantConfig): Promise<Cliente[]> {
+  if (config.flexxusMock) return [mockCliente]
+  return apiFetch(config, "/clientes")
+}
+
 export async function getFacturas(config: TenantConfig, codigocliente: string): Promise<Factura[]> {
   if (config.flexxusMock) return mockFacturas
   return apiFetch(config, "/facturas", { codigocliente })
@@ -33,7 +39,36 @@ export async function getPresupuestos(config: TenantConfig, codigocliente: strin
   return apiFetch(config, "/presupuestos", { codigocliente })
 }
 
+// Flexxus no almacena condiciones comerciales: viven en nuestra DB por
+// (tenant, cliente). mockCondiciones queda como fallback de dev sin seed.
 export async function getCondiciones(config: TenantConfig, codigocliente: string): Promise<CondicionesComerciales> {
-  if (config.flexxusMock) return mockCondiciones
-  return apiFetch(config, `/clientes/${codigocliente}/condiciones`)
+  try {
+    const { getDb } = await import("@/db")
+    const { clientCommercialConditions } = await import("@/db/schema")
+    const { and, eq } = await import("drizzle-orm")
+
+    const [row] = await getDb()
+      .select()
+      .from(clientCommercialConditions)
+      .where(
+        and(
+          eq(clientCommercialConditions.tenantId, config.id),
+          eq(clientCommercialConditions.codigocliente, codigocliente),
+        ),
+      )
+
+    if (!row) return mockCondiciones
+
+    return {
+      condicionPago: row.condicionPago,
+      plazoDias: row.plazoDias,
+      listaPrecios: row.listaPrecios,
+      descuentos: row.descuentos as CondicionesComerciales["descuentos"],
+      vendedor: row.vendedor as CondicionesComerciales["vendedor"],
+      transporte: row.transporte as CondicionesComerciales["transporte"],
+    }
+  } catch (err) {
+    console.error("getCondiciones: DB no disponible, fallback a mock:", err)
+    return mockCondiciones
+  }
 }

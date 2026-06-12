@@ -47,3 +47,41 @@ export const tenants: Map<string, TenantConfig> = new Map(
 export function getTenantById(id: string): TenantConfig | null {
   return tenants.get(id) ?? null
 }
+
+/** IDs de tenants activos — usado por el middleware (Edge, sin acceso a DB) */
+export function isKnownTenantId(id: string): boolean {
+  return TENANT_IDS.includes(id)
+}
+
+/**
+ * Config del tenant desde la DB, con fallback transitorio al registro de env.
+ * El fallback se elimina cuando la DB esté estabilizada en todos los entornos.
+ */
+export async function getTenantByIdFromDb(id: string): Promise<TenantConfig | null> {
+  try {
+    const { getDb } = await import("@/db")
+    const { tenants: tenantsTable } = await import("@/db/schema")
+    const { eq } = await import("drizzle-orm")
+
+    const [row] = await getDb().select().from(tenantsTable).where(eq(tenantsTable.id, id))
+    if (!row) return getTenantById(id)
+
+    return {
+      id: row.id,
+      name: row.name,
+      subtitle: row.subtitle,
+      logoPath: row.logoPath,
+      flexxusBaseUrl: row.flexxusBaseUrl,
+      flexxusToken: row.flexxusToken,
+      flexxusMock: row.flexxusMock,
+      whatsappNumber: row.whatsappNumber,
+      resendFrom: row.resendFrom,
+      aiApiBaseUrl: row.aiApiUrl,
+      aiApiKey: row.aiApiKey,
+      aiAgentId: row.aiAgentId,
+    }
+  } catch (err) {
+    console.error("getTenantByIdFromDb: DB no disponible, fallback a env:", err)
+    return getTenantById(id)
+  }
+}

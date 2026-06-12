@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getTenantById } from "@/lib/tenants"
+import { isKnownTenantId } from "@/lib/tenants"
 
 export function middleware(req: NextRequest) {
   const override = process.env.TENANT_OVERRIDE
   const tenantId = override ?? req.headers.get("host")?.split(".")[0] ?? ""
 
-  const tenant = getTenantById(tenantId)
-  if (!tenant) {
+  // Edge runtime: solo valida que el ID esté en TENANT_IDS; la config completa
+  // se carga desde la DB en getTenantConfig (server runtime).
+  if (!isKnownTenantId(tenantId)) {
     return new NextResponse(`Tenant "${tenantId}" not found`, { status: 404 })
   }
 
