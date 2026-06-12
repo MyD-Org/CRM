@@ -72,6 +72,64 @@ function saldoDe(f: Factura) {
   return f.importe - (f.pagado ?? 0)
 }
 
+// ── Ordenamiento de columnas ─────────────────────────────────────────────────
+
+type SortDir = 1 | -1
+
+function useSort<K extends string>(defaultDescKeys: readonly K[] = [], initialKey: K | null = null) {
+  const [sortKey, setSortKey] = useState<K | null>(initialKey)
+  const [sortDir, setSortDir] = useState<SortDir>(initialKey && defaultDescKeys.includes(initialKey) ? -1 : 1)
+
+  function toggleSort(key: K) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 1 ? -1 : 1))
+    } else {
+      setSortKey(key)
+      setSortDir(defaultDescKeys.includes(key) ? -1 : 1)
+    }
+  }
+
+  return { sortKey, sortDir, toggleSort }
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime()
+  if (typeof a === "number" && typeof b === "number") return a - b
+  return String(a).localeCompare(String(b), "es")
+}
+
+function SortableTh({
+  label,
+  active,
+  dir,
+  onClick,
+  align = "left",
+  className = "",
+}: {
+  label: string
+  active: boolean
+  dir: SortDir
+  onClick: () => void
+  align?: "left" | "right"
+  className?: string
+}) {
+  return (
+    <th
+      onClick={onClick}
+      className={`py-2 px-3 font-medium text-xs cursor-pointer select-none transition-colors ${align === "right" ? "text-right" : "text-left"} ${className}`}
+      style={{ color: active ? "var(--blue)" : "var(--ink-soft)" }}
+      aria-sort={active ? (dir === 1 ? "ascending" : "descending") : undefined}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span style={{ fontSize: 7, lineHeight: 1, visibility: active ? "visible" : "hidden" }}>
+          {dir === 1 ? "▲" : "▼"}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -389,6 +447,19 @@ function FacturasTable({
     })
   }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField])
 
+  const { sortKey, sortDir, toggleSort } = useSort<"id" | "emision" | "vencimiento" | "importe" | "estado">(["emision", "vencimiento", "importe"], "emision")
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered
+    const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2 }
+    return [...filtered].sort((a, b) => {
+      let av: unknown, bv: unknown
+      if (sortKey === "emision" || sortKey === "vencimiento") { av = parseLocalDate(a[sortKey]); bv = parseLocalDate(b[sortKey]) }
+      else if (sortKey === "estado") { av = estadoOrder[a.estado]; bv = estadoOrder[b.estado] }
+      else { av = a[sortKey]; bv = b[sortKey] }
+      return compareValues(av, bv) * sortDir
+    })
+  }, [filtered, sortKey, sortDir])
+
   const allSelected = filtered.length > 0 && filtered.every((f) => selected.has(f.id))
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
@@ -458,23 +529,23 @@ function FacturasTable({
               <th className="w-10 py-2 px-2 text-left">
                 <Checkbox checked={allSelected} onChange={toggleAll} />
               </th>
-              <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Comprobante</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>Emisión</th>
-              <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Vencimiento</th>
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Importe</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>Estado</th>
+              <SortableTh label="Comprobante" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
+              <SortableTh label="Emisión" active={sortKey === "emision"} dir={sortDir} onClick={() => toggleSort("emision")} className="hidden sm:table-cell" />
+              <SortableTh label="Vencimiento" active={sortKey === "vencimiento"} dir={sortDir} onClick={() => toggleSort("vencimiento")} />
+              <SortableTh label="Importe" active={sortKey === "importe"} dir={sortDir} onClick={() => toggleSort("importe")} align="right" />
+              <SortableTh label="Estado" active={sortKey === "estado"} dir={sortDir} onClick={() => toggleSort("estado")} className="hidden md:table-cell" />
               <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
                   No hay facturas para mostrar
                 </td>
               </tr>
             ) : (
-              filtered.map((f) => (
+              sorted.map((f) => (
                 <tr
                   key={f.id}
                   className="transition-colors"
@@ -589,6 +660,16 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     })
   }, [pagos, search, fromDate, toDate, dateFilterField])
 
+  const { sortKey, sortDir, toggleSort } = useSort<"id" | "fecha" | "facturaAsociada" | "medio" | "monto">(["fecha", "monto"], "fecha")
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = sortKey === "fecha" ? parseLocalDate(a.fecha) : a[sortKey]
+      const bv = sortKey === "fecha" ? parseLocalDate(b.fecha) : b[sortKey]
+      return compareValues(av, bv) * sortDir
+    })
+  }, [filtered, sortKey, sortDir])
+
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
@@ -675,23 +756,23 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
               <th className="w-10 py-2 px-2 text-left">
                 <Checkbox checked={allSelected} onChange={toggleAll} />
               </th>
-              <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Recibo</th>
-              <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Fecha</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>Factura asociada</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>Medio</th>
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Monto pagado</th>
+              <SortableTh label="Recibo" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
+              <SortableTh label="Fecha" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} />
+              <SortableTh label="Factura asociada" active={sortKey === "facturaAsociada"} dir={sortDir} onClick={() => toggleSort("facturaAsociada")} className="hidden md:table-cell" />
+              <SortableTh label="Medio" active={sortKey === "medio"} dir={sortDir} onClick={() => toggleSort("medio")} className="hidden sm:table-cell" />
+              <SortableTh label="Monto pagado" active={sortKey === "monto"} dir={sortDir} onClick={() => toggleSort("monto")} align="right" />
               <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
                   No hay pagos para mostrar
                 </td>
               </tr>
             ) : (
-              filtered.map((p) => (
+              sorted.map((p) => (
                 <tr
                   key={p.id}
                   className="transition-colors"
@@ -799,6 +880,19 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
     })
   }, [presupuestos, search, filterEstados, fromDate, toDate, dateFilterField])
 
+  const { sortKey, sortDir, toggleSort } = useSort<"id" | "fecha" | "validoHasta" | "total" | "estado">(["fecha", "validoHasta", "total"], "fecha")
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered
+    const estadoOrder: Record<PresupuestoEstado, number> = { vencido: 0, vigente: 1, aceptado: 2 }
+    return [...filtered].sort((a, b) => {
+      let av: unknown, bv: unknown
+      if (sortKey === "fecha" || sortKey === "validoHasta") { av = parseLocalDate(a[sortKey]); bv = parseLocalDate(b[sortKey]) }
+      else if (sortKey === "estado") { av = estadoOrder[a.estado]; bv = estadoOrder[b.estado] }
+      else { av = a[sortKey]; bv = b[sortKey] }
+      return compareValues(av, bv) * sortDir
+    })
+  }, [filtered, sortKey, sortDir])
+
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPresupuestos = presupuestos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPresupuestos.reduce((s, p) => s + p.total, 0)
@@ -876,23 +970,23 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
               <th className="w-10 py-2 px-2 text-left">
                 <Checkbox checked={allSelected} onChange={toggleAll} />
               </th>
-              <th className="py-2 px-3 text-left font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Presupuesto</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>Fecha</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>Válido hasta</th>
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Total</th>
-              <th className="py-2 px-3 text-left font-medium text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>Estado</th>
+              <SortableTh label="Presupuesto" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
+              <SortableTh label="Fecha" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} className="hidden sm:table-cell" />
+              <SortableTh label="Válido hasta" active={sortKey === "validoHasta"} dir={sortDir} onClick={() => toggleSort("validoHasta")} className="hidden md:table-cell" />
+              <SortableTh label="Total" active={sortKey === "total"} dir={sortDir} onClick={() => toggleSort("total")} align="right" />
+              <SortableTh label="Estado" active={sortKey === "estado"} dir={sortDir} onClick={() => toggleSort("estado")} className="hidden md:table-cell" />
               <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
                   No hay presupuestos para mostrar
                 </td>
               </tr>
             ) : (
-              filtered.map((p) => (
+              sorted.map((p) => (
                 <tr
                   key={p.id}
                   className="transition-colors"
