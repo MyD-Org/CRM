@@ -5,6 +5,8 @@ import { sessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { getCliente, getFacturas, getPagos, getPresupuestos } from "@/lib/flexxus"
 import { DashboardClient } from "@/components/portal/DashboardClient"
+import { AiChat } from "@/components/portal/AiChat"
+import { aiChatEnabled } from "@/lib/flags"
 import type { SessionData } from "@/types"
 
 export default async function DashboardPage() {
@@ -22,8 +24,11 @@ export default async function DashboardPage() {
     getPresupuestos(tenant, session.codigocliente),
   ])
 
+  const [aiEnabled] = await Promise.all([aiChatEnabled()])
+
   return (
-    <DashboardClient
+    <>
+      <DashboardClient
       cliente={cliente}
       facturas={facturas}
       pagos={pagos}
@@ -33,6 +38,15 @@ export default async function DashboardPage() {
       whatsappNumber={tenant.whatsappNumber}
       logoSrc={tenant.logoPath}
       logoSubtitle={tenant.subtitle}
-    />
+      />
+      {aiEnabled && (
+        <AiChat
+          baseUrl="/ai-api"
+          agentId={tenant.aiAgentId}
+          tenantName={tenant.name}
+          logoSrc={tenant.logoPath}
+        />
+      )}
+    </>
   )
 }

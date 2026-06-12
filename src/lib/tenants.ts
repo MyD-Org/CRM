@@ -8,6 +8,9 @@ export interface TenantConfig {
   flexxusMock: boolean
   whatsappNumber: string
   resendFrom: string
+  aiApiBaseUrl: string
+  aiApiKey: string
+  aiAgentId: string
 }
 
 function buildTenantConfig(id: string): TenantConfig | null {
@@ -27,6 +30,9 @@ function buildTenantConfig(id: string): TenantConfig | null {
     flexxusMock: isMock,
     whatsappNumber: process.env[`${prefix}_WHATSAPP`] ?? "",
     resendFrom: process.env[`${prefix}_RESEND_FROM`] ?? "portal@example.com",
+    aiApiBaseUrl: process.env[`${prefix}_AI_API_URL`] ?? "",
+    aiApiKey: process.env[`${prefix}_AI_API_KEY`] ?? "",
+    aiAgentId: process.env[`${prefix}_AI_AGENT_ID`] ?? "",
   }
 }
 
