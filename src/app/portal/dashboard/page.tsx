@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { sessionOptions } from "@/lib/session"
 import { mockCliente, mockFacturas, mockPagos, mockPresupuestos } from "@/lib/mock-data"
 import { DashboardClient } from "@/components/portal/DashboardClient"
+import { AssistantWidget } from "@/components/portal/AssistantWidget"
 import type { SessionData } from "@/types"
 
 export default async function DashboardPage() {
@@ -15,12 +16,15 @@ export default async function DashboardPage() {
   }
 
   return (
-    <DashboardClient
-      cliente={mockCliente}
-      facturas={mockFacturas}
-      pagos={mockPagos}
-      presupuestos={mockPresupuestos}
-      razonsocial={session.razonsocial ?? mockCliente.razonsocial}
-    />
+    <>
+      <DashboardClient
+        cliente={mockCliente}
+        facturas={mockFacturas}
+        pagos={mockPagos}
+        presupuestos={mockPresupuestos}
+        razonsocial={session.razonsocial ?? mockCliente.razonsocial}
+      />
+      <AssistantWidget />
+    </>
   )
 }
