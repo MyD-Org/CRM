@@ -21,9 +21,8 @@ export const mockFacturas: Factura[] = [
 ]
 
 export const mockPagos: Pago[] = [
-  { id: "RC-0001-00000218", fecha: "05/06/2026", facturaAsociada: "FA-0001-00012740", medio: "Transferencia", monto: 100000 },
-  { id: "RC-0001-00000205", fecha: "24/04/2026", facturaAsociada: "FA-0001-00012390", medio: "Transferencia", monto: 90750 },
-  { id: "RC-0001-00000191", fecha: "08/04/2026", facturaAsociada: "FA-0001-00012245", medio: "Cheque", monto: 233989.80 },
+  { id: "RC-0001-00000218", fecha: "05/06/2026", facturas: [{ factura: "FA-0001-00012740", imputado: 100000 }], medio: "Transferencia", monto: 100000 },
+  { id: "RC-0001-00000191", fecha: "08/04/2026", facturas: [{ factura: "FA-0001-00012390", imputado: 90750 }, { factura: "FA-0001-00012245", imputado: 233989.80 }], medio: "Cheque", monto: 324739.80 },
 ]
 
 export const mockCondiciones: CondicionesComerciales = {

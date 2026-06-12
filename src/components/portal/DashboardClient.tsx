@@ -644,28 +644,28 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
   const [wspModal, setWspModal] = useState(false)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
-  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
   const searchRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
     const desde = fromDate ? isoToLocal(fromDate) : null
     const hasta = toDate ? isoToLocal(toDate) : null
     return pagos.filter((p) => {
-      const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturaAsociada.toLowerCase().includes(search.toLowerCase())
-      const field = p.fecha
-      const fecha = parseLocalDate(field)
+      const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturas.some((imp) => imp.factura.toLowerCase().includes(search.toLowerCase()))
+      const fecha = parseLocalDate(p.fecha)
       const matchFrom = !desde || !fecha || fecha >= desde
       const matchTo = !hasta || !fecha || fecha <= hasta
       return matchSearch && matchFrom && matchTo
     })
-  }, [pagos, search, fromDate, toDate, dateFilterField])
+  }, [pagos, search, fromDate, toDate])
 
   const { sortKey, sortDir, toggleSort } = useSort<"id" | "fecha" | "facturaAsociada" | "medio" | "monto">(["fecha", "monto"], "fecha")
   const sorted = useMemo(() => {
     if (!sortKey) return filtered
     return [...filtered].sort((a, b) => {
-      const av = sortKey === "fecha" ? parseLocalDate(a.fecha) : a[sortKey]
-      const bv = sortKey === "fecha" ? parseLocalDate(b.fecha) : b[sortKey]
+      let av: unknown, bv: unknown
+      if (sortKey === "fecha") { av = parseLocalDate(a.fecha); bv = parseLocalDate(b.fecha) }
+      else if (sortKey === "facturaAsociada") { av = a.facturas[0]?.factura ?? ""; bv = b.facturas[0]?.factura ?? "" }
+      else { av = a[sortKey]; bv = b[sortKey] }
       return compareValues(av, bv) * sortDir
     })
   }, [filtered, sortKey, sortDir])
@@ -706,8 +706,6 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           toDate={toDate}
           onFromDateChange={setFromDate}
           onToDateChange={setToDate}
-          dateFilterField={dateFilterField}
-          onDateFilterFieldChange={setDateFilterField}
           filterOptions={[]}
           filterValue="todos"
           setFilterValue={() => {}}
@@ -758,7 +756,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
               </th>
               <SortableTh label="Recibo" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
               <SortableTh label="Fecha" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} />
-              <SortableTh label="Factura asociada" active={sortKey === "facturaAsociada"} dir={sortDir} onClick={() => toggleSort("facturaAsociada")} className="hidden md:table-cell" />
+              <SortableTh label="Facturas asociadas" active={sortKey === "facturaAsociada"} dir={sortDir} onClick={() => toggleSort("facturaAsociada")} className="hidden md:table-cell" />
               <SortableTh label="Medio" active={sortKey === "medio"} dir={sortDir} onClick={() => toggleSort("medio")} className="hidden sm:table-cell" />
               <SortableTh label="Monto pagado" active={sortKey === "monto"} dir={sortDir} onClick={() => toggleSort("monto")} align="right" />
               <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
@@ -791,7 +789,20 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
                     <div className="text-xs" style={{ color: "var(--ink-faint)" }}>Recibo de pago</div>
                   </td>
                   <td className="py-2.5 px-3 text-xs" style={{ color: "var(--ink-soft)" }}>{p.fecha}</td>
-                  <td className="py-2.5 px-3 text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>{p.facturaAsociada}</td>
+                  <td className="py-2.5 px-3 text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>
+                    <span className="inline-flex items-center gap-1.5">
+                      {p.facturas[0]?.factura}
+                      {p.facturas.length > 1 && (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+                          style={{ background: "var(--blue-soft)", color: "var(--blue)" }}
+                          title={p.facturas.slice(1).map((imp) => imp.factura).join(", ")}
+                        >
+                          +{p.facturas.length - 1}
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="py-2.5 px-3 text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>{p.medio}</td>
                   <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--green)" }}>{fmt(p.monto)}</td>
                   <td className="py-2.5 px-3">
@@ -971,7 +982,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
                 <Checkbox checked={allSelected} onChange={toggleAll} />
               </th>
               <SortableTh label="Presupuesto" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
-              <SortableTh label="Fecha" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} className="hidden sm:table-cell" />
+              <SortableTh label="Emisión" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} className="hidden sm:table-cell" />
               <SortableTh label="Válido hasta" active={sortKey === "validoHasta"} dir={sortDir} onClick={() => toggleSort("validoHasta")} className="hidden md:table-cell" />
               <SortableTh label="Total" active={sortKey === "total"} dir={sortDir} onClick={() => toggleSort("total")} align="right" />
               <SortableTh label="Estado" active={sortKey === "estado"} dir={sortDir} onClick={() => toggleSort("estado")} className="hidden md:table-cell" />
@@ -1284,7 +1295,7 @@ function Toolbar(props: ToolbarProps) {
             <Calendar size={12} strokeWidth={2} />
             <span>{(() => {
               if (!fromDate) return "Fecha"
-              const prefix = activeDateField === "vencimiento" ? "Vence: " : "Emit.: "
+              const prefix = !onDateFilterFieldChange ? "" : activeDateField === "vencimiento" ? "Vence: " : "Emit.: "
               const fmt2 = (iso: string) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}` }
               return toDate && toDate !== fromDate
                 ? `${prefix}${fmt2(fromDate)} – ${fmt2(toDate)}`
@@ -1310,32 +1321,34 @@ function Toolbar(props: ToolbarProps) {
               role="dialog"
               aria-label="Seleccionar fecha o rango"
             >
-                <div className="flex gap-1 bg-[var(--bg)] border border-[var(--border)] rounded-[8px] p-0.5 mb-2.5">
-                  <button
-                    type="button"
-                    onClick={() => onDateFilterFieldChange?.("emision")}
-                    className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
-                    style={
-                      activeDateField === "emision"
-                        ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
-                        : { background: "transparent", color: "var(--ink-soft)" }
-                    }
-                  >
-                    Emisión
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDateFilterFieldChange?.("vencimiento")}
-                    className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
-                    style={
-                      activeDateField === "vencimiento"
-                        ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
-                        : { background: "transparent", color: "var(--ink-soft)" }
-                    }
-                  >
-                    Vencimiento
-                  </button>
-                </div>
+                {onDateFilterFieldChange && (
+                  <div className="flex gap-1 bg-[var(--bg)] border border-[var(--border)] rounded-[8px] p-0.5 mb-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onDateFilterFieldChange("emision")}
+                      className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
+                      style={
+                        activeDateField === "emision"
+                          ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
+                          : { background: "transparent", color: "var(--ink-soft)" }
+                      }
+                    >
+                      Emisión
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDateFilterFieldChange("vencimiento")}
+                      className="flex-1 rounded-[6px] px-2 py-1 text-xs font-semibold transition-all"
+                      style={
+                        activeDateField === "vencimiento"
+                          ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
+                          : { background: "transparent", color: "var(--ink-soft)" }
+                      }
+                    >
+                      Vencimiento
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between mb-2">
                   <button
@@ -1942,8 +1955,6 @@ function FacturaModal({
 // ── Pago Modal ────────────────────────────────────────────────────────────────
 
 function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[]; onClose: () => void }) {
-  const facturaAsoc = facturas.find((f) => f.id === pago.facturaAsociada)
-
   return (
     <Modal onClose={onClose} title={`Recibo ${pago.id}`}>
       <div className="flex flex-col gap-5">
@@ -1958,20 +1969,26 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
           <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-faint)" }}>
             Facturas canceladas con este pago
           </p>
-          {facturaAsoc ? (
-            <div
-              className="flex items-center justify-between p-3 rounded-[var(--radius)]"
-              style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-            >
-              <div>
-                <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>{facturaAsoc.id}</p>
-                <p className="text-xs" style={{ color: "var(--ink-soft)" }}>{facturaAsoc.tipo} · Emitida {facturaAsoc.emision}</p>
-              </div>
-              <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{fmt(facturaAsoc.importe)}</span>
-            </div>
-          ) : (
-            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{pago.facturaAsociada}</p>
-          )}
+          <div className="flex flex-col gap-2">
+            {pago.facturas.map((imp) => {
+              const facturaAsoc = facturas.find((f) => f.id === imp.factura)
+              return (
+                <div
+                  key={imp.factura}
+                  className="flex items-center justify-between p-3 rounded-[var(--radius)]"
+                  style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                >
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>{imp.factura}</p>
+                    {facturaAsoc && (
+                      <p className="text-xs" style={{ color: "var(--ink-soft)" }}>{facturaAsoc.tipo} · Emitida {facturaAsoc.emision}</p>
+                    )}
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{fmt(imp.imputado)}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         <div className="flex justify-end">

@@ -22,10 +22,16 @@ export interface Factura {
   pagado?: number
 }
 
+export interface PagoImputacion {
+  factura: string
+  imputado: number
+}
+
 export interface Pago {
   id: string
   fecha: string
-  facturaAsociada: string
+  /** Facturas canceladas (total o parcialmente) con este pago */
+  facturas: PagoImputacion[]
   medio: string
   monto: number
 }
