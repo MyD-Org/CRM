@@ -1,11 +1,13 @@
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { sessionOptions, otpSessionOptions } from "@/lib/session"
-import { mockCliente } from "@/lib/mock-data"
+import { getTenantConfig } from "@/lib/tenant-context"
+import { getCliente } from "@/lib/flexxus"
 import type { SessionData, OtpSessionData } from "@/types"
 
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenantConfig()
     const body = await request.json()
     const { code } = body as { code: string }
 
@@ -15,7 +17,6 @@ export async function POST(request: Request) {
 
     const cookieStore = await cookies()
 
-    // Read OTP session
     const otpSession = await getIronSession<OtpSessionData>(cookieStore, otpSessionOptions)
 
     if (!otpSession.otp || !otpSession.otpExpiry || !otpSession.identifier) {
@@ -31,16 +32,16 @@ export async function POST(request: Request) {
       return Response.json({ error: "Código incorrecto" }, { status: 400 })
     }
 
-    // OTP is valid — create user session
+    const clienteData = await getCliente(tenant, otpSession.identifier)
+
     const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
     session.isLoggedIn = true
-    session.codigocliente = mockCliente.codigocliente
-    session.razonsocial = mockCliente.razonsocial
-    session.cuit = mockCliente.cuit
+    session.codigocliente = clienteData.codigocliente
+    session.razonsocial = clienteData.razonsocial
+    session.cuit = clienteData.cuit
     session.email = otpSession.identifier
     await session.save()
 
-    // Destroy OTP session
     otpSession.destroy()
 
     return Response.json({ success: true, redirect: "/portal/dashboard" })

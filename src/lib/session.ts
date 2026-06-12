@@ -5,7 +5,7 @@ export type { SessionData, OtpSessionData }
 
 export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET ?? "development-secret-change-in-production-32chars",
-  cookieName: "central-led-session",
+  cookieName: "portal-session",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
@@ -15,11 +15,11 @@ export const sessionOptions: SessionOptions = {
 
 export const otpSessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET ?? "development-secret-change-in-production-32chars",
-  cookieName: "central-led-otp",
+  cookieName: "portal-otp",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
     sameSite: "lax",
-    maxAge: 60 * 10, // 10 minutes
+    maxAge: 60 * 10,
   },
 }

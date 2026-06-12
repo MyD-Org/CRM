@@ -1,9 +1,17 @@
 import type { Metadata } from "next"
+import { getTenantConfig } from "@/lib/tenant-context"
 import "./globals.css"
 
-export const metadata: Metadata = {
-  title: "Portal de Clientes — Central LED",
-  description: "Portal de clientes de Central LED — Materiales Eléctricos e Iluminación",
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const tenant = await getTenantConfig()
+    return {
+      title: `Portal de Clientes — ${tenant.name}`,
+      description: `Portal de clientes de ${tenant.name}${tenant.subtitle ? ` — ${tenant.subtitle}` : ""}`,
+    }
+  } catch {
+    return { title: "Portal de Clientes" }
+  }
 }
 
 export default function RootLayout({

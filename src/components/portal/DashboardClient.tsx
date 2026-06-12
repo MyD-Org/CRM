@@ -12,7 +12,7 @@ import {
   type WhatsAppFacturaIntent,
   type WhatsAppPresupuestoIntent,
 } from "@/lib/whatsapp"
-import { ShoppingCart, LogOut, CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info } from "lucide-react"
+import { ShoppingCart, LogOut, CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,13 @@ function initials(name: string) {
     .toUpperCase()
 }
 
+function parseLocalDate(value: string | null | undefined) {
+  if (!value) return null
+  const [day, month, year] = value.split("/").map(Number)
+  if (!day || !month || !year) return null
+  return new Date(year, month - 1, day)
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -65,13 +72,17 @@ interface Props {
   pagos: Pago[]
   presupuestos: Presupuesto[]
   razonsocial: string
+  tenantName: string
+  whatsappNumber: string
+  logoSrc: string
+  logoSubtitle: string
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial }: Props) {
+export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("facturas")
   const [facturasFilter, setFacturasFilter] = useState<FacturaEstado | "todos">("todos")
@@ -101,11 +112,15 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
         }}
       >
         <div className="flex items-center gap-3">
-          <Logo size="sm" />
-          <div className="w-px h-5" style={{ background: "var(--border)" }} />
-          <span className="text-xs font-medium hidden sm:block" style={{ color: "var(--ink-soft)" }}>
-            Materiales Eléctricos e Iluminación
-          </span>
+          <Logo size="sm" src={logoSrc} name={tenantName} />
+          {logoSubtitle && (
+            <>
+              <div className="w-px h-5" style={{ background: "var(--border)" }} />
+              <span className="text-xs font-medium hidden sm:block" style={{ color: "var(--ink-soft)" }}>
+                {logoSubtitle}
+              </span>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -242,14 +257,17 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
                 facturas={facturas}
                 razonsocial={razonsocial}
                 cuentaCorriente={cliente.numerocuentacorriente}
+                tenantName={tenantName}
+                whatsappNumber={whatsappNumber}
+                logoSrc={logoSrc}
                 initialFilter={facturasFilter}
                 onFilterChange={setFacturasFilter}
                 initialSearch={facturasSearch}
                 onSearchChange={setFacturasSearch}
               />
             )}
-            {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} />}
-            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} />}
+            {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
+            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
           </div>
         </div>
       </main>
@@ -358,6 +376,9 @@ function FacturasTable({
   facturas,
   razonsocial,
   cuentaCorriente,
+  tenantName,
+  whatsappNumber,
+  logoSrc,
   initialFilter = "todos",
   onFilterChange,
   initialSearch = "",
@@ -366,6 +387,9 @@ function FacturasTable({
   facturas: Factura[]
   razonsocial: string
   cuentaCorriente: number
+  tenantName: string
+  whatsappNumber: string
+  logoSrc: string
   initialFilter?: FacturaEstado | "todos"
   onFilterChange?: (v: FacturaEstado | "todos") => void
   initialSearch?: string
@@ -375,6 +399,9 @@ function FacturasTable({
   const [search, setSearch] = useState(initialSearch)
   const [searchOpen, setSearchOpen] = useState(!!initialSearch)
   const [filterEstados, setFilterEstados] = useState<Set<FacturaEstado>>(initialToSet(initialFilter))
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
 
   const prevInitial = useRef(initialFilter)
   if (prevInitial.current !== initialFilter) {
@@ -402,12 +429,17 @@ function FacturasTable({
   }
 
   const filtered = useMemo(() => {
+    const desde = fromDate ? new Date(fromDate) : null
+    const hasta = toDate ? new Date(toDate) : null
     return facturas.filter((f) => {
       const matchSearch = !search || f.id.toLowerCase().includes(search.toLowerCase()) || f.tipo.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(f.estado)
-      return matchSearch && matchEstado
+      const fecha = parseLocalDate(dateFilterField === "emision" ? f.emision : f.vencimiento)
+      const matchFrom = !desde || !fecha || fecha >= desde
+      const matchTo = !hasta || !fecha || fecha <= hasta
+      return matchSearch && matchEstado && matchFrom && matchTo
     })
-  }, [facturas, search, filterEstados])
+  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField])
 
   const allSelected = filtered.length > 0 && filtered.every((f) => selected.has(f.id))
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
@@ -444,6 +476,12 @@ function FacturasTable({
         searchRef={searchRef}
         search={search}
         setSearch={setSearch}
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        dateFilterField={dateFilterField}
+        onDateFilterFieldChange={setDateFilterField}
         multiFilterOptions={[
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
@@ -531,6 +569,8 @@ function FacturasTable({
       {modalFactura && (
         <FacturaModal
           factura={modalFactura}
+          tenantName={tenantName}
+          logoSrc={logoSrc}
           onClose={() => setModalFactura(null)}
           onWhatsapp={(intent) => {
             const f = modalFactura
@@ -545,6 +585,8 @@ function FacturasTable({
           facturas={whatsappModal.facturas}
           razonsocial={razonsocial}
           cuentaCorriente={cuentaCorriente}
+          tenantName={tenantName}
+          whatsappNumber={whatsappNumber}
           initialIntent={whatsappModal.intent}
           onClose={() => setWhatsappModal(null)}
         />
@@ -555,20 +597,30 @@ function FacturasTable({
 
 // ── Pagos Table ───────────────────────────────────────────────────────────────
 
-function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente }: { pagos: Pago[]; facturas: Factura[]; razonsocial: string; cuentaCorriente: number }) {
+function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName, whatsappNumber }: { pagos: Pago[]; facturas: Factura[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
   const [modalPago, setModalPago] = useState<Pago | null>(null)
   const [showAdjuntar, setShowAdjuntar] = useState(false)
   const [wspModal, setWspModal] = useState(false)
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
   const searchRef = useRef<HTMLInputElement>(null)
 
   const filtered = useMemo(() => {
+    const desde = fromDate ? new Date(fromDate) : null
+    const hasta = toDate ? new Date(toDate) : null
     return pagos.filter((p) => {
-      return !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturaAsociada.toLowerCase().includes(search.toLowerCase())
+      const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturaAsociada.toLowerCase().includes(search.toLowerCase())
+      const field = p.fecha
+      const fecha = parseLocalDate(field)
+      const matchFrom = !desde || !fecha || fecha >= desde
+      const matchTo = !hasta || !fecha || fecha <= hasta
+      return matchSearch && matchFrom && matchTo
     })
-  }, [pagos, search])
+  }, [pagos, search, fromDate, toDate, dateFilterField])
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
@@ -602,6 +654,12 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente }: { pagos: 
           searchRef={searchRef}
           search={search}
           setSearch={setSearch}
+          fromDate={fromDate}
+          toDate={toDate}
+          onFromDateChange={setFromDate}
+          onToDateChange={setToDate}
+          dateFilterField={dateFilterField}
+          onDateFilterFieldChange={setDateFilterField}
           filterOptions={[]}
           filterValue="todos"
           setFilterValue={() => {}}
@@ -634,6 +692,8 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente }: { pagos: 
           pagos={selectedPagos}
           razonsocial={razonsocial}
           cuentaCorriente={cuentaCorriente}
+          tenantName={tenantName}
+          whatsappNumber={whatsappNumber}
           onClose={() => setWspModal(false)}
         />
       )}
@@ -735,13 +795,16 @@ function PresupuestoBadge({ estado }: { estado: PresupuestoEstado }) {
   )
 }
 
-function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { presupuestos: Presupuesto[]; razonsocial: string; cuentaCorriente: number }) {
+function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber }: { presupuestos: Presupuesto[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState("")
   const [searchOpen, setSearchOpen] = useState(false)
   const [filterEstados, setFilterEstados] = useState<Set<PresupuestoEstado>>(new Set())
   const [modalPresupuesto, setModalPresupuesto] = useState<Presupuesto | null>(null)
   const [wspModal, setWspModal] = useState<WhatsAppPresupuestoIntent | null>(null)
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
   const searchRef = useRef<HTMLInputElement>(null)
 
   function toggleEstado(estado: PresupuestoEstado) {
@@ -754,12 +817,17 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { pre
   }
 
   const filtered = useMemo(() => {
+    const desde = fromDate ? new Date(fromDate) : null
+    const hasta = toDate ? new Date(toDate) : null
     return presupuestos.filter((p) => {
       const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(p.estado)
-      return matchSearch && matchEstado
+      const fecha = parseLocalDate(dateFilterField === "emision" ? p.fecha : p.validoHasta)
+      const matchFrom = !desde || !fecha || fecha >= desde
+      const matchTo = !hasta || !fecha || fecha <= hasta
+      return matchSearch && matchEstado && matchFrom && matchTo
     })
-  }, [presupuestos, search, filterEstados])
+  }, [presupuestos, search, filterEstados, fromDate, toDate, dateFilterField])
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPresupuestos = presupuestos.filter((p) => selected.has(p.id))
@@ -792,6 +860,12 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { pre
         searchRef={searchRef}
         search={search}
         setSearch={setSearch}
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        dateFilterField={dateFilterField}
+        onDateFilterFieldChange={setDateFilterField}
         multiFilterOptions={[
           { value: "vigente", label: "Vigentes" },
           { value: "vencido", label: "Vencidos" },
@@ -817,6 +891,8 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { pre
           presupuestos={selectedPresupuestos}
           razonsocial={razonsocial}
           cuentaCorriente={cuentaCorriente}
+          tenantName={tenantName}
+          whatsappNumber={whatsappNumber}
           initialIntent={wspModal}
           onClose={() => setWspModal(null)}
         />
@@ -886,7 +962,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { pre
       </div>
 
       {modalPresupuesto && (
-        <PresupuestoModal presupuesto={modalPresupuesto} onClose={() => setModalPresupuesto(null)} />
+        <PresupuestoModal presupuesto={modalPresupuesto} tenantName={tenantName} whatsappNumber={whatsappNumber} onClose={() => setModalPresupuesto(null)} />
       )}
     </>
   )
@@ -894,21 +970,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente }: { pre
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
-function Toolbar({
-  searchOpen,
-  setSearchOpen,
-  searchRef,
-  search,
-  setSearch,
-  filterOptions,
-  filterValue,
-  setFilterValue,
-  multiFilterOptions,
-  activeFilters,
-  onToggleFilter,
-  onClearFilters,
-  hideFilter,
-}: {
+interface ToolbarProps {
   searchOpen: boolean
   setSearchOpen: (v: boolean) => void
   searchRef: React.RefObject<HTMLInputElement | null>
@@ -922,65 +984,314 @@ function Toolbar({
   onToggleFilter?: (v: string) => void
   onClearFilters?: () => void
   hideFilter?: boolean
-}) {
+  fromDate?: string
+  toDate?: string
+  onFromDateChange?: (v: string) => void
+  onToDateChange?: (v: string) => void
+  dateFilterField?: "emision" | "vencimiento"
+  onDateFilterFieldChange?: (field: "emision" | "vencimiento") => void
+}
+
+function Toolbar(props: ToolbarProps) {
+  const {
+    searchOpen,
+    setSearchOpen,
+    searchRef,
+    search,
+    setSearch,
+    filterOptions,
+    filterValue,
+    setFilterValue,
+    multiFilterOptions,
+    activeFilters,
+    onToggleFilter,
+    onClearFilters,
+    hideFilter,
+    fromDate,
+    toDate,
+    onFromDateChange,
+    onToDateChange,
+    dateFilterField,
+    onDateFilterFieldChange,
+  } = props
+
+  const [dateOpen, setDateOpen] = useState(false)
+  const dateButtonRef = useRef<HTMLButtonElement | null>(null)
+  const datePanelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (!dateOpen) return
+      if (
+        datePanelRef.current &&
+        dateButtonRef.current &&
+        !datePanelRef.current.contains(event.target as Node) &&
+        !dateButtonRef.current.contains(event.target as Node)
+      ) {
+        setDateOpen(false)
+      }
+    }
+    function handleKeydown(event: KeyboardEvent) {
+      if (!dateOpen) return
+      if (event.key === "Escape") {
+        setDateOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    document.addEventListener("keydown", handleKeydown)
+    return () => {
+      document.removeEventListener("mousedown", handleClick)
+      document.removeEventListener("keydown", handleKeydown)
+    }
+  }, [dateOpen])
+
+  const hasDateFilter = Boolean(onFromDateChange && onToDateChange)
+  const activeDateField = dateFilterField ?? "emision"
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+
+  const selectedFrom = fromDate ? new Date(fromDate) : null
+  const selectedTo = toDate ? new Date(toDate) : null
+  const rangeStart = selectedFrom && selectedTo && selectedFrom <= selectedTo ? selectedFrom : selectedTo && selectedFrom ? selectedTo : selectedFrom
+  const rangeEnd = selectedFrom && selectedTo && selectedFrom <= selectedTo ? selectedTo : selectedFrom && selectedTo ? selectedFrom : selectedTo
+
+  const days = useMemo(() => {
+    const firstOfMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)
+    const startWeekday = (firstOfMonth.getDay() + 6) % 7 // Monday = 0
+    const startDate = new Date(firstOfMonth)
+    startDate.setDate(firstOfMonth.getDate() - startWeekday)
+
+    return Array.from({ length: 42 }).map((_, index) => {
+      const day = new Date(startDate)
+      day.setDate(startDate.getDate() + index)
+      return day
+    })
+  }, [calendarMonth])
+
+  const weekDayLabels = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"]
+
+  function formatMonthLabel(date: Date) {
+    return date.toLocaleString("es-AR", { month: "long", year: "numeric" })
+  }
+
+  function formatIso(date: Date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  function sameDate(a: Date, b: Date | null) {
+    return Boolean(b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate())
+  }
+
+  function selectDay(day: Date) {
+    const dayIso = formatIso(day)
+    if (!selectedFrom || (selectedFrom && selectedTo)) {
+      onFromDateChange?.(dayIso)
+      onToDateChange?.("")
+      return
+    }
+    if (day < selectedFrom) {
+      onFromDateChange?.(dayIso)
+      onToDateChange?.("")
+      return
+    }
+    onToDateChange?.(dayIso)
+  }
+
+  function clearDates() {
+    onFromDateChange?.("")
+    onToDateChange?.("")
+  }
+
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {/* Multi-select filter chips */}
-      {!hideFilter && multiFilterOptions && multiFilterOptions.length > 0 && (
-        <div className="flex gap-1.5">
-          <button
-            onClick={onClearFilters}
-            className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
-            style={
-              activeFilters?.size === 0
-                ? { background: "var(--blue)", color: "white" }
-                : { background: "var(--bg)", color: "var(--ink-soft)", border: "1px solid var(--border)" }
-            }
-          >
-            Todos
-          </button>
-          {multiFilterOptions.map((opt) => {
-            const isActive = activeFilters?.has(opt.value)
-            return (
+    <div className="flex items-center gap-2 flex-wrap justify-between">
+      <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2">
+        {/* Multi-select filter chips */}
+        {!hideFilter && multiFilterOptions && multiFilterOptions.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={onClearFilters}
+              className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+              style={
+                activeFilters?.size === 0
+                  ? { background: "var(--blue)", color: "white" }
+                  : { background: "var(--bg)", color: "var(--ink-soft)", border: "1px solid var(--border)" }
+              }
+            >
+              Todos
+            </button>
+            {multiFilterOptions.map((opt) => {
+              const isActive = activeFilters?.has(opt.value)
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => onToggleFilter?.(opt.value)}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                  style={
+                    isActive
+                      ? { background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue)" }
+                      : { background: "var(--bg)", color: "var(--ink-soft)", border: "1px solid var(--border)" }
+                  }
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Single-select filter tabs (para pagos/presupuestos) */}
+        {!hideFilter && filterOptions && filterOptions.length > 0 && (
+          <div className="flex gap-1 rounded-[var(--radius)] p-0.5" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+            {filterOptions.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => onToggleFilter?.(opt.value)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                onClick={() => setFilterValue?.(opt.value)}
+                className="px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all"
                 style={
-                  isActive
-                    ? { background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue)" }
-                    : { background: "var(--bg)", color: "var(--ink-soft)", border: "1px solid var(--border)" }
+                  filterValue === opt.value
+                    ? { background: "var(--card)", color: "var(--ink)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
+                    : { background: "transparent", color: "var(--ink-soft)" }
                 }
               >
                 {opt.label}
               </button>
-            )
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Single-select filter tabs (para pagos/presupuestos) */}
-      {!hideFilter && filterOptions && filterOptions.length > 0 && (
-        <div className="flex gap-1 rounded-[var(--radius)] p-0.5" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-          {filterOptions.map((opt) => (
+        {/* Date range filter dropdown */}
+        {hasDateFilter && (
+          <div className="relative">
             <button
-              key={opt.value}
-              onClick={() => setFilterValue?.(opt.value)}
-              className="px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all"
-              style={
-                filterValue === opt.value
-                  ? { background: "var(--card)", color: "var(--ink)", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
-                  : { background: "transparent", color: "var(--ink-soft)" }
-              }
+              ref={dateButtonRef}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={dateOpen}
+              onClick={() => setDateOpen((prev) => !prev)}
+              className="flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-semibold transition-all"
+              style={{
+                borderColor: dateOpen ? "var(--blue)" : "var(--border)",
+                background: "var(--card)",
+                color: "var(--ink)",
+              }}
             >
-              {opt.label}
+              <Calendar size={16} strokeWidth={2} />
+              <span>Filtrar por fecha</span>
+              <ChevronDown size={14} strokeWidth={2} style={{ transform: dateOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s ease" }} />
             </button>
-          ))}
-        </div>
-      )}
+
+            {dateOpen && (
+              <div
+                ref={datePanelRef}
+                className="absolute right-0 mt-2 w-[320px] rounded-[14px] border border-[var(--border)] bg-white shadow-[0_18px_44px_rgba(16,24,40,0.18)] p-4"
+                role="dialog"
+                aria-label="Seleccionar fecha o rango"
+              >
+                <div className="flex gap-2 bg-[var(--bg)] border border-[var(--border)] rounded-[var(--radius)] p-1 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => onDateFilterFieldChange?.("emision")}
+                    className="flex-1 rounded-[8px] px-3 py-2 text-xs font-semibold transition-all"
+                    style={
+                      activeDateField === "emision"
+                        ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
+                        : { background: "transparent", color: "var(--ink-soft)" }
+                    }
+                  >
+                    Emisión
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDateFilterFieldChange?.("vencimiento")}
+                    className="flex-1 rounded-[8px] px-3 py-2 text-xs font-semibold transition-all"
+                    style={
+                      activeDateField === "vencimiento"
+                        ? { background: "white", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }
+                        : { background: "transparent", color: "var(--ink-soft)" }
+                    }
+                  >
+                    Vencimiento
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                    className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--border)] text-sm"
+                    style={{ color: "var(--ink-soft)" }}
+                  >
+                    ‹
+                  </button>
+                  <span className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                    {formatMonthLabel(calendarMonth)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                    className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--border)] text-sm"
+                    style={{ color: "var(--ink-soft)" }}
+                  >
+                    ›
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wider text-[var(--ink-soft)] mb-2">
+                  {weekDayLabels.map((label) => (
+                    <div key={label}>{label}</div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {days.map((day) => {
+                    const isCurrentMonth = day.getMonth() === calendarMonth.getMonth()
+                    const isSelected = sameDate(day, selectedFrom) || sameDate(day, selectedTo)
+                    const inRange = rangeStart && rangeEnd && day >= rangeStart && day <= rangeEnd
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        type="button"
+                        onClick={() => selectDay(day)}
+                        className="h-9 rounded-[10px] text-sm transition-all"
+                        style={{
+                          background: isSelected ? "var(--blue)" : inRange ? "rgba(59,130,246,0.12)" : "transparent",
+                          color: isSelected ? "white" : isCurrentMonth ? "var(--ink)" : "var(--ink-soft)",
+                          opacity: isCurrentMonth ? 1 : 0.5,
+                        }}
+                      >
+                        {day.getDate()}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between mt-4 text-sm text-[var(--ink-soft)]">
+                  <button
+                    type="button"
+                    onClick={clearDates}
+                    className="font-semibold"
+                    style={{ color: "var(--ink)" }}
+                  >
+                    Limpiar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDateOpen(false)}
+                    className="rounded-[var(--radius)] bg-[var(--blue)] px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Search toggle */}
-      <div className="flex items-center gap-0">
+      <div className="flex items-center gap-0 shrink-0">
         <button
           onClick={() => setSearchOpen(!searchOpen)}
           className="flex items-center justify-center w-8 h-8 rounded-[var(--radius)] transition-all"
@@ -1069,18 +1380,22 @@ function WhatsAppFacturasModal({
   facturas,
   razonsocial,
   cuentaCorriente,
+  tenantName,
+  whatsappNumber,
   initialIntent,
   onClose,
 }: {
   facturas: Factura[]
   razonsocial: string
   cuentaCorriente: number
+  tenantName: string
+  whatsappNumber: string
   initialIntent: WhatsAppFacturaIntent
   onClose: () => void
 }) {
   const [intent, setIntent] = useState<WhatsAppFacturaIntent>(initialIntent)
   const [message, setMessage] = useState(() =>
-    buildFacturasWhatsAppMessage(initialIntent, razonsocial, cuentaCorriente, facturas, fmt),
+    buildFacturasWhatsAppMessage(initialIntent, tenantName, razonsocial, cuentaCorriente, facturas, fmt),
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1092,7 +1407,7 @@ function WhatsAppFacturasModal({
   }, [])
 
   useEffect(() => {
-    const newMsg = buildFacturasWhatsAppMessage(intent, razonsocial, cuentaCorriente, facturas, fmt)
+    const newMsg = buildFacturasWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, facturas, fmt)
     setMessage(newMsg)
     setTimeout(() => {
       const el = textareaRef.current
@@ -1100,7 +1415,7 @@ function WhatsAppFacturasModal({
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     }, 0)
-  }, [intent, facturas, razonsocial, cuentaCorriente])
+  }, [intent, facturas, razonsocial, cuentaCorriente, tenantName])
 
   const intents: { value: WhatsAppFacturaIntent; title: string; subtitle: string }[] = [
     { value: "pagar", title: "Quiero pagar", subtitle: "Coordinar el pago de estas facturas" },
@@ -1220,7 +1535,7 @@ function WhatsAppFacturasModal({
               Cancelar
             </button>
             <button
-              onClick={() => openWhatsApp(message)}
+              onClick={() => openWhatsApp(whatsappNumber, message)}
               className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all text-white"
               style={{ background: "var(--wsp)" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
@@ -1256,41 +1571,47 @@ function SelectionBar({
       className="flex items-center gap-3 px-4 py-2.5 rounded-[var(--radius)] mt-2 flex-wrap"
       style={{ background: count > 0 ? "var(--blue)" : "var(--bg)", color: count > 0 ? "white" : "var(--ink-soft)", border: count > 0 ? "none" : "1px solid var(--border)" }}
     >
-      <span className="text-sm font-medium flex-1">
-        {count > 0 ? `${count} seleccionado${count !== 1 ? "s" : ""} · Total: ${fmt(total)}` : "Seleccioná comprobantes para operar"}
-      </span>
-      {count > 0 && (
-        <>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {count > 0 && (
           <button
             onClick={onClear}
-            className="text-xs font-medium opacity-80 hover:opacity-100 transition-opacity underline"
+            className="flex items-center justify-center w-7 h-7 rounded-full transition-all"
+            style={{ background: "rgba(255,255,255,0.14)", color: "white" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.22)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.14)" }}
+            aria-label="Limpiar selección"
           >
-            Limpiar
+            <X size={12} strokeWidth={1.5} color="white" />
           </button>
+        )}
+        <span className="text-sm font-medium truncate">
+          {count > 0 ? `${count} seleccionado${count !== 1 ? "s" : ""} · Total: ${fmt(total)}` : "Seleccioná comprobantes para operar"}
+        </span>
+      </div>
+      {count > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={onDownload}
             className="flex items-center gap-1.5 px-3 py-1 rounded-[6px] text-xs font-medium transition-all"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.25)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.15)" }}
+            style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.26)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.18)" }}
           >
             <DownloadIcon />
             Descargar
           </button>
-        </>
-      )}
-      {onWhatsapp && (
-        <button
-          onClick={count > 0 ? onWhatsapp : undefined}
-          disabled={count === 0}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-[6px] text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: count > 0 ? "var(--wsp)" : "var(--border)", color: count > 0 ? "white" : "var(--ink-soft)" }}
-          onMouseEnter={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp-strong)" }}
-          onMouseLeave={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp)" }}
-        >
-          <WspIcon />
-          WhatsApp
-        </button>
+          <button
+            onClick={count > 0 ? onWhatsapp : undefined}
+            disabled={count === 0}
+            className="flex items-center gap-1.5 px-4 py-1 rounded-[6px] text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: count > 0 ? "var(--wsp)" : "var(--border)", color: "white" }}
+            onMouseEnter={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp-strong)" }}
+            onMouseLeave={(e) => { if (count > 0) e.currentTarget.style.background = "var(--wsp)" }}
+          >
+            <WspIcon />
+            Consultar
+          </button>
+        </div>
       )}
     </div>
   )
@@ -1341,10 +1662,14 @@ function FacturaModal({
   factura,
   onClose,
   onWhatsapp,
+  tenantName,
+  logoSrc,
 }: {
   factura: Factura
   onClose: () => void
   onWhatsapp: (intent: WhatsAppFacturaIntent) => void
+  tenantName: string
+  logoSrc: string
 }) {
   const items = [
     { desc: "Luminaria LED Panel 60x60 48W", qty: 10, unit: factura.importe * 0.4 / 10, total: factura.importe * 0.4 },
@@ -1360,9 +1685,9 @@ function FacturaModal({
         {/* Header doc */}
         <div className="flex justify-between items-start pb-4" style={{ borderBottom: "2px solid var(--border)" }}>
           <div>
-            <Logo size="sm" />
+            <Logo size="sm" src={logoSrc} name={tenantName} />
             <div className="mt-2 text-xs" style={{ color: "var(--ink-soft)" }}>
-              <p>Central LED S.A.</p>
+              <p>{tenantName}</p>
               <p>CUIT: 30-71234567-8</p>
               <p>San Martín 1245, Posadas, Misiones</p>
               <p>IVA Responsable Inscripto</p>
@@ -1548,7 +1873,7 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
 
 // ── Presupuesto Modal ─────────────────────────────────────────────────────────
 
-function PresupuestoModal({ presupuesto, onClose }: { presupuesto: Presupuesto; onClose: () => void }) {
+function PresupuestoModal({ presupuesto, tenantName, whatsappNumber, onClose }: { presupuesto: Presupuesto; tenantName: string; whatsappNumber: string; onClose: () => void }) {
   const items = [
     { desc: "Luminaria LED Industrial 150W", qty: 4, unit: presupuesto.total * 0.5 / 4, total: presupuesto.total * 0.5 },
     { desc: "Panel LED 40W retroiluminado", qty: 6, unit: presupuesto.total * 0.3 / 6, total: presupuesto.total * 0.3 },
@@ -1556,7 +1881,7 @@ function PresupuestoModal({ presupuesto, onClose }: { presupuesto: Presupuesto; 
   ]
 
   function handleWsp() {
-    openWhatsApp(`Hola Central LED, quiero avanzar con el presupuesto ${presupuesto.id} por un total de ${fmt(presupuesto.total)}.`)
+    openWhatsApp(whatsappNumber, `Hola ${tenantName}, quiero avanzar con el presupuesto ${presupuesto.id} por un total de ${fmt(presupuesto.total)}.`)
   }
 
   return (
@@ -1838,14 +2163,16 @@ function DownloadIcon() {
 
 // ── WhatsApp Pagos Modal ──────────────────────────────────────────────────────
 
-function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, onClose }: {
+function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, onClose }: {
   pagos: Pago[]
   razonsocial: string
   cuentaCorriente: number
+  tenantName: string
+  whatsappNumber: string
   onClose: () => void
 }) {
   const [message, setMessage] = useState(() =>
-    buildPagosWhatsAppMessage(razonsocial, cuentaCorriente, pagos, fmt)
+    buildPagosWhatsAppMessage(tenantName, razonsocial, cuentaCorriente, pagos, fmt)
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1903,7 +2230,7 @@ function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, onClose }: {
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
             >Cancelar</button>
-            <button onClick={() => openWhatsApp(message)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium text-white transition-all"
+            <button onClick={() => openWhatsApp(whatsappNumber, message)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium text-white transition-all"
               style={{ background: "var(--wsp)" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "var(--wsp)" }}
@@ -1920,16 +2247,18 @@ function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, onClose }: {
 
 // ── WhatsApp Presupuestos Modal ───────────────────────────────────────────────
 
-function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente, initialIntent, onClose }: {
+function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialIntent, onClose }: {
   presupuestos: Presupuesto[]
   razonsocial: string
   cuentaCorriente: number
+  tenantName: string
+  whatsappNumber: string
   initialIntent: WhatsAppPresupuestoIntent
   onClose: () => void
 }) {
   const [intent, setIntent] = useState<WhatsAppPresupuestoIntent>(initialIntent)
   const [message, setMessage] = useState(() =>
-    buildPresupuestosWhatsAppMessage(initialIntent, razonsocial, cuentaCorriente, presupuestos, fmt)
+    buildPresupuestosWhatsAppMessage(initialIntent, tenantName, razonsocial, cuentaCorriente, presupuestos, fmt)
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1941,7 +2270,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente,
   }, [])
 
   useEffect(() => {
-    setMessage(buildPresupuestosWhatsAppMessage(intent, razonsocial, cuentaCorriente, presupuestos, fmt))
+    setMessage(buildPresupuestosWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, presupuestos, fmt))
     setTimeout(() => {
       const el = textareaRef.current
       if (!el) return
@@ -2019,7 +2348,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente,
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
             >Cancelar</button>
-            <button onClick={() => openWhatsApp(message)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium text-white transition-all"
+            <button onClick={() => openWhatsApp(whatsappNumber, message)} className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium text-white transition-all"
               style={{ background: "var(--wsp)" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "var(--wsp)" }}

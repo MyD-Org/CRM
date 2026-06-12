@@ -2,25 +2,37 @@ import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
 import { sessionOptions } from "@/lib/session"
-import { mockCliente, mockFacturas, mockPagos, mockPresupuestos } from "@/lib/mock-data"
+import { getTenantConfig } from "@/lib/tenant-context"
+import { getCliente, getFacturas, getPagos, getPresupuestos } from "@/lib/flexxus"
 import { DashboardClient } from "@/components/portal/DashboardClient"
 import type { SessionData } from "@/types"
 
 export default async function DashboardPage() {
-  const cookieStore = await cookies()
+  const [tenant, cookieStore] = await Promise.all([getTenantConfig(), cookies()])
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
-  if (!session.isLoggedIn) {
+  if (!session.isLoggedIn || !session.codigocliente) {
     redirect("/portal")
   }
 
+  const [cliente, facturas, pagos, presupuestos] = await Promise.all([
+    getCliente(tenant, session.codigocliente),
+    getFacturas(tenant, session.codigocliente),
+    getPagos(tenant, session.codigocliente),
+    getPresupuestos(tenant, session.codigocliente),
+  ])
+
   return (
     <DashboardClient
-      cliente={mockCliente}
-      facturas={mockFacturas}
-      pagos={mockPagos}
-      presupuestos={mockPresupuestos}
-      razonsocial={session.razonsocial ?? mockCliente.razonsocial}
+      cliente={cliente}
+      facturas={facturas}
+      pagos={pagos}
+      presupuestos={presupuestos}
+      razonsocial={session.razonsocial ?? cliente.razonsocial}
+      tenantName={tenant.name}
+      whatsappNumber={tenant.whatsappNumber}
+      logoSrc={tenant.logoPath}
+      logoSubtitle={tenant.subtitle}
     />
   )
 }

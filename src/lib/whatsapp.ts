@@ -1,7 +1,5 @@
 import type { Factura, Pago, Presupuesto, FacturaEstado } from "@/types"
 
-const WHATSAPP_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "5493757300293"
-
 const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
   pendiente: "Pendiente",
   vencida: "Vencida",
@@ -11,19 +9,20 @@ const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
 export type WhatsAppFacturaIntent = "pagar" | "consulta"
 export type WhatsAppPresupuestoIntent = "avanzar" | "consulta"
 
-export function openWhatsApp(message: string) {
-  const url = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`
+export function openWhatsApp(phone: string, message: string) {
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
   window.open(url, "_blank", "noopener,noreferrer")
 }
 
 export function buildFacturasWhatsAppMessage(
   intent: WhatsAppFacturaIntent,
+  tenantName: string,
   razonsocial: string,
   cuentaCorriente: number,
   facturas: Pick<Factura, "id" | "tipo" | "importe" | "estado">[],
   formatCurrency: (n: number) => string,
 ): string {
-  const header = `Hola Central LED, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
+  const header = `Hola ${tenantName}, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
   const intro =
     intent === "pagar"
       ? "Quiero coordinar el pago de los siguientes comprobantes:"
@@ -37,12 +36,13 @@ export function buildFacturasWhatsAppMessage(
 }
 
 export function buildPagosWhatsAppMessage(
+  tenantName: string,
   razonsocial: string,
   cuentaCorriente: number,
   pagos: Pick<Pago, "id" | "fecha" | "medio" | "monto">[],
   formatCurrency: (n: number) => string,
 ): string {
-  const header = `Hola Central LED, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
+  const header = `Hola ${tenantName}, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
   const intro = "Tengo una consulta sobre los siguientes pagos:"
   const lines = pagos
     .map((p) => `• ${p.id} — ${p.fecha} — ${p.medio} — ${formatCurrency(p.monto)}`)
@@ -52,12 +52,13 @@ export function buildPagosWhatsAppMessage(
 
 export function buildPresupuestosWhatsAppMessage(
   intent: WhatsAppPresupuestoIntent,
+  tenantName: string,
   razonsocial: string,
   cuentaCorriente: number,
   presupuestos: Pick<Presupuesto, "id" | "fecha" | "total">[],
   formatCurrency: (n: number) => string,
 ): string {
-  const header = `Hola Central LED, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
+  const header = `Hola ${tenantName}, les escribo de ${razonsocial} (Cta. Cte. N° ${cuentaCorriente}).`
   const intro =
     intent === "avanzar"
       ? "Quiero avanzar con los siguientes presupuestos:"
