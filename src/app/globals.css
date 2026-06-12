@@ -1,26 +1,85 @@
+@import url("https://fonts.googleapis.com/css2?family=Bowlby+One&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f1f2f4;
+  --card: #ffffff;
+  --ink: #16191d;
+  --ink-soft: #5b626b;
+  --ink-faint: #8a9099;
+  --border: #dde0e4;
+  --border-strong: #cfd3d9;
+  --blue: #0c3ed6;
+  --blue-hover: #0930a6;
+  --blue-bright: #1f8cff;
+  --blue-soft: #e9eefc;
+  --red: #d2150f;
+  --red-soft: #fdecec;
+  --green: #1b7a45;
+  --green-soft: #e8f5ec;
+  --wsp: #1f9d56;
+  --wsp-strong: #128a45;
+  --amber: #9a6400;
+  --amber-soft: #fbf0db;
+  --radius: 10px;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-blue: var(--blue);
+  --color-blue-hover: var(--blue-hover);
+  --color-blue-bright: var(--blue-bright);
+  --color-blue-soft: var(--blue-soft);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-wsp: var(--wsp);
+  --color-wsp-strong: var(--wsp-strong);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --radius-brand: var(--radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
 }
