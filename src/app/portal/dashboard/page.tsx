@@ -12,7 +12,7 @@ import type { SessionData } from "@/types"
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string }>
+  searchParams: Promise<{ tab?: string; q?: string; factura?: string }>
 }) {
   const [tenant, cookieStore, sp] = await Promise.all([getTenantConfig(), cookies(), searchParams])
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
@@ -42,8 +42,9 @@ export default async function DashboardPage({
       whatsappNumber={tenant.whatsappNumber}
       logoSrc={tenant.logoPath}
       logoSubtitle={tenant.subtitle}
-      initialTab={sp.tab}
+      initialTab={sp.factura ? "facturas" : sp.tab}
       initialQuery={sp.q}
+      openFacturaId={sp.factura}
       />
       {aiEnabled && (
         <AiChat

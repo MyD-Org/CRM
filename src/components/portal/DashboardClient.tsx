@@ -144,6 +144,7 @@ interface Props {
   logoSubtitle: string
   initialTab?: string
   initialQuery?: string
+  openFacturaId?: string
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -156,7 +157,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery }: Props) {
+export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -302,6 +303,7 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
                 onFilterChange={setFacturasFilter}
                 initialSearch={facturasSearch}
                 onSearchChange={setFacturasSearch}
+                openFacturaId={openFacturaId}
               />
             )}
             {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={pagosSearch} />}
@@ -422,6 +424,7 @@ function FacturasTable({
   onFilterChange,
   initialSearch = "",
   onSearchChange,
+  openFacturaId,
 }: {
   facturas: Factura[]
   razonsocial: string
@@ -433,6 +436,7 @@ function FacturasTable({
   onFilterChange?: (v: FacturaEstado | "todos") => void
   initialSearch?: string
   onSearchChange?: (v: string) => void
+  openFacturaId?: string
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState(initialSearch)
@@ -457,6 +461,15 @@ function FacturasTable({
   const [modalFactura, setModalFactura] = useState<Factura | null>(null)
   const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  // Abre el detalle de la factura indicada por URL (?factura=ID) — usado al tocar
+  // una notificación. Se reabre si cambia el id.
+  const prevOpen = useRef<string | undefined>(undefined)
+  if (openFacturaId && prevOpen.current !== openFacturaId) {
+    prevOpen.current = openFacturaId
+    const target = facturas.find((f) => f.id === openFacturaId)
+    if (target) setModalFactura(target)
+  }
 
   function toggleEstado(estado: FacturaEstado) {
     setFilterEstados(prev => {

@@ -195,8 +195,10 @@ interface NotifMeta {
   target?: NotifTarget // si existe, se muestra el botón para navegar
 }
 
-// URL del dashboard filtrando una tab por comprobante.
+// URL del dashboard apuntando a un comprobante. Para facturas abre el detalle
+// directamente (?factura=ID); para el resto filtra la tab por comprobante.
 function dashboardHref(kind: EntityKind, id: string) {
+  if (kind === "factura") return `/portal/dashboard?factura=${encodeURIComponent(id)}`
   return `/portal/dashboard?tab=${kind}s&q=${encodeURIComponent(id)}`
 }
 
