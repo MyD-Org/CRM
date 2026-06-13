@@ -8,6 +8,13 @@
       "when": 1781304256935,
       "tag": "0000_outstanding_yellowjacket",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781356424305,
+      "tag": "0001_rich_shen",
+      "breakpoints": true
     }
   ]
 }

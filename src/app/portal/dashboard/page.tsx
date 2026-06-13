@@ -9,8 +9,12 @@ import { AiChat } from "@/components/portal/AiChat"
 import { aiChatEnabled } from "@/lib/flags"
 import type { SessionData } from "@/types"
 
-export default async function DashboardPage() {
-  const [tenant, cookieStore] = await Promise.all([getTenantConfig(), cookies()])
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; q?: string }>
+}) {
+  const [tenant, cookieStore, sp] = await Promise.all([getTenantConfig(), cookies(), searchParams])
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
 
   if (!session.isLoggedIn || !session.codigocliente) {
@@ -38,6 +42,8 @@ export default async function DashboardPage() {
       whatsappNumber={tenant.whatsappNumber}
       logoSrc={tenant.logoPath}
       logoSubtitle={tenant.subtitle}
+      initialTab={sp.tab}
+      initialQuery={sp.q}
       />
       {aiEnabled && (
         <AiChat

@@ -142,16 +142,43 @@ interface Props {
   whatsappNumber: string
   logoSrc: string
   logoSubtitle: string
+  initialTab?: string
+  initialQuery?: string
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
 
+const TABS: Tab[] = ["facturas", "pagos", "presupuestos"]
+
+function toTab(value?: string): Tab {
+  return TABS.includes(value as Tab) ? (value as Tab) : "facturas"
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("facturas")
+export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery }: Props) {
+  const startTab = toTab(initialTab)
+  const startQuery = initialQuery ?? ""
+
+  const [activeTab, setActiveTab] = useState<Tab>(startTab)
   const [facturasFilter, setFacturasFilter] = useState<FacturaEstado | "todos">("todos")
-  const [facturasSearch, setFacturasSearch] = useState("")
+  const [facturasSearch, setFacturasSearch] = useState(startTab === "facturas" ? startQuery : "")
+  const [pagosSearch, setPagosSearch] = useState(startTab === "pagos" ? startQuery : "")
+  const [presupuestosSearch, setPresupuestosSearch] = useState(startTab === "presupuestos" ? startQuery : "")
+
+  // Sincroniza con los query params (?tab=&q=) cuando cambian — p.ej. al tocar
+  // una notificación estando ya en el dashboard.
+  const prevNav = useRef(`${startTab}|${startQuery}`)
+  const navKey = `${toTab(initialTab)}|${initialQuery ?? ""}`
+  if (prevNav.current !== navKey) {
+    prevNav.current = navKey
+    const t = toTab(initialTab)
+    const q = initialQuery ?? ""
+    setActiveTab(t)
+    if (t === "facturas") { setFacturasFilter("todos"); setFacturasSearch(q) }
+    else if (t === "pagos") setPagosSearch(q)
+    else setPresupuestosSearch(q)
+  }
 
   const vencidasCount = facturas.filter((f) => f.estado === "vencida").length
   const pendientesCount = facturas.filter((f) => f.estado === "pendiente").length
@@ -160,7 +187,12 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
-      <PortalHeader logoSrc={logoSrc} tenantName={tenantName} logoSubtitle={logoSubtitle} razonsocial={razonsocial} />
+      <PortalHeader
+        logoSrc={logoSrc}
+        tenantName={tenantName}
+        logoSubtitle={logoSubtitle}
+        razonsocial={razonsocial}
+      />
 
       {/* Content */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
@@ -272,8 +304,9 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
                 onSearchChange={setFacturasSearch}
               />
             )}
-            {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
-            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
+            {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={pagosSearch} />}
+            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={presupuestosSearch} />}
+
           </div>
         </div>
       </main>
@@ -635,10 +668,17 @@ function FacturasTable({
 
 // ── Pagos Table ───────────────────────────────────────────────────────────────
 
-function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName, whatsappNumber }: { pagos: Pago[]; facturas: Factura[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string }) {
+function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialSearch = "" }: { pagos: Pago[]; facturas: Factura[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string; initialSearch?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState("")
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [search, setSearch] = useState(initialSearch)
+  const [searchOpen, setSearchOpen] = useState(!!initialSearch)
+
+  const prevSearch = useRef(initialSearch)
+  if (prevSearch.current !== initialSearch) {
+    prevSearch.current = initialSearch
+    setSearch(initialSearch)
+    setSearchOpen(!!initialSearch)
+  }
   const [modalPago, setModalPago] = useState<Pago | null>(null)
   const [showAdjuntar, setShowAdjuntar] = useState(false)
   const [wspModal, setWspModal] = useState(false)
@@ -857,10 +897,17 @@ function PresupuestoBadge({ estado }: { estado: PresupuestoEstado }) {
   )
 }
 
-function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber }: { presupuestos: Presupuesto[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string }) {
+function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialSearch = "" }: { presupuestos: Presupuesto[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string; initialSearch?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState("")
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [search, setSearch] = useState(initialSearch)
+  const [searchOpen, setSearchOpen] = useState(!!initialSearch)
+
+  const prevSearch = useRef(initialSearch)
+  if (prevSearch.current !== initialSearch) {
+    prevSearch.current = initialSearch
+    setSearch(initialSearch)
+    setSearchOpen(!!initialSearch)
+  }
   const [filterEstados, setFilterEstados] = useState<Set<PresupuestoEstado>>(new Set())
   const [modalPresupuesto, setModalPresupuesto] = useState<Presupuesto | null>(null)
   const [wspModal, setWspModal] = useState<WhatsAppPresupuestoIntent | null>(null)

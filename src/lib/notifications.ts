@@ -62,7 +62,6 @@ function tenantConfigFromRow(row: typeof tenantsTable.$inferSelect): TenantConfi
 
 function buildEmail(tenant: TenantConfig, cliente: Cliente, items: PendingNotification[]) {
   const vencidas = items.filter((i) => i.diasDiff > 0)
-  const porVencer = items.filter((i) => i.diasDiff <= 0)
 
   const subject = vencidas.length
     ? `${tenant.name} — Tenés ${vencidas.length === 1 ? "una factura vencida" : `${vencidas.length} facturas vencidas`}`

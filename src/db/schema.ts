@@ -80,6 +80,7 @@ export const notificationLog = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
     status: text("status").notNull(), // 'sent' | 'failed'
     error: text("error"),
+    readAt: timestamp("read_at", { withTimezone: true }), // null = no leída
   },
   (t) => [
     index("nl_tenant_cliente_sent").on(t.tenantId, t.codigocliente, t.sentAt),
