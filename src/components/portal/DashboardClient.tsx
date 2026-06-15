@@ -8,6 +8,11 @@ import {
   Badge,
   Button,
   SelectionBar as DSSelectionBar,
+  Dialog,
+  Tabs,
+  Tooltip as DSTooltip,
+  TooltipProvider,
+  SearchInput,
 } from "@myd-org/ui"
 import { Logo } from "./Logo"
 import { PortalHeader } from "./PortalHeader"
@@ -26,27 +31,19 @@ import { CreditCard, Search, Plus, X, Upload, FileText, Eye, Download, Info, Cal
 
 function Tooltip({ text, white = false }: { text: string; white?: boolean }) {
   return (
-    <span className="relative group inline-flex items-center">
-      <Info
-        size={13}
-        strokeWidth={1.6}
-        style={{ color: white ? "rgba(255,255,255,0.6)" : "var(--ink-faint)", cursor: "default" }}
-      />
-      <span
-        className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg px-3 py-2 text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 text-center"
-        style={{
-          background: "var(--ink)",
-          color: "white",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-        }}
+    <DSTooltip content={text}>
+      <button
+        type="button"
+        aria-label={text}
+        className="inline-flex cursor-default items-center bg-transparent p-0"
       >
-        {text}
-        <span
-          className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent"
-          style={{ borderTopColor: "var(--ink)" }}
+        <Info
+          size={13}
+          strokeWidth={1.6}
+          style={{ color: white ? "rgba(255,255,255,0.6)" : "var(--ink-faint)" }}
         />
-      </span>
-    </span>
+      </button>
+    </DSTooltip>
   )
 }
 
@@ -221,24 +218,17 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
           className="rounded-[var(--radius)] flex flex-col"
           style={{ background: "var(--card)", border: "1px solid var(--border)" }}
         >
-          <div
-            className="flex gap-0 border-b px-4"
-            style={{ borderColor: "var(--border)" }}
-          >
-            {(["facturas", "pagos", "presupuestos"] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="px-4 py-3.5 text-sm font-medium capitalize transition-all relative"
-                style={{
-                  color: activeTab === tab ? "var(--blue)" : "var(--ink-soft)",
-                  borderBottom: activeTab === tab ? "2px solid var(--blue)" : "2px solid transparent",
-                }}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            items={[
+              { value: "facturas", label: "Facturas" },
+              { value: "pagos", label: "Pagos" },
+              { value: "presupuestos", label: "Presupuestos" },
+            ]}
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as Tab)}
+            ariaLabel="Vistas"
+            listClassName="px-4 py-1"
+          />
 
           <div className="p-4">
             {activeTab === "facturas" && (
@@ -1376,36 +1366,16 @@ function Toolbar(props: ToolbarProps) {
           </div>
         )}
 
-      {/* Search — icon inside input, closes on blur if empty */}
+      {/* Search — icon button when closed, SearchInput when open */}
       <div className="relative shrink-0 flex items-center">
         {searchOpen ? (
-          <div
-            className="flex items-center gap-1.5 rounded-full px-2.5"
-            style={{ border: "1px solid var(--blue)", background: "var(--card)", height: 26 }}
-          >
-            <Search size={13} strokeWidth={1.4} style={{ color: "var(--blue)", flexShrink: 0 }} />
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onBlur={() => { if (!search) setSearchOpen(false) }}
-              placeholder="Buscar..."
-              className="text-xs outline-none bg-transparent"
-              style={{ width: 160, color: "var(--ink)" }}
-            />
-            {search && (
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { setSearch(""); searchRef.current?.focus() }}
-                aria-label="Limpiar búsqueda"
-                className="flex items-center justify-center shrink-0 transition-opacity hover:opacity-70"
-                style={{ color: "var(--blue)" }}
-              >
-                <X size={11} strokeWidth={2.5} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            ref={searchRef}
+            value={search}
+            onValueChange={setSearch}
+            onBlur={() => { if (!search) setSearchOpen(false) }}
+            className="h-[26px] py-0 text-xs"
+          />
         ) : (
           <button
             onClick={() => setSearchOpen(true)}
@@ -1657,38 +1627,14 @@ function SelectionBar({
 
 function Modal({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(22,25,29,0.5)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
+    <Dialog
+      open
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title={title}
+      className="max-w-2xl"
     >
-      <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col"
-        style={{
-          background: "var(--card)",
-          borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between px-6 py-4 sticky top-0"
-          style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}
-        >
-          <h2 className="text-base font-semibold" style={{ color: "var(--ink)" }}>{title}</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full transition-all"
-            style={{ color: "var(--ink-soft)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
-          >
-            <X size={16} strokeWidth={1.8} color="currentColor" />
-          </button>
-        </div>
-        <div className="p-6 flex-1">{children}</div>
-      </div>
-    </div>
+      {children}
+    </Dialog>
   )
 }
 

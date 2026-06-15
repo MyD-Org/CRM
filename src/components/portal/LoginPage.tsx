@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Button, Field, Input, Spinner } from "@myd-org/ui"
+import { Button, Field, Input, Spinner, Tabs } from "@myd-org/ui"
 import { Logo } from "@/components/portal/Logo"
 import { ChevronLeft, Clock, ShoppingCart } from "lucide-react"
 
@@ -178,30 +178,16 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
         style={{ background: "transparent" }}
       >
         <Logo size="md" showSubtitle src={logoSrc} name={tenantName} subtitle={tenantSubtitle} />
-        <nav className="flex items-center gap-1 rounded-full p-1" style={{ background: "rgba(255,255,255,0.7)", border: "1px solid var(--border)" }}>
-          <button
-            onClick={() => setStep("identify")}
-            className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
-            style={
-              step !== "tienda"
-                ? { background: "var(--blue)", color: "white" }
-                : { background: "transparent", color: "var(--ink-soft)" }
-            }
-          >
-            Iniciar sesión
-          </button>
-          <button
-            onClick={() => setStep("tienda")}
-            className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
-            style={
-              step === "tienda"
-                ? { background: "var(--blue)", color: "white" }
-                : { background: "transparent", color: "var(--ink-soft)" }
-            }
-          >
-            Tienda
-          </button>
-        </nav>
+        <Tabs
+          variant="pill"
+          items={[
+            { value: "login", label: "Iniciar sesión" },
+            { value: "tienda", label: "Tienda" },
+          ]}
+          value={step === "tienda" ? "tienda" : "login"}
+          onValueChange={(v) => setStep(v === "tienda" ? "tienda" : "identify")}
+          ariaLabel="Autenticación"
+        />
       </header>
 
       {/* Main */}

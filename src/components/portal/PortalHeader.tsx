@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Avatar } from "@myd-org/ui"
+import { Avatar, DropdownMenu, type DropdownMenuEntry } from "@myd-org/ui"
 import { ShoppingCart, LogOut, FileText, ChevronDown, ChevronRight, Bell, Clock, AlertTriangle } from "lucide-react"
 import { Logo } from "./Logo"
 
@@ -18,10 +17,8 @@ interface PortalHeaderProps {
 
 export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }: PortalHeaderProps) {
   const router = useRouter()
-  const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
-  const menuRef = useRef<HTMLDivElement | null>(null)
   const notifRef = useRef<HTMLDivElement | null>(null)
   const notif = useNotifications()
 
@@ -32,13 +29,12 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
   }
 
   useEffect(() => {
-    if (!menuOpen && !notifOpen) return
+    if (!notifOpen) return
     function handleClick(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false)
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) setNotifOpen(false)
     }
     function handleKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape") { setMenuOpen(false); setNotifOpen(false) }
+      if (event.key === "Escape") setNotifOpen(false)
     }
     document.addEventListener("mousedown", handleClick)
     document.addEventListener("keydown", handleKeydown)
@@ -46,7 +42,7 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
       document.removeEventListener("mousedown", handleClick)
       document.removeEventListener("keydown", handleKeydown)
     }
-  }, [menuOpen, notifOpen])
+  }, [notifOpen])
 
   return (
     <header
@@ -82,7 +78,7 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
         {/* Campanita de notificaciones */}
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => { setNotifOpen((p) => !p); setMenuOpen(false) }}
+            onClick={() => setNotifOpen((p) => !p)}
             aria-label="Notificaciones"
             className="relative flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-[var(--bg)]"
           >
@@ -99,57 +95,35 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
         </div>
 
         {/* Avatar + menú */}
-        <div className="relative" ref={menuRef}>
+        <DropdownMenu
+          className="w-56"
+          items={
+            [
+              { type: "label", label: razonsocial },
+              {
+                label: "Condiciones comerciales",
+                icon: <FileText size={15} strokeWidth={1.6} className="text-muted" />,
+                onSelect: () => router.push("/portal/condiciones"),
+              },
+              {
+                label: "Salir",
+                icon: <LogOut size={15} strokeWidth={1.6} />,
+                tone: "danger",
+                disabled: loggingOut,
+                onSelect: handleLogout,
+              },
+            ] as DropdownMenuEntry[]
+          }
+        >
           <button
-            onClick={() => setMenuOpen((prev) => !prev)}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            type="button"
+            aria-label="Menú de usuario"
             className="flex items-center gap-1.5 transition-opacity hover:opacity-80"
           >
             <Avatar size="sm" name={razonsocial} className="h-8 w-8 text-xs font-bold" />
-            <ChevronDown
-              size={14}
-              strokeWidth={2}
-              style={{ color: "var(--ink-soft)", transform: menuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-            />
+            <ChevronDown size={14} strokeWidth={2} style={{ color: "var(--ink-soft)" }} />
           </button>
-
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 mt-2 w-56 rounded-[12px] py-1.5 z-50"
-              style={{
-                background: "var(--card)",
-                border: "1px solid var(--border)",
-                boxShadow: "0 12px 32px rgba(16,24,40,0.14)",
-              }}
-            >
-              <div className="px-4 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
-                <p className="text-xs font-semibold truncate" style={{ color: "var(--ink)" }}>{razonsocial}</p>
-              </div>
-              <Link
-                href="/portal/condiciones"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-[var(--bg)]"
-                style={{ color: "var(--ink)" }}
-              >
-                <FileText size={15} strokeWidth={1.6} style={{ color: "var(--ink-soft)" }} />
-                Condiciones comerciales
-              </Link>
-              <button
-                role="menuitem"
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-left transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
-                style={{ color: "var(--red)" }}
-              >
-                <LogOut size={15} strokeWidth={1.6} color="currentColor" />
-                Salir
-              </button>
-            </div>
-          )}
-        </div>
+        </DropdownMenu>
       </div>
     </header>
   )
