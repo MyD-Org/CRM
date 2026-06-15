@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { Button, Field, Input, Spinner } from "@myd-org/ui"
 import { Logo } from "@/components/portal/Logo"
 import { ChevronLeft, Clock, ShoppingCart } from "lucide-react"
 
@@ -276,11 +277,8 @@ function IdentifyStep({
         </p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium" style={{ color: "var(--ink)" }} htmlFor="identifier">
-          CUIT o Email
-        </label>
-        <input
+      <Field label="CUIT o Email" error={error || undefined}>
+        <Input
           id="identifier"
           type="text"
           value={identifier}
@@ -289,41 +287,24 @@ function IdentifyStep({
           autoFocus
           autoComplete="username"
           required
-          className="w-full px-3.5 py-2.5 text-sm rounded-[var(--radius)] outline-none transition-all"
-          style={{
-            border: error ? "1.5px solid var(--red)" : "1.5px solid var(--border-strong)",
-            color: "var(--ink)",
-            background: "var(--card)",
-          }}
-          onFocus={(e) => {
-            if (!error) e.currentTarget.style.borderColor = "var(--blue)"
-          }}
-          onBlur={(e) => {
-            if (!error) e.currentTarget.style.borderColor = "var(--border-strong)"
-          }}
         />
-        {error && (
-          <p className="text-xs" style={{ color: "var(--red)" }}>{error}</p>
-        )}
-      </div>
+      </Field>
 
-      <button
+      <Button
         type="submit"
-        disabled={loading || !identifier.trim()}
-        className="w-full py-2.5 rounded-[var(--radius)] text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: loading ? "var(--blue-hover)" : "var(--blue)" }}
-        onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--blue-hover)" }}
-        onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "var(--blue)" }}
+        loading={loading}
+        disabled={!identifier.trim()}
+        className="w-full"
       >
         {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <SpinnerIcon />
+          <>
+            <Spinner size="sm" />
             Enviando...
-          </span>
+          </>
         ) : (
           "Continuar"
         )}
-      </button>
+      </Button>
 
       <p className="text-xs text-center" style={{ color: "var(--ink-faint)" }}>
         Te enviaremos un código de verificación de 6 dígitos.
@@ -369,15 +350,16 @@ function OtpStep({
   return (
     <form onSubmit={onSubmit} className="p-8 flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm font-medium w-fit transition-opacity hover:opacity-70"
-          style={{ color: "var(--blue)" }}
+          className="w-fit px-0 text-primary hover:bg-transparent hover:opacity-70"
         >
           <ChevronLeft size={16} strokeWidth={1.8} color="currentColor" />
           Volver
-        </button>
+        </Button>
         <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>
           Verificá tu identidad
         </h1>
@@ -421,23 +403,21 @@ function OtpStep({
         <p className="text-sm text-center" style={{ color: "var(--red)" }}>{error}</p>
       )}
 
-      <button
+      <Button
         type="submit"
-        disabled={loading || otp.join("").length < 6}
-        className="w-full py-2.5 rounded-[var(--radius)] text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: "var(--blue)" }}
-        onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--blue-hover)" }}
-        onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "var(--blue)" }}
+        loading={loading}
+        disabled={otp.join("").length < 6}
+        className="w-full"
       >
         {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <SpinnerIcon />
+          <>
+            <Spinner size="sm" />
             Verificando...
-          </span>
+          </>
         ) : (
           "Verificar"
         )}
-      </button>
+      </Button>
 
       <div className="flex items-center justify-center gap-1 text-sm" style={{ color: "var(--ink-soft)" }}>
         <span>¿No recibiste el código?</span>
@@ -496,32 +476,16 @@ function TiendaCard({ onBack }: { onBack: () => void }) {
         </p>
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={onBack}
-        className="flex items-center gap-2 text-sm font-medium transition-opacity hover:opacity-70"
-        style={{ color: "var(--blue)" }}
+        className="text-primary hover:bg-transparent hover:opacity-70"
       >
         <ChevronLeft size={16} strokeWidth={1.8} color="currentColor" />
         Volver al inicio de sesión
-      </button>
+      </Button>
     </div>
-  )
-}
-
-// ── Spinner ──────────────────────────────────────────────────────────────────
-
-function SpinnerIcon() {
-  return (
-    <svg
-      className="animate-spin"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-    >
-      <circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-      <path d="M8 2a6 6 0 016 6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-    </svg>
   )
 }

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@myd-org/ai-widget": "file:../../../../../tmp/myd-org-ai-widget-0.1.0.tgz",
+    "@myd-org/ui": "^0.3.0",
     "@vercel/flags": "^3.1.1",
     "drizzle-orm": "^0.45.2",
     "iron-session": "^8.0.4",

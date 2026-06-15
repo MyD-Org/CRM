@@ -3,17 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { Avatar } from "@myd-org/ui"
 import { ShoppingCart, LogOut, FileText, ChevronDown, ChevronRight, Bell, Clock, AlertTriangle } from "lucide-react"
 import { Logo } from "./Logo"
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-}
 
 type EntityKind = "factura" | "pago" | "presupuesto"
 
@@ -114,12 +106,7 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
             aria-expanded={menuOpen}
             className="flex items-center gap-1.5 transition-opacity hover:opacity-80"
           >
-            <span
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-              style={{ background: "var(--blue)" }}
-            >
-              {initials(razonsocial)}
-            </span>
+            <Avatar size="sm" name={razonsocial} className="h-8 w-8 text-xs font-bold" />
             <ChevronDown
               size={14}
               strokeWidth={2}

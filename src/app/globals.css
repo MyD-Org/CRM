@@ -1,5 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Bowlby+One&display=swap");
 @import "tailwindcss";
+@import "@myd-org/ui/tailwind.css";
+@source "../../node_modules/@myd-org/ui/dist";
 
 :root {
   --bg: #f1f2f4;
@@ -23,6 +25,29 @@
   --amber-soft: #fbf0db;
   --radius: 10px;
   --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* Override de roles del DS con la paleta del CRM */
+  --color-primary: #0c3ed6;
+  --color-primary-hover: #0930a6;
+  --color-primary-soft: #e9eefc;
+  --color-text: #16191d;
+  --color-muted: #5b626b;
+  --color-subtle: #8a9099;
+  --color-surface: #ffffff;
+  --color-bg: #f1f2f4;
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-strong: #cfd3d9;
+  --color-danger: #d2150f;
+  --color-danger-soft: #fdecec;
+  --color-success: #1b7a45;
+  --color-success-soft: #e8f5ec;
+  --color-warning: #9a6400;
+  --color-warning-soft: #fbf0db;
+  --color-accent: #1f9d56;
+  --color-accent-strong: #128a45;
+  --radius-sm: 10px;
+  --radius: 10px;
+  --radius-lg: 10px;
 }
 
 @theme inline {

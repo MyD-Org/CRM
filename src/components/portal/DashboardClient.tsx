@@ -1,6 +1,14 @@
 "use client"
 
 import { useState, useMemo, useRef, useEffect } from "react"
+import {
+  Table,
+  type TableColumn,
+  Progress,
+  Badge,
+  Button,
+  SelectionBar as DSSelectionBar,
+} from "@myd-org/ui"
 import { Logo } from "./Logo"
 import { PortalHeader } from "./PortalHeader"
 import type { Cliente, Factura, Pago, Presupuesto, FacturaEstado, PresupuestoEstado } from "@/types"
@@ -12,7 +20,7 @@ import {
   type WhatsAppFacturaIntent,
   type WhatsAppPresupuestoIntent,
 } from "@/lib/whatsapp"
-import { CreditCard, Search, Plus, X, Upload, FileText, Check, Eye, Download, Info, Calendar, ChevronDown, CheckSquare } from "lucide-react"
+import { CreditCard, Search, Plus, X, Upload, FileText, Eye, Download, Info, Calendar, ChevronDown } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -70,64 +78,6 @@ function esPagoParcial(f: Factura) {
 /** Lo que realmente se adeuda de la factura (importe menos pagos registrados) */
 function saldoDe(f: Factura) {
   return f.importe - (f.pagado ?? 0)
-}
-
-// ── Ordenamiento de columnas ─────────────────────────────────────────────────
-
-type SortDir = 1 | -1
-
-function useSort<K extends string>(defaultDescKeys: readonly K[] = [], initialKey: K | null = null) {
-  const [sortKey, setSortKey] = useState<K | null>(initialKey)
-  const [sortDir, setSortDir] = useState<SortDir>(initialKey && defaultDescKeys.includes(initialKey) ? -1 : 1)
-
-  function toggleSort(key: K) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 1 ? -1 : 1))
-    } else {
-      setSortKey(key)
-      setSortDir(defaultDescKeys.includes(key) ? -1 : 1)
-    }
-  }
-
-  return { sortKey, sortDir, toggleSort }
-}
-
-function compareValues(a: unknown, b: unknown): number {
-  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime()
-  if (typeof a === "number" && typeof b === "number") return a - b
-  return String(a).localeCompare(String(b), "es")
-}
-
-function SortableTh({
-  label,
-  active,
-  dir,
-  onClick,
-  align = "left",
-  className = "",
-}: {
-  label: string
-  active: boolean
-  dir: SortDir
-  onClick: () => void
-  align?: "left" | "right"
-  className?: string
-}) {
-  return (
-    <th
-      onClick={onClick}
-      className={`py-2 px-3 font-medium text-xs cursor-pointer select-none transition-colors ${align === "right" ? "text-right" : "text-left"} ${className}`}
-      style={{ color: active ? "var(--blue)" : "var(--ink-soft)" }}
-      aria-sort={active ? (dir === 1 ? "ascending" : "descending") : undefined}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <span style={{ fontSize: 7, lineHeight: 1, visibility: active ? "visible" : "hidden" }}>
-          {dir === 1 ? "▲" : "▼"}
-        </span>
-      </span>
-    </th>
-  )
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -393,20 +343,14 @@ const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
   pagada: "Pagada",
 }
 
+const FACTURA_TONE: Record<FacturaEstado, "warning" | "danger" | "success"> = {
+  pendiente: "warning",
+  vencida: "danger",
+  pagada: "success",
+}
+
 function FacturaBadge({ estado }: { estado: FacturaEstado }) {
-  const styles: Record<FacturaEstado, React.CSSProperties> = {
-    pendiente: { background: "var(--amber-soft)", color: "var(--amber)" },
-    vencida: { background: "var(--red-soft)", color: "var(--red)" },
-    pagada: { background: "var(--green-soft)", color: "var(--green)" },
-  }
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-      style={styles[estado]}
-    >
-      {FACTURA_ESTADO_LABELS[estado]}
-    </span>
-  )
+  return <Badge tone={FACTURA_TONE[estado]}>{FACTURA_ESTADO_LABELS[estado]}</Badge>
 }
 
 function initialToSet(f: FacturaEstado | "todos"): Set<FacturaEstado> {
@@ -493,41 +437,102 @@ function FacturasTable({
     })
   }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField])
 
-  const { sortKey, sortDir, toggleSort } = useSort<"id" | "emision" | "vencimiento" | "importe" | "estado">(["emision", "vencimiento", "importe"], "emision")
-  const sorted = useMemo(() => {
-    if (!sortKey) return filtered
-    const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2 }
-    return [...filtered].sort((a, b) => {
-      let av: unknown, bv: unknown
-      if (sortKey === "emision" || sortKey === "vencimiento") { av = parseLocalDate(a[sortKey]); bv = parseLocalDate(b[sortKey]) }
-      else if (sortKey === "estado") { av = estadoOrder[a.estado]; bv = estadoOrder[b.estado] }
-      else { av = a[sortKey]; bv = b[sortKey] }
-      return compareValues(av, bv) * sortDir
-    })
-  }, [filtered, sortKey, sortDir])
-
-  const allSelected = filtered.length > 0 && filtered.every((f) => selected.has(f.id))
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
 
-  function toggleAll() {
-    if (allSelected) {
-      const next = new Set(selected)
-      filtered.forEach((f) => next.delete(f.id))
-      setSelected(next)
-    } else {
-      const next = new Set(selected)
-      filtered.forEach((f) => next.add(f.id))
-      setSelected(next)
-    }
-  }
+  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2 }
 
-  function toggleOne(id: string) {
-    const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setSelected(next)
-  }
+  const facturaColumns: TableColumn<Factura>[] = [
+    {
+      key: "id",
+      header: "Comprobante",
+      sortable: true,
+      render: (f) => (
+        <>
+          <div className="font-medium" style={{ color: "var(--ink)" }}>{f.id}</div>
+          <div className="text-xs" style={{ color: "var(--ink-faint)" }}>{f.tipo}</div>
+        </>
+      ),
+    },
+    {
+      key: "emision",
+      header: "Emisión",
+      sortable: true,
+      hideBelow: "sm",
+      defaultSortDir: "desc",
+      sortValue: (f) => parseLocalDate(f.emision)?.valueOf() ?? 0,
+      className: "text-xs",
+      headerClassName: "text-xs",
+      render: (f) => <span style={{ color: "var(--ink-soft)" }}>{f.emision}</span>,
+    },
+    {
+      key: "vencimiento",
+      header: "Vencimiento",
+      sortable: true,
+      defaultSortDir: "desc",
+      sortValue: (f) => parseLocalDate(f.vencimiento)?.valueOf() ?? 0,
+      className: "text-xs",
+      render: (f) => <span style={{ color: "var(--ink-soft)" }}>{f.vencimiento}</span>,
+    },
+    {
+      key: "importe",
+      header: "Importe",
+      sortable: true,
+      align: "right",
+      defaultSortDir: "desc",
+      sortValue: (f) => f.importe,
+      className: "font-medium tabular-nums",
+      render: (f) =>
+        esPagoParcial(f) ? (
+          <div className="inline-flex flex-col items-end gap-1">
+            <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{fmt(f.importe)}</span>
+            <Progress
+              value={f.pagado ?? 0}
+              max={f.importe}
+              size="sm"
+              className="w-[92px]"
+            />
+            <span className="font-bold" style={{ fontSize: 12.5 }}>Saldo {fmt(saldoDe(f))}</span>
+          </div>
+        ) : (
+          <span style={{ color: "var(--ink)" }}>{fmt(f.importe)}</span>
+        ),
+    },
+    {
+      key: "estado",
+      header: "Estado",
+      sortable: true,
+      hideBelow: "md",
+      sortValue: (f) => estadoOrder[f.estado],
+      render: (f) => (
+        <div className="inline-flex flex-col items-start gap-1">
+          <FacturaBadge estado={f.estado} />
+          {esPagoParcial(f) && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--blue)" }}>
+              <span className="rounded-full" style={{ width: 5, height: 5, background: "var(--blue)" }} />
+              Pago parcial
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "acciones",
+      header: "Acciones",
+      align: "right",
+      headerClassName: "text-xs",
+      render: (f) => (
+        <div className="flex items-center justify-end gap-2">
+          <ActionBtn onClick={() => setModalFactura(f)} label="Ver">
+            <EyeIcon />
+          </ActionBtn>
+          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+            <DownloadIcon />
+          </ActionBtn>
+        </div>
+      ),
+    },
+  ]
 
   function openWhatsAppModal(intent: WhatsAppFacturaIntent = "pagar") {
     setWhatsappModal({ facturas: selectedFacturas, intent })
@@ -568,92 +573,17 @@ function FacturasTable({
         />
       )}
 
-      <div className="overflow-x-auto mt-2">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th className="w-10 py-2 px-2 text-left">
-                <Checkbox checked={allSelected} onChange={toggleAll} />
-              </th>
-              <SortableTh label="Comprobante" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
-              <SortableTh label="Emisión" active={sortKey === "emision"} dir={sortDir} onClick={() => toggleSort("emision")} className="hidden sm:table-cell" />
-              <SortableTh label="Vencimiento" active={sortKey === "vencimiento"} dir={sortDir} onClick={() => toggleSort("vencimiento")} />
-              <SortableTh label="Importe" active={sortKey === "importe"} dir={sortDir} onClick={() => toggleSort("importe")} align="right" />
-              <SortableTh label="Estado" active={sortKey === "estado"} dir={sortDir} onClick={() => toggleSort("estado")} className="hidden md:table-cell" />
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
-                  No hay facturas para mostrar
-                </td>
-              </tr>
-            ) : (
-              sorted.map((f) => (
-                <tr
-                  key={f.id}
-                  className="transition-colors"
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    background: selected.has(f.id) ? "var(--blue-soft)" : "transparent",
-                  }}
-                  onMouseEnter={(e) => { if (!selected.has(f.id)) e.currentTarget.style.background = "var(--bg)" }}
-                  onMouseLeave={(e) => { if (!selected.has(f.id)) e.currentTarget.style.background = "transparent" }}
-                >
-                  <td className="py-2.5 px-2">
-                    <Checkbox checked={selected.has(f.id)} onChange={() => toggleOne(f.id)} />
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="font-medium" style={{ color: "var(--ink)" }}>{f.id}</div>
-                    <div className="text-xs" style={{ color: "var(--ink-faint)" }}>{f.tipo}</div>
-                  </td>
-                  <td className="py-2.5 px-3 hidden sm:table-cell text-xs" style={{ color: "var(--ink-soft)" }}>{f.emision}</td>
-                  <td className="py-2.5 px-3 text-xs" style={{ color: "var(--ink-soft)" }}>{f.vencimiento}</td>
-                  <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--ink)" }}>
-                    {esPagoParcial(f) ? (
-                      <div className="inline-flex flex-col items-end gap-1">
-                        <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{fmt(f.importe)}</span>
-                        <span className="block rounded-full overflow-hidden" style={{ width: 92, height: 4, background: "var(--border)" }}>
-                          <span
-                            className="block h-full rounded-full"
-                            style={{ width: `${Math.round(((f.pagado ?? 0) / f.importe) * 100)}%`, background: "var(--blue)" }}
-                          />
-                        </span>
-                        <span className="font-bold" style={{ fontSize: 12.5 }}>Saldo {fmt(saldoDe(f))}</span>
-                      </div>
-                    ) : (
-                      fmt(f.importe)
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3 hidden md:table-cell">
-                    <div className="inline-flex flex-col items-start gap-1">
-                      <FacturaBadge estado={f.estado} />
-                      {esPagoParcial(f) && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--blue)" }}>
-                          <span className="rounded-full" style={{ width: 5, height: 5, background: "var(--blue)" }} />
-                          Pago parcial
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <ActionBtn onClick={() => setModalFactura(f)} label="Ver">
-                        <EyeIcon />
-                      </ActionBtn>
-                      <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
-                        <DownloadIcon />
-                      </ActionBtn>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table<Factura>
+        className="mt-2"
+        columns={facturaColumns}
+        rows={filtered}
+        rowKey={(f) => f.id}
+        selectable
+        selectedKeys={Array.from(selected)}
+        onSelectionChange={(keys) => setSelected(new Set(keys))}
+        defaultSort={{ key: "emision", dir: "desc" }}
+        empty="No hay facturas para mostrar"
+      />
 
       {modalFactura && (
         <FacturaModal
@@ -711,40 +641,87 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     })
   }, [pagos, search, fromDate, toDate])
 
-  const { sortKey, sortDir, toggleSort } = useSort<"id" | "fecha" | "facturaAsociada" | "medio" | "monto">(["fecha", "monto"], "fecha")
-  const sorted = useMemo(() => {
-    if (!sortKey) return filtered
-    return [...filtered].sort((a, b) => {
-      let av: unknown, bv: unknown
-      if (sortKey === "fecha") { av = parseLocalDate(a.fecha); bv = parseLocalDate(b.fecha) }
-      else if (sortKey === "facturaAsociada") { av = a.facturas[0]?.factura ?? ""; bv = b.facturas[0]?.factura ?? "" }
-      else { av = a[sortKey]; bv = b[sortKey] }
-      return compareValues(av, bv) * sortDir
-    })
-  }, [filtered, sortKey, sortDir])
-
-  const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
 
-  function toggleAll() {
-    if (allSelected) {
-      const next = new Set(selected)
-      filtered.forEach((p) => next.delete(p.id))
-      setSelected(next)
-    } else {
-      const next = new Set(selected)
-      filtered.forEach((p) => next.add(p.id))
-      setSelected(next)
-    }
-  }
-
-  function toggleOne(id: string) {
-    const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setSelected(next)
-  }
+  const pagoColumns: TableColumn<Pago>[] = [
+    {
+      key: "id",
+      header: "Recibo",
+      sortable: true,
+      render: (p) => (
+        <>
+          <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>
+          <div className="text-xs" style={{ color: "var(--ink-faint)" }}>Recibo de pago</div>
+        </>
+      ),
+    },
+    {
+      key: "fecha",
+      header: "Fecha",
+      sortable: true,
+      defaultSortDir: "desc",
+      sortValue: (p) => parseLocalDate(p.fecha)?.valueOf() ?? 0,
+      className: "text-xs",
+      render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.fecha}</span>,
+    },
+    {
+      key: "facturaAsociada",
+      header: "Facturas asociadas",
+      sortable: true,
+      hideBelow: "md",
+      sortValue: (p) => p.facturas[0]?.factura ?? "",
+      className: "text-xs",
+      render: (p) => (
+        <span className="inline-flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
+          {p.facturas[0]?.factura}
+          {p.facturas.length > 1 && (
+            <span
+              className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
+              style={{ background: "var(--blue-soft)", color: "var(--blue)" }}
+              title={p.facturas.slice(1).map((imp) => imp.factura).join(", ")}
+            >
+              +{p.facturas.length - 1}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "medio",
+      header: "Medio",
+      sortable: true,
+      hideBelow: "sm",
+      className: "text-xs",
+      render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.medio}</span>,
+    },
+    {
+      key: "monto",
+      header: "Monto pagado",
+      sortable: true,
+      align: "right",
+      defaultSortDir: "desc",
+      sortValue: (p) => p.monto,
+      className: "font-medium tabular-nums",
+      render: (p) => <span style={{ color: "var(--green)" }}>{fmt(p.monto)}</span>,
+    },
+    {
+      key: "acciones",
+      header: "Acciones",
+      align: "right",
+      headerClassName: "text-xs",
+      render: (p) => (
+        <div className="flex items-center justify-end gap-2">
+          <ActionBtn onClick={() => setModalPago(p)} label="Ver">
+            <EyeIcon />
+          </ActionBtn>
+          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+            <DownloadIcon />
+          </ActionBtn>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <>
@@ -800,80 +777,17 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
         />
       )}
 
-      <div className="overflow-x-auto mt-2">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th className="w-10 py-2 px-2 text-left">
-                <Checkbox checked={allSelected} onChange={toggleAll} />
-              </th>
-              <SortableTh label="Recibo" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
-              <SortableTh label="Fecha" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} />
-              <SortableTh label="Facturas asociadas" active={sortKey === "facturaAsociada"} dir={sortDir} onClick={() => toggleSort("facturaAsociada")} className="hidden md:table-cell" />
-              <SortableTh label="Medio" active={sortKey === "medio"} dir={sortDir} onClick={() => toggleSort("medio")} className="hidden sm:table-cell" />
-              <SortableTh label="Monto pagado" active={sortKey === "monto"} dir={sortDir} onClick={() => toggleSort("monto")} align="right" />
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
-                  No hay pagos para mostrar
-                </td>
-              </tr>
-            ) : (
-              sorted.map((p) => (
-                <tr
-                  key={p.id}
-                  className="transition-colors"
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    background: selected.has(p.id) ? "var(--blue-soft)" : "transparent",
-                  }}
-                  onMouseEnter={(e) => { if (!selected.has(p.id)) e.currentTarget.style.background = "var(--bg)" }}
-                  onMouseLeave={(e) => { if (!selected.has(p.id)) e.currentTarget.style.background = "transparent" }}
-                >
-                  <td className="py-2.5 px-2">
-                    <Checkbox checked={selected.has(p.id)} onChange={() => toggleOne(p.id)} />
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>
-                    <div className="text-xs" style={{ color: "var(--ink-faint)" }}>Recibo de pago</div>
-                  </td>
-                  <td className="py-2.5 px-3 text-xs" style={{ color: "var(--ink-soft)" }}>{p.fecha}</td>
-                  <td className="py-2.5 px-3 text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>
-                    <span className="inline-flex items-center gap-1.5">
-                      {p.facturas[0]?.factura}
-                      {p.facturas.length > 1 && (
-                        <span
-                          className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold"
-                          style={{ background: "var(--blue-soft)", color: "var(--blue)" }}
-                          title={p.facturas.slice(1).map((imp) => imp.factura).join(", ")}
-                        >
-                          +{p.facturas.length - 1}
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>{p.medio}</td>
-                  <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--green)" }}>{fmt(p.monto)}</td>
-                  <td className="py-2.5 px-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <ActionBtn onClick={() => setModalPago(p)} label="Ver">
-                        <EyeIcon />
-                      </ActionBtn>
-                      <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
-                        <DownloadIcon />
-                      </ActionBtn>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table<Pago>
+        className="mt-2"
+        columns={pagoColumns}
+        rows={filtered}
+        rowKey={(p) => p.id}
+        selectable
+        selectedKeys={Array.from(selected)}
+        onSelectionChange={(keys) => setSelected(new Set(keys))}
+        defaultSort={{ key: "fecha", dir: "desc" }}
+        empty="No hay pagos para mostrar"
+      />
 
       {modalPago && (
         <PagoModal pago={modalPago} facturas={facturas} onClose={() => setModalPago(null)} />
@@ -895,18 +809,10 @@ const PRESUPUESTO_ESTADO_LABELS: Record<PresupuestoEstado, string> = {
 }
 
 function PresupuestoBadge({ estado }: { estado: PresupuestoEstado }) {
-  const styles: Record<PresupuestoEstado, React.CSSProperties> = {
-    vigente: { background: "var(--blue-soft)", color: "var(--blue)" },
-    vencido: { background: "var(--red-soft)", color: "var(--red)" },
-    aceptado: { background: "var(--green-soft)", color: "var(--green)" },
-  }
+  if (estado === "vencido") return <Badge tone="danger">{PRESUPUESTO_ESTADO_LABELS[estado]}</Badge>
+  if (estado === "aceptado") return <Badge tone="success">{PRESUPUESTO_ESTADO_LABELS[estado]}</Badge>
   return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-      style={styles[estado]}
-    >
-      {PRESUPUESTO_ESTADO_LABELS[estado]}
-    </span>
+    <Badge className="bg-primary-soft text-primary">{PRESUPUESTO_ESTADO_LABELS[estado]}</Badge>
   )
 }
 
@@ -951,41 +857,73 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
     })
   }, [presupuestos, search, filterEstados, fromDate, toDate, dateFilterField])
 
-  const { sortKey, sortDir, toggleSort } = useSort<"id" | "fecha" | "validoHasta" | "total" | "estado">(["fecha", "validoHasta", "total"], "fecha")
-  const sorted = useMemo(() => {
-    if (!sortKey) return filtered
-    const estadoOrder: Record<PresupuestoEstado, number> = { vencido: 0, vigente: 1, aceptado: 2 }
-    return [...filtered].sort((a, b) => {
-      let av: unknown, bv: unknown
-      if (sortKey === "fecha" || sortKey === "validoHasta") { av = parseLocalDate(a[sortKey]); bv = parseLocalDate(b[sortKey]) }
-      else if (sortKey === "estado") { av = estadoOrder[a.estado]; bv = estadoOrder[b.estado] }
-      else { av = a[sortKey]; bv = b[sortKey] }
-      return compareValues(av, bv) * sortDir
-    })
-  }, [filtered, sortKey, sortDir])
-
-  const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.id))
   const selectedPresupuestos = presupuestos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPresupuestos.reduce((s, p) => s + p.total, 0)
 
-  function toggleAll() {
-    if (allSelected) {
-      const next = new Set(selected)
-      filtered.forEach((p) => next.delete(p.id))
-      setSelected(next)
-    } else {
-      const next = new Set(selected)
-      filtered.forEach((p) => next.add(p.id))
-      setSelected(next)
-    }
-  }
+  const presupuestoEstadoOrder: Record<PresupuestoEstado, number> = { vencido: 0, vigente: 1, aceptado: 2 }
 
-  function toggleOne(id: string) {
-    const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setSelected(next)
-  }
+  const presupuestoColumns: TableColumn<Presupuesto>[] = [
+    {
+      key: "id",
+      header: "Presupuesto",
+      sortable: true,
+      render: (p) => <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>,
+    },
+    {
+      key: "fecha",
+      header: "Emisión",
+      sortable: true,
+      hideBelow: "sm",
+      defaultSortDir: "desc",
+      sortValue: (p) => parseLocalDate(p.fecha)?.valueOf() ?? 0,
+      className: "text-xs",
+      render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.fecha}</span>,
+    },
+    {
+      key: "validoHasta",
+      header: "Válido hasta",
+      sortable: true,
+      hideBelow: "md",
+      defaultSortDir: "desc",
+      sortValue: (p) => parseLocalDate(p.validoHasta)?.valueOf() ?? 0,
+      className: "text-xs",
+      render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.validoHasta}</span>,
+    },
+    {
+      key: "total",
+      header: "Total",
+      sortable: true,
+      align: "right",
+      defaultSortDir: "desc",
+      sortValue: (p) => p.total,
+      className: "font-medium tabular-nums",
+      render: (p) => <span style={{ color: "var(--ink)" }}>{fmt(p.total)}</span>,
+    },
+    {
+      key: "estado",
+      header: "Estado",
+      sortable: true,
+      hideBelow: "md",
+      sortValue: (p) => presupuestoEstadoOrder[p.estado],
+      render: (p) => <PresupuestoBadge estado={p.estado} />,
+    },
+    {
+      key: "acciones",
+      header: "Acciones",
+      align: "right",
+      headerClassName: "text-xs",
+      render: (p) => (
+        <div className="flex items-center justify-end gap-2">
+          <ActionBtn onClick={() => setModalPresupuesto(p)} label="Ver">
+            <EyeIcon />
+          </ActionBtn>
+          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+            <DownloadIcon />
+          </ActionBtn>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <>
@@ -1034,68 +972,17 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
         />
       )}
 
-      <div className="overflow-x-auto mt-2">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th className="w-10 py-2 px-2 text-left">
-                <Checkbox checked={allSelected} onChange={toggleAll} />
-              </th>
-              <SortableTh label="Presupuesto" active={sortKey === "id"} dir={sortDir} onClick={() => toggleSort("id")} />
-              <SortableTh label="Emisión" active={sortKey === "fecha"} dir={sortDir} onClick={() => toggleSort("fecha")} className="hidden sm:table-cell" />
-              <SortableTh label="Válido hasta" active={sortKey === "validoHasta"} dir={sortDir} onClick={() => toggleSort("validoHasta")} className="hidden md:table-cell" />
-              <SortableTh label="Total" active={sortKey === "total"} dir={sortDir} onClick={() => toggleSort("total")} align="right" />
-              <SortableTh label="Estado" active={sortKey === "estado"} dir={sortDir} onClick={() => toggleSort("estado")} className="hidden md:table-cell" />
-              <th className="py-2 px-3 text-right font-medium text-xs" style={{ color: "var(--ink-soft)" }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--ink-faint)" }}>
-                  No hay presupuestos para mostrar
-                </td>
-              </tr>
-            ) : (
-              sorted.map((p) => (
-                <tr
-                  key={p.id}
-                  className="transition-colors"
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    background: selected.has(p.id) ? "var(--blue-soft)" : "transparent",
-                  }}
-                  onMouseEnter={(e) => { if (!selected.has(p.id)) e.currentTarget.style.background = "var(--bg)" }}
-                  onMouseLeave={(e) => { if (!selected.has(p.id)) e.currentTarget.style.background = "transparent" }}
-                >
-                  <td className="py-2.5 px-2">
-                    <Checkbox checked={selected.has(p.id)} onChange={() => toggleOne(p.id)} />
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>
-                  </td>
-                  <td className="py-2.5 px-3 text-xs hidden sm:table-cell" style={{ color: "var(--ink-soft)" }}>{p.fecha}</td>
-                  <td className="py-2.5 px-3 text-xs hidden md:table-cell" style={{ color: "var(--ink-soft)" }}>{p.validoHasta}</td>
-                  <td className="py-2.5 px-3 text-right font-medium tabular-nums" style={{ color: "var(--ink)" }}>{fmt(p.total)}</td>
-                  <td className="py-2.5 px-3 hidden md:table-cell">
-                    <PresupuestoBadge estado={p.estado} />
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <ActionBtn onClick={() => setModalPresupuesto(p)} label="Ver">
-                        <EyeIcon />
-                      </ActionBtn>
-                      <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
-                        <DownloadIcon />
-                      </ActionBtn>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table<Presupuesto>
+        className="mt-2"
+        columns={presupuestoColumns}
+        rows={filtered}
+        rowKey={(p) => p.id}
+        selectable
+        selectedKeys={Array.from(selected)}
+        onSelectionChange={(keys) => setSelected(new Set(keys))}
+        defaultSort={{ key: "fecha", dir: "desc" }}
+        empty="No hay presupuestos para mostrar"
+      />
 
       {modalPresupuesto && (
         <PresupuestoModal presupuesto={modalPresupuesto} tenantName={tenantName} whatsappNumber={whatsappNumber} onClose={() => setModalPresupuesto(null)} />
@@ -1734,78 +1621,35 @@ function SelectionBar({
   onWhatsapp?: () => void
   itemLabel?: string
 }) {
-  const hasSelection = count > 0
-
+  const label = `${count} ${itemLabel}${count !== 1 ? "s" : ""} seleccionada${count !== 1 ? "s" : ""}`
   return (
-    <div
-      className="rounded-[10px] mt-3 mb-3 overflow-hidden"
-      style={{
-        background: hasSelection ? "var(--blue)" : "var(--bg)",
-        border: `1px solid ${hasSelection ? "var(--blue)" : "var(--border)"}`,
-        transition: "background 0.2s, border-color 0.2s",
-      }}
+    <DSSelectionBar
+      className="my-3"
+      count={count}
+      label={label}
+      summary={`Total: ${fmt(total)}`}
+      emptyHint="Seleccioná para descargar o consultar"
+      onClear={onClear}
     >
-      {/* Fila info */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5">
-        {hasSelection ? (
-          <button
-            onClick={onClear}
-            className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
-            style={{ background: "rgba(255,255,255,0.2)" }}
-            aria-label="Limpiar selección"
-          >
-            <X size={11} strokeWidth={2.5} color="white" />
-          </button>
-        ) : (
-          <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center" style={{ background: "var(--border)" }}>
-            <CheckSquare size={12} strokeWidth={1.8} style={{ color: "var(--ink-faint)" }} />
-          </div>
-        )}
-
-        <div className="flex flex-col flex-1 min-w-0">
-          {hasSelection ? (
-            <>
-              <span className="text-sm font-bold text-white">{count} {itemLabel}{count !== 1 ? "s" : ""} seleccionada{count !== 1 ? "s" : ""}</span>
-              <span className="text-xs text-white/80">Total: {fmt(total)}</span>
-            </>
-          ) : (
-            <span className="text-sm" style={{ color: "var(--ink-soft)" }}>Seleccioná para descargar o consultar</span>
-          )}
-        </div>
-
-        {/* Botones — en pantallas angostas bajan a su propia fila */}
-        <div className={`${hasSelection ? "flex" : "hidden sm:flex"} items-center gap-2 shrink-0 basis-full sm:basis-auto order-last sm:order-none`}>
-          <button
-            onClick={onDownload}
-            disabled={!hasSelection}
-            className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all"
-            style={
-              hasSelection
-                ? { background: "rgba(255,255,255,0.18)", color: "white" }
-                : { background: "var(--border)", color: "var(--ink-faint)", cursor: "not-allowed" }
-            }
-          >
-            <DownloadIcon />
-            Descargar
-          </button>
-          {onWhatsapp && (
-            <button
-              onClick={onWhatsapp}
-              disabled={!hasSelection}
-              className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-all"
-              style={
-                hasSelection
-                  ? { background: "var(--wsp)", color: "white" }
-                  : { background: "var(--border)", color: "var(--ink-faint)", cursor: "not-allowed" }
-              }
-            >
-              <WspIcon size={14} />
-              Consultar
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+      <Button
+        size="sm"
+        onClick={onDownload}
+        className="bg-white/20 text-on-primary hover:bg-white/30"
+      >
+        <DownloadIcon />
+        Descargar
+      </Button>
+      {onWhatsapp && (
+        <Button
+          size="sm"
+          onClick={onWhatsapp}
+          className="bg-[var(--wsp)] text-white hover:opacity-90"
+        >
+          <WspIcon size={14} />
+          Consultar
+        </Button>
+      )}
+    </DSSelectionBar>
   )
 }
 
@@ -2317,36 +2161,18 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
-      style={{
-        border: checked ? "none" : "1.5px solid var(--border-strong)",
-        background: checked ? "var(--blue)" : "transparent",
-      }}
-    >
-      {checked && (
-        <Check size={10} strokeWidth={1.6} color="white" />
-      )}
-    </button>
-  )
-}
-
 function ActionBtn({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
   return (
-    <button
-      title={label}
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={onClick}
-      className="w-7 h-7 flex items-center justify-center rounded-[6px] transition-all"
-      style={{ color: "var(--ink-soft)", border: "1px solid var(--border)" }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)"; e.currentTarget.style.color = "var(--ink)" }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--ink-soft)" }}
+      title={label}
+      aria-label={label}
+      className="h-7 w-7 rounded-[6px] border border-border text-muted hover:bg-bg hover:text-text"
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
