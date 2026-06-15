@@ -13,6 +13,8 @@ import {
   Tooltip as DSTooltip,
   TooltipProvider,
   SearchInput,
+  Field,
+  Select,
 } from "@myd-org/ui"
 import { Logo } from "./Logo"
 import { PortalHeader } from "./PortalHeader"
@@ -2038,37 +2040,29 @@ function AdjuntarModal({ onClose, facturas }: { onClose: () => void; facturas: F
           </div>
         )}
 
-        {/* Tipo */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: "var(--ink)" }}>Tipo de comprobante</label>
-          <select
+        <Field label="Tipo de comprobante">
+          <Select
             value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            className="px-3 py-2 rounded-[var(--radius)] text-sm outline-none"
-            style={{ border: "1px solid var(--border-strong)", color: "var(--ink)", background: "var(--card)" }}
-          >
-            <option value="transferencia">Transferencia bancaria</option>
-            <option value="cheque">Cheque</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
+            onValueChange={setTipo}
+            options={[
+              { value: "transferencia", label: "Transferencia bancaria" },
+              { value: "cheque", label: "Cheque" },
+              { value: "efectivo", label: "Efectivo" },
+              { value: "otro", label: "Otro" },
+            ]}
+          />
+        </Field>
 
-        {/* Factura asociada */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: "var(--ink)" }}>Factura asociada (opcional)</label>
-          <select
-            value={facturaId}
-            onChange={(e) => setFacturaId(e.target.value)}
-            className="px-3 py-2 rounded-[var(--radius)] text-sm outline-none"
-            style={{ border: "1px solid var(--border-strong)", color: "var(--ink)", background: "var(--card)" }}
-          >
-            <option value="">Sin asociar</option>
-            {facturas.map((f) => (
-              <option key={f.id} value={f.id}>{f.id} — {fmt(f.importe)}</option>
-            ))}
-          </select>
-        </div>
+        <Field label="Factura asociada (opcional)">
+          <Select
+            value={facturaId || "none"}
+            onValueChange={(v) => setFacturaId(v === "none" ? "" : v)}
+            options={[
+              { value: "none", label: "Sin asociar" },
+              ...facturas.map((f) => ({ value: f.id, label: `${f.id} — ${fmt(f.importe)}` })),
+            ]}
+          />
+        </Field>
 
         <div className="flex gap-3 justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
