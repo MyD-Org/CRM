@@ -10,6 +10,8 @@ export const sessionOptions: SessionOptions = {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
     sameSite: "lax",
+    // Dominio raiz compartido para que la tienda pueda leer la sesion
+    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
   },
 }
 

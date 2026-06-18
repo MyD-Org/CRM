@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button, Field, Input, Spinner, Tabs } from "@myd-org/ui"
 import { Logo } from "@/components/portal/Logo"
 import { ChevronLeft, Clock, ShoppingCart } from "lucide-react"
@@ -16,6 +16,9 @@ type Step = "identify" | "otp" | "tienda"
 
 export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: LoginPageProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Lee ?redirect= de la URL para volver a la tienda tras el login
+  const redirectTo = searchParams.get("redirect") ?? undefined
   const [step, setStep] = useState<Step>("identify")
   const [identifier, setIdentifier] = useState("")
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
@@ -84,7 +87,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
       const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, redirectTo }),
       })
       const data = await res.json()
       if (!res.ok) {

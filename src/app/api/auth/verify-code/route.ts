@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const tenant = await getTenantConfig()
     const body = await request.json()
-    const { code } = body as { code: string }
+    const { code, redirectTo } = body as { code: string; redirectTo?: string }
 
     if (!code || code.length !== 6) {
       return Response.json({ error: "Código inválido" }, { status: 400 })
@@ -40,11 +40,23 @@ export async function POST(request: Request) {
     session.razonsocial = clienteData.razonsocial
     session.cuit = clienteData.cuit
     session.email = otpSession.identifier
+    session.tipoCuenta = clienteData.tipoCuenta
     await session.save()
 
     otpSession.destroy()
 
-    return Response.json({ success: true, redirect: "/portal/dashboard" })
+    // redirectTo viene de la tienda; solo se acepta si el origen coincide con SHOP_REDIRECT_ORIGIN
+    const safeRedirect = (() => {
+      if (!redirectTo) return "/portal/dashboard"
+      const allowed = process.env.SHOP_REDIRECT_ORIGIN
+      if (!allowed) return "/portal/dashboard"
+      try {
+        const url = new URL(redirectTo)
+        if (url.origin === allowed) return redirectTo
+      } catch {}
+      return "/portal/dashboard"
+    })()
+    return Response.json({ success: true, redirect: safeRedirect })
   } catch (err) {
     console.error("verify-code error:", err)
     return Response.json({ error: "Error interno del servidor" }, { status: 500 })

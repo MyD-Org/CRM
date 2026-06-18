@@ -5,6 +5,14 @@ import { flag } from "@vercel/flags/next"
 // Para cambiar de proveedor: reemplazar solo este archivo manteniendo la misma
 // interfaz exportada (cada flag es una función async que devuelve boolean).
 
+export const shopEnabled = flag<boolean>({
+  key: "shop-enabled",
+  defaultValue: false,
+  description: "Activa el link a la tienda online en el header del portal",
+  origin: "https://vercel.com/docs/workflow-collaboration/feature-flags",
+  decide: () => process.env.SHOP_ENABLED === "true",
+})
+
 export const aiChatEnabled = flag<boolean>({
   key: "ai-chat-enabled",
   defaultValue: false,

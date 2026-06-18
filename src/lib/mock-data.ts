@@ -6,6 +6,7 @@ export const mockCliente: Cliente = {
   cuit: "30-71045887-3",
   email: "dalilacabeza@gmail.com",
   numerocuentacorriente: 1042,
+  tipoCuenta: "corriente",
   limitecredito: 800000,
   deudatotal: 533761.70,
   saldovencido: 345781.70,

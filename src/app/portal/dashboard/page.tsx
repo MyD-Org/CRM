@@ -6,7 +6,7 @@ import { getTenantConfig } from "@/lib/tenant-context"
 import { getCliente, getFacturas, getPagos, getPresupuestos } from "@/lib/flexxus"
 import { DashboardClient } from "@/components/portal/DashboardClient"
 import { AiChat } from "@/components/portal/AiChat"
-import { aiChatEnabled } from "@/lib/flags"
+import { aiChatEnabled, shopEnabled } from "@/lib/flags"
 import type { SessionData } from "@/types"
 
 export default async function DashboardPage({
@@ -28,7 +28,7 @@ export default async function DashboardPage({
     getPresupuestos(tenant, session.codigocliente),
   ])
 
-  const [aiEnabled] = await Promise.all([aiChatEnabled()])
+  const [aiEnabled, shopActive] = await Promise.all([aiChatEnabled(), shopEnabled()])
 
   return (
     <>
@@ -45,6 +45,7 @@ export default async function DashboardPage({
       initialTab={sp.factura ? "facturas" : sp.tab}
       initialQuery={sp.q}
       openFacturaId={sp.factura}
+      shopUrl={shopActive ? process.env.NEXT_PUBLIC_SHOP_URL : undefined}
       />
       {aiEnabled && (
         <AiChat

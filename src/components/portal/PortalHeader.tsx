@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Avatar, DropdownMenu, type DropdownMenuEntry } from "@myd-org/ui"
-import { ShoppingCart, LogOut, FileText, ChevronDown, ChevronRight, Bell, Clock, AlertTriangle } from "lucide-react"
+import { ShoppingCart, LogOut, ChevronDown, ChevronRight, Bell, Clock, AlertTriangle } from "lucide-react"
 import { Logo } from "./Logo"
 
 type EntityKind = "factura" | "pago" | "presupuesto"
@@ -13,9 +13,10 @@ interface PortalHeaderProps {
   tenantName: string
   logoSubtitle: string
   razonsocial: string
+  shopUrl?: string
 }
 
-export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }: PortalHeaderProps) {
+export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial, shopUrl }: PortalHeaderProps) {
   const router = useRouter()
   const [notifOpen, setNotifOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -66,14 +67,25 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        {/* Tienda chip disabled */}
-        <div
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-not-allowed"
-          style={{ background: "var(--bg)", color: "var(--ink-faint)", border: "1px solid var(--border)" }}
-        >
-          <ShoppingCart size={12} strokeWidth={1.2} color="currentColor" />
-          Tienda · Pronto
-        </div>
+        {/* Tienda chip — activo solo cuando el flag shop-enabled está activo */}
+        {shopUrl ? (
+          <a
+            href={shopUrl}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors hover:opacity-80"
+            style={{ background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue-soft)" }}
+          >
+            <ShoppingCart size={12} strokeWidth={1.2} color="currentColor" />
+            Ir a la tienda
+          </a>
+        ) : (
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-not-allowed"
+            style={{ background: "var(--bg)", color: "var(--ink-faint)", border: "1px solid var(--border)" }}
+          >
+            <ShoppingCart size={12} strokeWidth={1.2} color="currentColor" />
+            Tienda · Pronto
+          </div>
+        )}
 
         {/* Campanita de notificaciones */}
         <div className="relative" ref={notifRef}>
@@ -100,11 +112,6 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial }:
           items={
             [
               { type: "label", label: razonsocial },
-              {
-                label: "Condiciones comerciales",
-                icon: <FileText size={15} strokeWidth={1.6} className="text-muted" />,
-                onSelect: () => router.push("/portal/condiciones"),
-              },
               {
                 label: "Salir",
                 icon: <LogOut size={15} strokeWidth={1.6} />,

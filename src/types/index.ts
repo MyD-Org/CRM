@@ -5,6 +5,7 @@ export interface Cliente {
   /** Email de contacto — destino de las notificaciones de cobranza */
   email?: string
   numerocuentacorriente: number
+  tipoCuenta: "corriente" | "contado"
   limitecredito: number
   deudatotal: number
   saldovencido: number
@@ -71,6 +72,7 @@ export interface SessionData {
   razonsocial?: string
   cuit?: string
   email?: string
+  tipoCuenta?: "corriente" | "contado"
   isLoggedIn: boolean
 }
 

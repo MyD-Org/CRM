@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useRef, useEffect } from "react"
+import Link from "next/link"
 import {
   Table,
   type TableColumn,
@@ -94,6 +95,7 @@ interface Props {
   initialTab?: string
   initialQuery?: string
   openFacturaId?: string
+  shopUrl?: string
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -106,7 +108,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId }: Props) {
+export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -142,78 +144,93 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
         tenantName={tenantName}
         logoSubtitle={logoSubtitle}
         razonsocial={razonsocial}
+        shopUrl={shopUrl}
       />
 
       {/* Content */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         {/* Welcome */}
-        <div>
-          <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
-            Bienvenido, {razonsocial}
-          </h1>
-          <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-            CUIT {cliente.cuit} · Cuenta corriente N° {cliente.numerocuentacorriente}
-          </p>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Deuda total */}
-          <div
-            className="rounded-[var(--radius)] p-5 flex flex-col gap-3"
-            style={{ background: "var(--blue)", color: "white" }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm font-medium opacity-80">
-                Deuda total
-                <Tooltip white text="Suma de todas las facturas pendientes de pago, incluyendo vencidas y a vencer." />
-              </span>
-            </div>
-            <div className="text-3xl font-bold tracking-tight">{fmt(cliente.deudatotal)}</div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs opacity-70">
-                <span>Límite de crédito</span>
-                <span>{fmt(cliente.limitecredito)}</span>
-              </div>
-              <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }}>
-                <div
-                  className="h-1.5 rounded-full transition-all"
-                  style={{
-                    background: "rgba(255,255,255,0.85)",
-                    width: `${Math.min(100, (cliente.deudatotal / cliente.limitecredito) * 100).toFixed(1)}%`,
-                  }}
-                />
-              </div>
-              <div className="text-xs opacity-70">
-                Disponible: {fmt(cliente.limitecredito - cliente.deudatotal)}
-              </div>
-            </div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
+              Bienvenido, {razonsocial}
+            </h1>
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+              CUIT {cliente.cuit} · Cuenta corriente N° {cliente.numerocuentacorriente}
+            </p>
           </div>
-
-          {/* Saldo vencido */}
-          <SummaryCard
-            title="Saldo vencido"
-            amount={cliente.saldovencido}
-            amountColor="var(--red)"
-            count={vencidasCount}
-            countLabel="facturas vencidas"
-            rows={topVencidas}
-            onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("vencida"); setFacturasSearch("") }}
-            onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
-          />
-
-          {/* Saldo a vencer */}
-          <SummaryCard
-            title="Saldo a vencer"
-            amount={cliente.saldoavencer}
-            amountColor="var(--amber)"
-            count={pendientesCount}
-            countLabel="facturas pendientes"
-            rows={topPendientes}
-            onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("pendiente"); setFacturasSearch("") }}
-            onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
-          />
+          {cliente.tipoCuenta === "corriente" && (
+            <Link
+              href="/portal/condiciones"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius)] px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{ background: "var(--blue-soft)", color: "var(--blue)" }}
+            >
+              <CreditCard size={15} strokeWidth={1.8} />
+              Condiciones comerciales
+            </Link>
+          )}
         </div>
+
+        {/* Summary Cards — solo cuenta corriente */}
+        {cliente.tipoCuenta === "corriente" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Deuda total */}
+            <div
+              className="rounded-[var(--radius)] p-5 flex flex-col gap-3"
+              style={{ background: "var(--blue)", color: "white" }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-sm font-medium opacity-80">
+                  Deuda total
+                  <Tooltip white text="Suma de todas las facturas pendientes de pago, incluyendo vencidas y a vencer." />
+                </span>
+              </div>
+              <div className="text-3xl font-bold tracking-tight">{fmt(cliente.deudatotal)}</div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-xs opacity-70">
+                  <span>Límite de crédito</span>
+                  <span>{fmt(cliente.limitecredito)}</span>
+                </div>
+                <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }}>
+                  <div
+                    className="h-1.5 rounded-full transition-all"
+                    style={{
+                      background: "rgba(255,255,255,0.85)",
+                      width: `${Math.min(100, (cliente.deudatotal / cliente.limitecredito) * 100).toFixed(1)}%`,
+                    }}
+                  />
+                </div>
+                <div className="text-xs opacity-70">
+                  Disponible: {fmt(cliente.limitecredito - cliente.deudatotal)}
+                </div>
+              </div>
+            </div>
+
+            {/* Saldo vencido */}
+            <SummaryCard
+              title="Saldo vencido"
+              amount={cliente.saldovencido}
+              amountColor="var(--red)"
+              count={vencidasCount}
+              countLabel="facturas vencidas"
+              rows={topVencidas}
+              onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("vencida"); setFacturasSearch("") }}
+              onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
+            />
+
+            {/* Saldo a vencer */}
+            <SummaryCard
+              title="Saldo a vencer"
+              amount={cliente.saldoavencer}
+              amountColor="var(--amber)"
+              count={pendientesCount}
+              countLabel="facturas pendientes"
+              rows={topPendientes}
+              onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("pendiente"); setFacturasSearch("") }}
+              onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
+            />
+          </div>
+        )}
 
         {/* Tabs */}
         <div
