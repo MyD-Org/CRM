@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Bot, User, Send } from "lucide-react"
+import { ArrowLeft, Bot, User, Send, CheckCheck } from "lucide-react"
+import { Button, Badge, Textarea } from "@myd-org/ui"
+import { useRouter } from "next/navigation"
 import type { InboxConversation, InboxMessage } from "@/lib/inbox-api"
 
 interface Props {
@@ -11,15 +13,17 @@ interface Props {
 }
 
 export function ThreadView({ conversation, initialMessages }: Props) {
+  const router = useRouter()
   const [messages, setMessages] = useState(initialMessages)
   const [mode, setMode] = useState<"bot" | "human">(conversation.mode)
+  const [assignedTo, setAssignedTo] = useState<string | null>(conversation.assigned_to)
   const [withinWindow, setWithinWindow] = useState(conversation.within_window)
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState("")
+  const [archiving, setArchiving] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Polling cada 5s
   useEffect(() => {
     const interval = setInterval(async () => {
       const res = await fetch(`/api/admin/inbox/${conversation.id}/messages`)
@@ -28,19 +32,32 @@ export function ThreadView({ conversation, initialMessages }: Props) {
     return () => clearInterval(interval)
   }, [conversation.id])
 
-  // Scroll al último mensaje
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  async function handleArchive() {
+    setArchiving(true)
+    try {
+      await fetch(`/api/admin/inbox/${conversation.id}/archive`, { method: "POST" })
+      router.push("/admin/inbox")
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   async function toggleMode() {
     const next = mode === "bot" ? "human" : "bot"
-    await fetch(`/api/admin/inbox/${conversation.id}/mode`, {
+    const res = await fetch(`/api/admin/inbox/${conversation.id}/mode`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ mode: next }),
     })
-    setMode(next)
+    if (res.ok) {
+      const data = await res.json()
+      setMode(next)
+      setAssignedTo(data.assigned_to ?? null)
+    }
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -72,8 +89,6 @@ export function ThreadView({ conversation, initialMessages }: Props) {
     }
   }
 
-  const canReply = mode === "human" && withinWindow
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -81,12 +96,10 @@ export function ThreadView({ conversation, initialMessages }: Props) {
         className="flex items-center gap-3 px-5 py-3 shrink-0"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--card)" }}
       >
-        <Link
-          href="/admin/inbox"
-          className="flex items-center justify-center w-7 h-7 rounded-full transition-colors hover:bg-[var(--bg)]"
-          style={{ color: "var(--ink-soft)" }}
-        >
-          <ArrowLeft size={16} strokeWidth={1.6} />
+        <Link href="/admin/inbox">
+          <Button variant="ghost" size="icon" aria-label="Volver">
+            <ArrowLeft size={16} strokeWidth={1.6} />
+          </Button>
         </Link>
 
         <div className="flex-1 min-w-0">
@@ -94,28 +107,29 @@ export function ThreadView({ conversation, initialMessages }: Props) {
           <p className="text-xs" style={{ color: "var(--ink-soft)" }}>WhatsApp</p>
         </div>
 
-        {/* Modo badge + toggle */}
         <div className="flex items-center gap-2">
-          {!withinWindow && (
-            <span
-              className="text-xs px-2 py-1 rounded-full"
-              style={{ background: "var(--amber-soft)", color: "var(--amber)" }}
-            >
-              Ventana cerrada
-            </span>
-          )}
-          <button
+          {!withinWindow && <Badge tone="warning">Ventana cerrada</Badge>}
+
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={toggleMode}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style={{
-              background: mode === "human" ? "var(--green-soft)" : "var(--blue-soft)",
-              color: mode === "human" ? "var(--green)" : "var(--blue)",
-              border: `1px solid ${mode === "human" ? "var(--green-soft)" : "var(--blue-soft)"}`,
-            }}
+            className="flex items-center gap-1.5 rounded-full"
           >
             {mode === "human" ? <User size={11} /> : <Bot size={11} />}
-            {mode === "human" ? "Tomo yo · Devolver al bot" : "Bot activo · Tomar"}
-          </button>
+            {mode === "human" ? `${assignedTo ?? "Operador"} · Devolver al bot` : "Bot activo · Tomar"}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleArchive}
+            disabled={archiving}
+            className="flex items-center gap-1.5 rounded-full"
+          >
+            <CheckCheck size={11} strokeWidth={1.6} />
+            Finalizar
+          </Button>
         </div>
       </div>
 
@@ -142,7 +156,7 @@ export function ThreadView({ conversation, initialMessages }: Props) {
           </p>
         ) : (
           <form onSubmit={handleSend} className="flex gap-2">
-            <textarea
+            <Textarea
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               placeholder="Escribí tu respuesta..."
@@ -150,21 +164,20 @@ export function ThreadView({ conversation, initialMessages }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as unknown as React.FormEvent) }
               }}
-              className="flex-1 px-3 py-2 rounded-[var(--radius)] text-sm resize-none outline-none"
-              style={{ border: "1px solid var(--border-strong)", background: "var(--bg)", color: "var(--ink)" }}
+              className="flex-1 resize-none"
             />
-            <button
+            <Button
               type="submit"
+              size="icon"
               disabled={!reply.trim() || sending}
-              className="flex items-center justify-center w-10 h-10 self-end rounded-full text-white transition-opacity disabled:opacity-40"
-              style={{ background: "var(--blue)" }}
+              className="self-end"
             >
               <Send size={16} strokeWidth={1.6} />
-            </button>
+            </Button>
           </form>
         )}
         {sendError && (
-          <p className="text-xs mt-2" style={{ color: "var(--red)" }}>{sendError}</p>
+          <p className="text-xs mt-2 text-danger">{sendError}</p>
         )}
       </div>
     </div>
@@ -187,9 +200,7 @@ function MessageBubble({ message }: { message: InboxMessage }) {
         <div
           className="px-3 py-2 rounded-[var(--radius)] text-sm"
           style={{
-            background: isOutbound
-              ? isHuman ? "var(--green)" : "var(--blue)"
-              : "var(--card)",
+            background: isOutbound ? (isHuman ? "var(--green)" : "var(--blue)") : "var(--card)",
             color: isOutbound ? "#fff" : "var(--ink)",
             border: isOutbound ? "none" : "1px solid var(--border)",
           }}

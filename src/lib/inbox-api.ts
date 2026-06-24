@@ -4,8 +4,10 @@ export interface InboxConversation {
   id: string
   channel: string
   contact: string
+  phone: string | null
   mode: "bot" | "human"
   status: string
+  assigned_to: string | null
   last_inbound_at: string | null
   within_window: boolean
   created_at: string
@@ -56,11 +58,21 @@ export async function setMode(
   aiTenantId: string,
   conversationId: string,
   mode: "bot" | "human",
+  operatorName?: string,
 ): Promise<void> {
   const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/mode`, {
     method: "POST",
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify({ mode, ...(operatorName ? { operatorName } : {}) }),
   })
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+}
+
+export async function archiveConversation(
+  aiApiUrl: string,
+  aiTenantId: string,
+  conversationId: string,
+): Promise<void> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/archive`, { method: "POST" })
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
 }
 

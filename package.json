@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync:ui": "cp -r ../ui/dist/* node_modules/@myd-org/ui/dist/",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

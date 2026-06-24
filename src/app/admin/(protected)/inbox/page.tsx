@@ -38,7 +38,7 @@ export default async function InboxPage() {
           {configError}
         </div>
       ) : (
-        <InboxList initialConversations={conversations} />
+        <InboxList initialConversations={conversations} currentUserName={session.name} />
       )}
     </div>
   )

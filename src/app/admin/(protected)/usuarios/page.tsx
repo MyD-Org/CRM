@@ -26,7 +26,7 @@ export default async function UsuariosPage() {
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Usuarios</h1>
         <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Operadores del backoffice</p>
       </div>
-      <UserList initialUsers={userList} currentUserId={session.userId} />
+      <UserList initialUsers={userList} currentUserId={session.userId} currentRole={session.role} />
     </div>
   )
 }
