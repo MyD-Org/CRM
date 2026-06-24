@@ -15,6 +15,13 @@
       "when": 1781356424305,
       "tag": "0001_rich_shen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782326540302,
+      "tag": "0002_boring_drax",
+      "breakpoints": true
     }
   ]
 }

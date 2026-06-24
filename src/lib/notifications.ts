@@ -57,6 +57,7 @@ function tenantConfigFromRow(row: typeof tenantsTable.$inferSelect): TenantConfi
     aiApiBaseUrl: row.aiApiUrl,
     aiApiKey: row.aiApiKey,
     aiAgentId: row.aiAgentId,
+    aiTenantId: row.aiTenantId,
   }
 }
 

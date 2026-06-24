@@ -11,6 +11,7 @@ export interface TenantConfig {
   aiApiBaseUrl: string
   aiApiKey: string
   aiAgentId: string
+  aiTenantId: string // UUID del tenant en la ai-api (para auth de staff/inbox)
 }
 
 function buildTenantConfig(id: string): TenantConfig | null {
@@ -33,6 +34,7 @@ function buildTenantConfig(id: string): TenantConfig | null {
     aiApiBaseUrl: process.env[`${prefix}_AI_API_URL`] ?? "",
     aiApiKey: process.env[`${prefix}_AI_API_KEY`] ?? "",
     aiAgentId: process.env[`${prefix}_AI_AGENT_ID`] ?? "",
+    aiTenantId: process.env[`${prefix}_AI_TENANT_ID`] ?? "",
   }
 }
 
@@ -79,6 +81,7 @@ export async function getTenantByIdFromDb(id: string): Promise<TenantConfig | nu
       aiApiBaseUrl: row.aiApiUrl,
       aiApiKey: row.aiApiKey,
       aiAgentId: row.aiAgentId,
+      aiTenantId: row.aiTenantId,
     }
   } catch (err) {
     console.error("getTenantByIdFromDb: DB no disponible, fallback a env:", err)
