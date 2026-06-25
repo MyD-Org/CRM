@@ -37,6 +37,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
     <ThreadView
       conversation={conversation}
       initialMessages={messages}
+      currentUserId={session.userId}
     />
   )
 }

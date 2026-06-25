@@ -10,13 +10,13 @@ import type { InboxConversation, InboxMessage } from "@/lib/inbox-api"
 interface Props {
   conversation: InboxConversation
   initialMessages: InboxMessage[]
+  currentUserId: string
 }
 
-export function ThreadView({ conversation, initialMessages }: Props) {
+export function ThreadView({ conversation, initialMessages, currentUserId }: Props) {
   const router = useRouter()
   const [messages, setMessages] = useState(initialMessages)
   const [mode, setMode] = useState<"bot" | "human">(conversation.mode)
-  const [assignedTo, setAssignedTo] = useState<string | null>(conversation.assigned_to)
   const [withinWindow, setWithinWindow] = useState(conversation.within_window)
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
@@ -53,10 +53,15 @@ export function ThreadView({ conversation, initialMessages }: Props) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ mode: next }),
     })
-    if (res.ok) {
-      const data = await res.json()
-      setMode(next)
-      setAssignedTo(data.assigned_to ?? null)
+    if (!res.ok) return
+    setMode(next)
+    // Al tomar la conversación, asignársela al operador actual.
+    if (next === "human") {
+      await fetch(`/api/admin/inbox/${conversation.id}/assign`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operatorId: currentUserId }),
+      })
     }
   }
 
@@ -117,7 +122,7 @@ export function ThreadView({ conversation, initialMessages }: Props) {
             className="flex items-center gap-1.5 rounded-full"
           >
             {mode === "human" ? <User size={11} /> : <Bot size={11} />}
-            {mode === "human" ? `${assignedTo ?? "Operador"} · Devolver al bot` : "Bot activo · Tomar"}
+            {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
           </Button>
 
           <Button

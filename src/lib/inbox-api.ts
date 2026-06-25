@@ -7,10 +7,11 @@ export interface InboxConversation {
   phone: string | null
   mode: "bot" | "human"
   status: string
-  assigned_to: string | null
+  assigned_operator_id: string | null
   last_inbound_at: string | null
   within_window: boolean
   created_at: string
+  awaiting_reply: boolean
 }
 
 export interface InboxMessage {
@@ -63,6 +64,19 @@ export async function setMode(
   const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/mode`, {
     method: "POST",
     body: JSON.stringify({ mode, ...(operatorName ? { operatorName } : {}) }),
+  })
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+}
+
+export async function assignConversation(
+  aiApiUrl: string,
+  aiTenantId: string,
+  conversationId: string,
+  operatorId: string,
+): Promise<void> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/assign`, {
+    method: "POST",
+    body: JSON.stringify({ operatorId }),
   })
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
 }
