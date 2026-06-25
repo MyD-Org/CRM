@@ -26,6 +26,8 @@ export const tenants = pgTable("tenants", {
   aiAgentId: text("ai_agent_id").notNull().default(""),
   // UUID del tenant en la ai-api (para auth de inbox/staff)
   aiTenantId: text("ai_tenant_id").notNull().default(""),
+  // Horario de atención para el mensaje de handoff automático. Ej: "Lunes a Viernes 9-18hs"
+  businessHours: text("business_hours"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
@@ -41,6 +43,8 @@ export const adminUsers = pgTable(
     // 'operator': puede usar el inbox y responder mensajes
     // 'superadmin': todo lo anterior + gestión de usuarios
     role: text("role").notNull().default("operator"),
+    // ej. 'ventas', 'cuentas-corrientes', 'soporte' — para routing automático de conversaciones
+    department: text("department"),
     // null mientras el usuario no haya aceptado la invitación y seteado contraseña
     passwordHash: text("password_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
