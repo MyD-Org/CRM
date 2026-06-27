@@ -15,8 +15,21 @@ export default async function CatalogoPage() {
 
   const db = getDb()
 
+  // Excluimos fileData (bytea/Uint8Array): es el blob crudo del Excel, no se renderiza y
+  // NO es serializable como prop de Server → Client Component (rompe el render). Además
+  // evitamos cargar el archivo entero solo para listar.
   const lists = await db
-    .select()
+    .select({
+      id: priceLists.id,
+      tenantId: priceLists.tenantId,
+      name: priceLists.name,
+      category: priceLists.category,
+      priceColumns: priceLists.priceColumns,
+      fileName: priceLists.fileName,
+      active: priceLists.active,
+      uploadedAt: priceLists.uploadedAt,
+      createdAt: priceLists.createdAt,
+    })
     .from(priceLists)
     .where(eq(priceLists.tenantId, session.tenantId))
     .orderBy(priceLists.createdAt)
