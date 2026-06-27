@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { Resend } from "resend"
 import { getDb } from "@/db"
 import { adminUsers, adminPasswordTokens, tenants } from "@/db/schema"
@@ -12,14 +12,67 @@ async function getAdminSession() {
   return getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
 }
 
+// Intenta enviar el email de invitación. Devuelve { sent, errorMsg }.
+// Resend v6 retorna { data, error } sin tirar excepción en errores de API.
+async function trySendInviteEmail({
+  tenant,
+  user,
+  role,
+  inviteUrl,
+}: {
+  tenant: { resendFrom?: string | null; name?: string | null } | undefined
+  user: { email: string; name: string }
+  role: string
+  inviteUrl: string
+}): Promise<{ sent: boolean; errorMsg?: string }> {
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const { error } = await resend.emails.send({
+      from: tenant?.resendFrom ?? "noreply@example.com",
+      to: user.email,
+      subject: `Invitación al backoffice de ${tenant?.name ?? ""}`,
+      html: `
+        <p>Hola ${user.name},</p>
+        <p>Fuiste invitado como <strong>${role === "superadmin" ? "Superadmin" : "Operador"}</strong> del backoffice.</p>
+        <p><a href="${inviteUrl}">Aceptar invitación y crear contraseña</a></p>
+        <p>El link vence en 7 días.</p>
+      `,
+    })
+    if (error) {
+      const msg = `${error.name}: ${error.message}`
+      console.error("[invite] Resend error:", msg)
+      return { sent: false, errorMsg: msg }
+    }
+    return { sent: true }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[invite] Resend exception:", msg)
+    return { sent: false, errorMsg: msg }
+  }
+}
+
 export async function GET() {
   const session = await getAdminSession()
   if (!session.userId) return NextResponse.json({ error: "no autorizado" }, { status: 401 })
 
   const db = getDb()
   const users = await db
-    .select({ id: adminUsers.id, email: adminUsers.email, name: adminUsers.name, role: adminUsers.role, createdAt: adminUsers.createdAt, hasPassword: adminUsers.passwordHash })
+    .select({
+      id: adminUsers.id,
+      email: adminUsers.email,
+      name: adminUsers.name,
+      role: adminUsers.role,
+      department: adminUsers.department,
+      createdAt: adminUsers.createdAt,
+      hasPassword: adminUsers.passwordHash,
+      inviteExpiresAt: adminPasswordTokens.expiresAt,
+      inviteAcceptedAt: adminPasswordTokens.usedAt,
+    })
     .from(adminUsers)
+    .leftJoin(
+      adminPasswordTokens,
+      and(eq(adminPasswordTokens.userId, adminUsers.id), eq(adminPasswordTokens.type, "invite")),
+    )
     .where(eq(adminUsers.tenantId, session.tenantId))
 
   return NextResponse.json(users.map((u) => ({ ...u, hasPassword: !!u.hasPassword })))
@@ -49,6 +102,7 @@ export async function POST(req: NextRequest) {
     email: body.email.toLowerCase(),
     name: body.name,
     role: body.role,
+    department: body.department?.trim() || null,
   }).returning()
 
   const { token, tokenHash } = generateToken()
@@ -58,18 +112,7 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"
   const inviteUrl = `${baseUrl}/admin/reset-password/${token}`
 
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  await resend.emails.send({
-    from: tenant?.resendFrom ?? "noreply@example.com",
-    to: user.email,
-    subject: `Invitación al backoffice de ${tenant?.name ?? ""}`,
-    html: `
-      <p>Hola ${user.name},</p>
-      <p>Fuiste invitado como <strong>${body.role === "superadmin" ? "Superadmin" : "Operador"}</strong> del backoffice.</p>
-      <p><a href="${inviteUrl}">Aceptar invitación y crear contraseña</a></p>
-      <p>El link vence en 7 días.</p>
-    `,
-  })
+  const { sent: emailSent, errorMsg: emailError } = await trySendInviteEmail({ tenant, user, role: body.role, inviteUrl })
 
-  return NextResponse.json({ id: user.id, ok: true }, { status: 201 })
+  return NextResponse.json({ id: user.id, ok: true, emailSent, emailError, inviteUrl }, { status: 201 })
 }

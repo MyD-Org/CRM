@@ -1,17 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { UserPlus, Mail, Shield, Clock, Pencil, Check, X } from "lucide-react"
-import { Button, Input, Field, Select, Badge, Alert, Avatar } from "@myd-org/ui"
+import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2 } from "lucide-react"
+import { Button, Input, Field, Select, Badge, Alert, Avatar, Dialog, useToast } from "@myd-org/ui"
 
 interface AdminUser {
   id: string
   email: string
   name: string
   role: string
+  department: string | null
   hasPassword: boolean
   createdAt: Date | string
+  inviteExpiresAt: Date | string | null
+  inviteAcceptedAt: Date | string | null
 }
+
+const DEPARTMENT_OPTIONS = [
+  { value: "", label: "Sin departamento" },
+  { value: "ventas", label: "Ventas" },
+  { value: "cuentas-corrientes", label: "Cuentas Corrientes" },
+  { value: "soporte", label: "Soporte" },
+]
 
 interface Props {
   initialUsers: AdminUser[]
@@ -22,18 +32,22 @@ interface Props {
 export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   const [users, setUsers] = useState(initialUsers)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: "", email: "", role: "operator" })
+  const [form, setForm] = useState({ name: "", email: "", role: "operator", department: "" })
+  const { toast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
-  const [formSuccess, setFormSuccess] = useState("")
+  // URLs de invitación conocidas en esta sesión (userId → url)
+  const [pendingUrls, setPendingUrls] = useState<Record<string, string>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", role: "" })
+  const [editForm, setEditForm] = useState({ name: "", role: "", department: "" })
   const [editError, setEditError] = useState("")
   const [editSaving, setEditSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   function startEdit(user: AdminUser) {
     setEditingId(user.id)
-    setEditForm({ name: user.name, role: user.role })
+    setEditForm({ name: user.name, role: user.role, department: user.department ?? "" })
     setEditError("")
   }
 
@@ -53,7 +67,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       })
       const body = await res.json()
       if (res.ok) {
-        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role } : u))
+        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role, department: body.department ?? u.department } : u))
         setEditingId(null)
       } else {
         setEditError(body.error ?? "Error al guardar")
@@ -66,7 +80,6 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormError("")
-    setFormSuccess("")
     setSubmitting(true)
     try {
       const res = await fetch("/api/admin/usuarios", {
@@ -76,8 +89,13 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       })
       const body = await res.json()
       if (res.ok) {
-        setFormSuccess(`Invitación enviada a ${form.email}`)
-        setForm({ name: "", email: "", role: "operator" })
+        if (body.emailSent === false) {
+          toast({ title: "Usuario creado", description: "El mail no pudo enviarse. Copiá el link desde la card.", tone: "warning" })
+        } else {
+          toast({ title: "Invitación enviada", description: `Se envió un mail a ${form.email}.`, tone: "success" })
+        }
+        if (body.inviteUrl) setPendingUrls((p) => ({ ...p, [body.id]: body.inviteUrl }))
+        setForm({ name: "", email: "", role: "operator", department: "" })
         setShowForm(false)
         const listRes = await fetch("/api/admin/usuarios")
         if (listRes.ok) setUsers(await listRes.json())
@@ -91,11 +109,45 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
   const isSuperadmin = currentRole === "superadmin"
 
+  async function confirmDelete() {
+    if (!deleteId) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/usuarios/${deleteId}`, { method: "DELETE" })
+      const body = await res.json()
+      if (res.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== deleteId))
+        toast({ title: "Usuario eliminado", tone: "neutral" })
+      } else {
+        toast({ title: body.error ?? "Error al eliminar", tone: "danger" })
+      }
+    } finally {
+      setDeleting(false)
+      setDeleteId(null)
+    }
+  }
+
   return (
     <div>
+      <Dialog
+        open={deleteId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteId(null) }}
+        title="Eliminar usuario"
+        description="Se eliminará la cuenta permanentemente. Esta acción no se puede deshacer."
+        headerBorder={false}
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancelar</Button>
+            <Button variant="danger" loading={deleting} onClick={confirmDelete}>Eliminar</Button>
+          </div>
+        }
+      >
+        <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar este usuario?</p>
+      </Dialog>
+
       {isSuperadmin && (
         <div className="flex justify-end mb-4">
-          <Button onClick={() => { setShowForm((p) => !p); setFormError(""); setFormSuccess("") }}>
+          <Button onClick={() => { setShowForm((p) => !p); setFormError("") }}>
             <UserPlus size={15} strokeWidth={1.6} />
             Invitar usuario
           </Button>
@@ -129,16 +181,25 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                 />
               </Field>
             </div>
-            <Field label="Rol">
-              <Select
-                value={form.role}
-                onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}
-                options={[
-                  { value: "operator", label: "Operador" },
-                  { value: "superadmin", label: "Superadmin" },
-                ]}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Rol">
+                <Select
+                  value={form.role}
+                  onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}
+                  options={[
+                    { value: "operator", label: "Operador" },
+                    { value: "superadmin", label: "Superadmin" },
+                  ]}
+                />
+              </Field>
+              <Field label="Departamento">
+                <Select
+                  value={form.department}
+                  onValueChange={(v) => setForm((p) => ({ ...p, department: v }))}
+                  options={DEPARTMENT_OPTIONS}
+                />
+              </Field>
+            </div>
             {formError && <Alert tone="danger">{formError}</Alert>}
             <div className="flex gap-2 justify-end pt-1">
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -150,13 +211,11 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
         </div>
       )}
 
-      {formSuccess && <Alert tone="success" className="mb-4">{formSuccess}</Alert>}
-
-      <div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+<div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)" }}>
         <table className="w-full text-sm" style={{ background: "var(--card)" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {["Usuario", "Rol", "Estado", "Alta", ""].map((h, i) => (
+              {["Usuario", "Departamento", "Rol", "Estado", "Alta", ""].map((h, i) => (
                 <th key={i} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
                   {h}
                 </th>
@@ -196,6 +255,22 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                     </div>
                   </td>
 
+                  {/* Departamento */}
+                  <td className="px-4 py-3">
+                    {isEditing && isSuperadmin && !isSelf ? (
+                      <Select
+                        value={editForm.department}
+                        onValueChange={(v) => setEditForm((p) => ({ ...p, department: v }))}
+                        options={DEPARTMENT_OPTIONS}
+                        className="w-44"
+                      />
+                    ) : (
+                      <span className="text-sm" style={{ color: user.department ? "var(--ink)" : "var(--ink-faint)" }}>
+                        {DEPARTMENT_OPTIONS.find((d) => d.value === user.department)?.label ?? "—"}
+                      </span>
+                    )}
+                  </td>
+
                   {/* Rol */}
                   <td className="px-4 py-3">
                     {isEditing && isSuperadmin && !isSelf ? (
@@ -218,9 +293,29 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
                   {/* Estado */}
                   <td className="px-4 py-3">
-                    <Badge tone={user.hasPassword ? "success" : "warning"}>
-                      {user.hasPassword ? "Activo" : "Invitación pendiente"}
-                    </Badge>
+                    <InviteStatus
+                      user={user}
+                      knownUrl={pendingUrls[user.id]}
+                      onResend={async () => {
+                        const res = await fetch(`/api/admin/usuarios/${user.id}/resend-invite`, { method: "POST" })
+                        if (!res.ok) {
+                          toast({ title: "No se pudo reenviar la invitación", tone: "danger" })
+                          return
+                        }
+                        const data = await res.json()
+                        if (data.inviteUrl) {
+                          setPendingUrls((p) => ({ ...p, [user.id]: data.inviteUrl }))
+                          await navigator.clipboard.writeText(data.inviteUrl)
+                        }
+                        if (data.emailSent) {
+                          toast({ title: "Invitación reenviada", description: `Mail enviado a ${user.email}. Link copiado.`, tone: "success" })
+                        } else {
+                          toast({ title: "Mail no pudo enviarse", description: "El link fue copiado al portapapeles.", tone: "warning" })
+                        }
+                        const listRes = await fetch("/api/admin/usuarios")
+                        if (listRes.ok) setUsers(await listRes.json())
+                      }}
+                    />
                   </td>
 
                   {/* Alta */}
@@ -251,9 +346,16 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                           </Button>
                         </div>
                       ) : (
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(user)} title="Editar">
-                          <Pencil size={13} strokeWidth={1.6} />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => startEdit(user)} title="Editar">
+                            <Pencil size={13} strokeWidth={1.6} />
+                          </Button>
+                          {user.id !== currentUserId && (
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(user.id)} title="Eliminar">
+                              <Trash2 size={13} strokeWidth={1.6} />
+                            </Button>
+                          )}
+                        </div>
                       )
                     )}
                   </td>
@@ -263,6 +365,99 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function InviteStatus({
+  user,
+  knownUrl,
+  onResend,
+}: {
+  user: AdminUser
+  knownUrl?: string
+  onResend?: () => Promise<void>
+}) {
+  const [copied, setCopied] = useState(false)
+  const [resending, setResending] = useState(false)
+
+  if (user.hasPassword) {
+    const acceptedAt = user.inviteAcceptedAt
+      ? new Date(user.inviteAcceptedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+      : null
+    return (
+      <div className="inline-flex flex-col gap-0.5">
+        <Badge tone="success">Activo</Badge>
+        {acceptedAt && (
+          <span className="text-[10px]" style={{ color: "var(--ink-faint)" }}>Aceptó el {acceptedAt}</span>
+        )}
+      </div>
+    )
+  }
+
+  const expired = user.inviteExpiresAt && new Date(user.inviteExpiresAt) < new Date()
+
+  async function handleCopy() {
+    if (!knownUrl) return
+    await navigator.clipboard.writeText(knownUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleResend() {
+    if (!onResend) return
+    setResending(true)
+    try {
+      await onResend()
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const expiresAt = user.inviteExpiresAt
+    ? new Date(user.inviteExpiresAt).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : null
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <Badge tone={expired ? "danger" : "warning"}>
+          {expired ? "Invitación vencida" : "Invitación pendiente"}
+        </Badge>
+        {/* Si tenemos la URL en memoria → botón copiar directo */}
+        {knownUrl && !expired && (
+          <button
+            onClick={handleCopy}
+            title={copied ? "¡Copiado!" : "Copiar link de invitación"}
+            className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors"
+            style={{
+              color: copied ? "var(--green)" : "var(--blue)",
+              background: copied ? "var(--green-soft)" : "var(--blue-soft)",
+            }}
+          >
+            {copied ? <Check size={10} /> : <Link size={10} />}
+            {copied ? "Copiado" : "Copiar link"}
+          </button>
+        )}
+        {/* Si no tenemos URL (recargó la página) → regenerar y copiar */}
+        {!knownUrl && (
+          <button
+            onClick={handleResend}
+            disabled={resending}
+            title="Regenerar y copiar link"
+            className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors"
+            style={{ color: "var(--ink-soft)", background: "var(--elevated)" }}
+          >
+            <RefreshCw size={10} className={resending ? "animate-spin" : ""} />
+            {copied ? "¡Copiado!" : expired ? "Regenerar" : "Reenviar"}
+          </button>
+        )}
+      </div>
+      {expiresAt && !expired && (
+        <span className="text-[10px]" style={{ color: "var(--ink-faint)" }}>Vence el {expiresAt}</span>
+      )}
     </div>
   )
 }

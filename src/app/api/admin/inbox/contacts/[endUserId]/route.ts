@@ -5,10 +5,11 @@ import { eq } from "drizzle-orm"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
-import { listConversations } from "@/lib/inbox-api"
+import { getContact } from "@/lib/inbox-api"
 import { operatorNamesByIds } from "@/lib/operator-names"
 
-export async function GET() {
+export async function GET(_req: Request, { params }: { params: Promise<{ endUserId: string }> }) {
+  const { endUserId } = await params
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId) return NextResponse.json({ error: "no autorizado" }, { status: 401 })
 
@@ -17,12 +18,16 @@ export async function GET() {
     return NextResponse.json({ error: "inbox no configurado" }, { status: 503 })
   }
 
-  const conversations = await listConversations(tenant.aiApiUrl, tenant.aiTenantId)
+  let contact
+  try {
+    contact = await getContact(tenant.aiApiUrl, tenant.aiTenantId, endUserId)
+  } catch {
+    return NextResponse.json({ error: "contact_not_found" }, { status: 404 })
+  }
 
-  const nameById = await operatorNamesByIds(conversations.map((c) => c.assigned_operator_id))
-  const enriched = conversations.map((c) => ({
-    ...c,
-    assigned_operator_name: c.assigned_operator_id ? nameById.get(c.assigned_operator_id) ?? null : null,
-  }))
-  return NextResponse.json(enriched)
+  const nameById = await operatorNamesByIds([contact.assigned_operator_id])
+  return NextResponse.json({
+    ...contact,
+    assigned_operator_name: contact.assigned_operator_id ? nameById.get(contact.assigned_operator_id) ?? null : null,
+  })
 }

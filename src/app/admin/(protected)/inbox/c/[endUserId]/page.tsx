@@ -1,0 +1,44 @@
+import { cookies } from "next/headers"
+import { getIronSession } from "iron-session"
+import { eq } from "drizzle-orm"
+import { notFound } from "next/navigation"
+import { getDb } from "@/db"
+import { tenants } from "@/db/schema"
+import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
+import { getContact, getContactMessages } from "@/lib/inbox-api"
+import { operatorNamesByIds } from "@/lib/operator-names"
+import { ContactThreadView } from "@/components/admin/ContactThreadView"
+
+export const dynamic = "force-dynamic"
+
+export default async function ContactThreadPage({ params }: { params: Promise<{ endUserId: string }> }) {
+  const { endUserId } = await params
+  const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
+  const [tenant] = await getDb().select().from(tenants).where(eq(tenants.id, session.tenantId))
+
+  if (!tenant?.aiTenantId || !tenant?.aiApiUrl) {
+    return (
+      <div className="p-6">
+        <div className="rounded-[var(--radius)] p-4 text-sm" style={{ background: "var(--amber-soft)", color: "var(--amber)" }}>
+          El inbox no está configurado.
+        </div>
+      </div>
+    )
+  }
+
+  const result = await Promise.all([
+    getContact(tenant.aiApiUrl, tenant.aiTenantId, endUserId),
+    getContactMessages(tenant.aiApiUrl, tenant.aiTenantId, endUserId, { limit: 30 }),
+  ]).catch(() => null)
+
+  if (!result) notFound()
+  const [contact, page] = result
+
+  const nameById = await operatorNamesByIds([contact.assigned_operator_id])
+  const enrichedContact = {
+    ...contact,
+    assigned_operator_name: contact.assigned_operator_id ? nameById.get(contact.assigned_operator_id) ?? null : null,
+  }
+
+  return <ContactThreadView contact={enrichedContact} initialPage={page} currentUserId={session.userId} />
+}

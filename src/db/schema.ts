@@ -6,9 +6,15 @@ import {
   timestamp,
   integer,
   boolean,
+  numeric,
   index,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/pg-core"
+
+const bytea = customType<{ data: Buffer }>({
+  dataType() { return "bytea" },
+})
 
 // Config por tenant — reemplaza las variables de entorno {PREFIX}_*
 export const tenants = pgTable("tenants", {
@@ -28,6 +34,8 @@ export const tenants = pgTable("tenants", {
   aiTenantId: text("ai_tenant_id").notNull().default(""),
   // Horario de atención para el mensaje de handoff automático. Ej: "Lunes a Viernes 9-18hs"
   businessHours: text("business_hours"),
+  // Condiciones de pago mostradas por el agente. Ej: [{ method: "Transferencia", discount: "5%" }]
+  paymentConditions: jsonb("payment_conditions").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
@@ -88,6 +96,42 @@ export const clientCommercialConditions = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("ccc_tenant_cliente").on(t.tenantId, t.codigocliente)],
+)
+
+// Listas de precios cargadas desde Excel (temporal hasta integrar Alegra)
+// Cada lista tiene N columnas de precio (ej: "Público", "Distribuidor", "Especial")
+// configuradas en priceColumns: { key: "lista1", label: "Precio público" }[]
+export const priceLists = pgTable("price_lists", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(), // ej: "Cables de acometida"
+  category: text("category").notNull(), // ej: "cables-acometida"
+  // [{ key: "lista1", label: "Precio público" }, ...]
+  priceColumns: jsonb("price_columns").notNull().default([]),
+  fileData: bytea("file_data"),
+  fileName: text("file_name"),
+  active: boolean("active").notNull().default(true),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Productos parseados del Excel de lista de precios
+export const catalogItems = pgTable(
+  "catalog_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    priceListId: uuid("price_list_id").notNull().references(() => priceLists.id, { onDelete: "cascade" }),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    code: text("code").notNull(),
+    description: text("description").notNull(),
+    // { lista1: "14341.17", lista2: "12487.55", lista3: "0.00" }
+    prices: jsonb("prices").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ci_tenant_code").on(t.tenantId, t.code),
+    index("ci_price_list").on(t.priceListId),
+  ],
 )
 
 // Reglas de notificación por tenant (editables por SQL hasta que exista el panel)

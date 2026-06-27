@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { Button, Input, Field, Alert } from "@myd-org/ui"
 
 export default function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>()
@@ -36,46 +37,47 @@ export default function ResetPasswordPage() {
 
   return (
     <div
-      className="w-full max-w-sm rounded-[var(--radius)] p-8"
-      style={{ background: "var(--card)", border: "1px solid var(--border)", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}
+      className="w-full p-8"
+      style={{
+        maxWidth: 408,
+        background: "var(--card)",
+        borderRadius: 16,
+        borderTop: "3px solid var(--blue-bright)",
+        boxShadow: "0 4px 32px rgba(12,62,214,0.08), 0 1px 4px rgba(0,0,0,0.06)",
+      }}
     >
-      <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--ink)" }}>Nueva contraseña</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--ink-soft)" }}>Elegí una contraseña de al menos 8 caracteres.</p>
+      <div className="flex flex-col gap-1.5 mb-6">
+        <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Nueva contraseña</h1>
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+          Elegí una contraseña de al menos 8 caracteres.
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>Nueva contraseña</label>
-          <input
+        <Field label="Nueva contraseña">
+          <Input
             type="password"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="px-3 py-2 rounded-[var(--radius)] text-sm outline-none"
-            style={{ border: "1px solid var(--border-strong)", background: "var(--bg)", color: "var(--ink)" }}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium" style={{ color: "var(--ink-soft)" }}>Confirmar contraseña</label>
-          <input
+        </Field>
+        <Field label="Confirmar contraseña">
+          <Input
             type="password"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             required
-            className="px-3 py-2 rounded-[var(--radius)] text-sm outline-none"
-            style={{ border: "1px solid var(--border-strong)", background: "var(--bg)", color: "var(--ink)" }}
           />
-        </div>
-        {error && <p className="text-xs" style={{ color: "var(--red)" }}>{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="py-2 rounded-[var(--radius)] text-sm font-medium text-white transition-opacity disabled:opacity-60"
-          style={{ background: "var(--blue)" }}
-        >
+        </Field>
+
+        {error && <Alert tone="danger">{error}</Alert>}
+
+        <Button type="submit" loading={loading} className="w-full justify-center">
           {loading ? "Guardando..." : "Guardar contraseña"}
-        </button>
+        </Button>
       </form>
     </div>
   )

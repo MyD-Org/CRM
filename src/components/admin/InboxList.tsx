@@ -4,43 +4,50 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
-import type { InboxConversation } from "@/lib/inbox-api"
+import type { InboxContact } from "@/lib/inbox-api"
+
+type Tab = "active" | "history" | "mine"
 
 interface Props {
-  initialConversations: InboxConversation[]
+  initialContacts: InboxContact[]
   currentUserId: string
 }
 
-export function InboxList({ initialConversations, currentUserId }: Props) {
-  const [conversations, setConversations] = useState(initialConversations)
-  const [tab, setTab] = useState<"all" | "mine">("all")
+export function InboxList({ initialContacts, currentUserId }: Props) {
+  const [contacts, setContacts] = useState(initialContacts)
+  const [tab, setTab] = useState<Tab>("active")
 
+  // El scope del fetch depende de la solapa: "Activas" trae solo ventana abierta;
+  // "Históricas" y "Mías" traen todos (a "Mías" se la filtra por operador en el cliente).
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const res = await fetch("/api/admin/inbox/conversations")
-      if (res.ok) setConversations(await res.json())
-    }, 10_000)
-    return () => clearInterval(interval)
-  }, [])
+    const scope = tab === "active" ? "active" : "all"
+    let cancelled = false
+    const load = async () => {
+      const res = await fetch(`/api/admin/inbox/contacts?scope=${scope}`)
+      if (res.ok && !cancelled) setContacts(await res.json())
+    }
+    load()
+    const interval = setInterval(load, 10_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [tab])
 
-  const mineConvs = conversations.filter((c) => c.assigned_operator_id === currentUserId)
-  const mineCount = mineConvs.length
-  const pendingCount = conversations.filter((c) => c.awaiting_reply).length
-  const visible = tab === "mine" ? mineConvs : conversations
+  const mine = contacts.filter((c) => c.assigned_operator_id === currentUserId)
+  const pendingCount = contacts.filter((c) => c.awaiting_reply).length
+  const visible = tab === "mine" ? mine : contacts
 
   return (
     <div className="flex flex-col gap-3">
       <Tabs
         variant="pill"
         value={tab}
-        onValueChange={(v) => setTab(v as "all" | "mine")}
+        onValueChange={(v) => setTab(v as Tab)}
         items={[
           {
-            value: "all",
+            value: "active",
             label: (
               <span className="flex items-center gap-1.5">
-                Todos
-                {pendingCount > 0 && (
+                Activas
+                {pendingCount > 0 && tab === "active" && (
                   <Badge tone="warning" className="text-[10px] px-1.5 py-0">
                     {pendingCount}
                   </Badge>
@@ -48,14 +55,15 @@ export function InboxList({ initialConversations, currentUserId }: Props) {
               </span>
             ),
           },
+          { value: "history", label: "Históricas" },
           {
             value: "mine",
             label: (
               <span className="flex items-center gap-1.5">
                 Mis conversaciones
-                {mineCount > 0 && (
+                {mine.length > 0 && (
                   <Badge tone="info" className="text-[10px] px-1.5 py-0">
-                    {mineCount}
+                    {mine.length}
                   </Badge>
                 )}
               </span>
@@ -67,27 +75,31 @@ export function InboxList({ initialConversations, currentUserId }: Props) {
       {!visible.length ? (
         <EmptyState
           icon={<MessageSquare size={28} strokeWidth={1.2} />}
-          title={tab === "mine" ? "No tenés conversaciones asignadas" : "No hay conversaciones todavía"}
+          title={
+            tab === "mine" ? "No tenés contactos asignados"
+              : tab === "history" ? "No hay contactos en el historial"
+                : "No hay conversaciones activas"
+          }
         />
       ) : (
         <div className="flex flex-col gap-2">
-          {visible.map((conv) => (
+          {visible.map((c) => (
             <Link
-              key={conv.id}
-              href={`/admin/inbox/${conv.id}`}
+              key={c.end_user_id}
+              href={`/admin/inbox/c/${c.end_user_id}`}
               className="flex items-center gap-4 px-4 py-3 rounded-[var(--radius)] transition-colors hover:opacity-90 overflow-hidden"
               style={{
-                background: conv.awaiting_reply ? "var(--amber-soft)" : "var(--card)",
-                border: `1px solid ${conv.awaiting_reply ? "var(--amber)" : "var(--border)"}`,
-                borderLeft: `3px solid ${conv.awaiting_reply ? "var(--amber)" : urgencyColor(conv.last_inbound_at)}`,
+                background: c.awaiting_reply ? "var(--amber-soft)" : "var(--card)",
+                border: `1px solid ${c.awaiting_reply ? "var(--amber)" : "var(--border)"}`,
+                borderLeft: `3px solid ${c.awaiting_reply ? "var(--amber)" : urgencyColor(c.last_inbound_at)}`,
               }}
             >
               <div className="relative shrink-0">
                 <div
                   className="w-9 h-9 rounded-full flex items-center justify-center"
-                  style={{ background: conv.awaiting_reply ? "var(--amber)" : "var(--blue-soft)" }}
+                  style={{ background: c.awaiting_reply ? "var(--amber)" : "var(--blue-soft)" }}
                 >
-                  {conv.awaiting_reply
+                  {c.awaiting_reply
                     ? <MessageCircleWarning size={16} strokeWidth={1.6} style={{ color: "white" }} />
                     : <MessageSquare size={16} strokeWidth={1.6} style={{ color: "var(--blue)" }} />
                   }
@@ -97,10 +109,10 @@ export function InboxList({ initialConversations, currentUserId }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium truncate" style={{ color: "var(--ink)" }}>
-                    {conv.contact}
+                    {c.contact}
                   </p>
-                  <ModeChip mode={conv.mode} isAssigned={!!conv.assigned_operator_id} />
-                  {conv.awaiting_reply && (
+                  <ModeChip mode={c.mode} operatorName={c.assigned_operator_name ?? null} />
+                  {c.awaiting_reply && (
                     <Badge tone="warning" className="flex items-center gap-1 shrink-0">
                       <MessageCircleWarning size={9} />
                       Sin respuesta
@@ -108,13 +120,14 @@ export function InboxList({ initialConversations, currentUserId }: Props) {
                   )}
                 </div>
                 <p className="text-xs truncate mt-0.5" style={{ color: "var(--ink-soft)" }}>
-                  {conv.channel}
-                  {conv.phone && conv.phone !== conv.contact ? ` · ${conv.phone}` : ""}
-                  {" · "}{conv.last_inbound_at ? formatTime(conv.last_inbound_at) : "—"}
+                  {c.last_message
+                    ? c.last_message
+                    : `${c.channel}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
+                  {" · "}{c.last_inbound_at ? formatTime(c.last_inbound_at) : "—"}
                 </p>
               </div>
 
-              <WindowBadge within={conv.within_window} />
+              <WindowBadge within={c.within_window} />
             </Link>
           ))}
         </div>
@@ -123,14 +136,30 @@ export function InboxList({ initialConversations, currentUserId }: Props) {
   )
 }
 
-function ModeChip({ mode, isAssigned }: { mode: string; isAssigned: boolean }) {
-  const isHuman = mode === "human"
-  return (
-    <Badge tone={isHuman ? "success" : "info"} className="flex items-center gap-1">
-      {isHuman ? <User size={9} /> : <Bot size={9} />}
-      {isHuman ? (isAssigned ? "Asignado" : "Humano") : "Bot"}
-    </Badge>
-  )
+function ModeChip({ mode, operatorName }: { mode: string; operatorName: string | null }) {
+  if (mode !== "human") {
+    return (
+      <Badge tone="info" className="flex items-center gap-1">
+        <Bot size={9} />
+        Bot
+      </Badge>
+    )
+  }
+  // En modo humano nunca mostramos el genérico "Humano": o el operador asignado, o un
+  // "Sin asignar" en alerta para que se vea que esa conversación necesita dueño.
+  return operatorName
+    ? (
+      <Badge tone="success" className="flex items-center gap-1">
+        <User size={9} />
+        Asignado a {operatorName}
+      </Badge>
+    )
+    : (
+      <Badge tone="warning" className="flex items-center gap-1">
+        <User size={9} />
+        Sin asignar
+      </Badge>
+    )
 }
 
 function WindowBadge({ within }: { within: boolean }) {

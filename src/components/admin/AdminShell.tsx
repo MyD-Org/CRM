@@ -3,8 +3,8 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { MessageSquare, Users, LogOut } from "lucide-react"
-import { SideNav } from "@myd-org/ui"
+import { MessageSquare, Users, LogOut, Package } from "lucide-react"
+import { SideNav, ToastProvider } from "@myd-org/ui"
 
 interface AdminShellProps {
   name: string
@@ -16,6 +16,7 @@ interface AdminShellProps {
 
 const NAV = [
   { href: "/admin/inbox", label: "Inbox", icon: <MessageSquare size={16} strokeWidth={1.6} /> },
+  { href: "/admin/catalogo", label: "Catálogo", icon: <Package size={16} strokeWidth={1.6} />, superadminOnly: true },
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
 ]
 
@@ -43,6 +44,7 @@ export function AdminShell({ name, role, logoSrc, tenantName, children }: AdminS
   )
 
   return (
+    <ToastProvider>
     <SideNav
       logo={logo}
       items={visibleNav.map((item) => ({
@@ -65,5 +67,6 @@ export function AdminShell({ name, role, logoSrc, tenantName, children }: AdminS
     >
       {children}
     </SideNav>
+    </ToastProvider>
   )
 }
