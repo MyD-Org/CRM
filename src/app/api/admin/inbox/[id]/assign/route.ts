@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { and, eq, isNotNull } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { getDb } from "@/db"
-import { adminUsers, tenants } from "@/db/schema"
+import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { assignConversation, listConversations } from "@/lib/inbox-api"
+import { availableOperators, loadMapOf, pickLeastLoaded } from "@/lib/assignment"
 
 // POST /api/admin/inbox/:id/assign
 //
@@ -33,42 +34,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (typeof body.operatorId === "string" && body.operatorId.trim()) {
     targetOperatorId = body.operatorId.trim()
   } else if (body.strategy === "least-loaded") {
-    const conditions = [
-      eq(adminUsers.tenantId, session.tenantId),
-      isNotNull(adminUsers.passwordHash),
-    ]
-    if (body.department) {
-      conditions.push(eq(adminUsers.department, body.department))
-    }
-
-    const operators = await db.select({ id: adminUsers.id })
-      .from(adminUsers)
-      .where(and(...conditions))
-
+    // Mismo criterio que la reconciliación automática (ADR 0006): operadores DISPONIBLES
+    // del depto + menos cargado. Lógica compartida en lib/assignment.ts.
+    const operators = await availableOperators(session.tenantId, body.department ?? null)
     if (!operators.length) {
       const reason = body.department
-        ? `no hay operadores activos en el departamento "${body.department}"`
-        : "no hay operadores activos"
+        ? `no hay operadores disponibles en el departamento "${body.department}"`
+        : "no hay operadores disponibles"
       return NextResponse.json({ error: reason }, { status: 404 })
     }
 
     const convs = await listConversations(tenant.aiApiUrl, tenant.aiTenantId)
-
-    const loadMap = new Map<string, number>()
-    for (const op of operators) loadMap.set(op.id, 0)
-    for (const conv of convs) {
-      if (conv.assigned_operator_id && loadMap.has(conv.assigned_operator_id)) {
-        loadMap.set(conv.assigned_operator_id, (loadMap.get(conv.assigned_operator_id) ?? 0) + 1)
-      }
-    }
-
-    let minLoad = Infinity
-    let chosen = operators[0].id
-    for (const op of operators) {
-      const load = loadMap.get(op.id) ?? 0
-      if (load < minLoad) { minLoad = load; chosen = op.id }
-    }
-    targetOperatorId = chosen
+    const chosen = pickLeastLoaded(operators, loadMapOf(convs))
+    targetOperatorId = chosen!.id
   } else {
     return NextResponse.json(
       { error: "Se requiere operatorId o strategy='least-loaded'" },

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Bot, User, Send, CheckCheck } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, User } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import type { InboxConversation, InboxMessage } from "@/lib/inbox-api"
@@ -115,26 +115,33 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
         <div className="flex items-center gap-2">
           {!withinWindow && <Badge tone="warning">Ventana cerrada</Badge>}
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={toggleMode}
-            className="flex items-center gap-1.5 rounded-full"
-          >
-            {mode === "human" ? <User size={11} /> : <Bot size={11} />}
-            {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
-          </Button>
+          {/* Acciones manuales solo en conversaciones activas (dentro de la ventana). Con la
+              ventana cerrada no se puede responder, así que se ocultan; las vencidas (+24h)
+              las cierra el cron de auto-cierre. */}
+          {withinWindow && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleMode}
+                className="flex items-center gap-1.5 rounded-full"
+              >
+                {mode === "human" ? <User size={11} /> : <Bot size={11} />}
+                {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
+              </Button>
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleArchive}
-            disabled={archiving}
-            className="flex items-center gap-1.5 rounded-full"
-          >
-            <CheckCheck size={11} strokeWidth={1.6} />
-            Finalizar
-          </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleArchive}
+                disabled={archiving}
+                className="flex items-center gap-1.5 rounded-full"
+              >
+                <CheckCheck size={11} strokeWidth={1.6} />
+                Finalizar
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -153,7 +160,9 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
       >
         {mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
-            El bot está respondiendo. Hacé click en "Tomar" para responder vos.
+            {withinWindow
+              ? 'El bot está respondiendo. Hacé click en "Tomar" para responder vos.'
+              : "El bot está respondiendo esta conversación."}
           </p>
         ) : !withinWindow ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--amber)" }}>

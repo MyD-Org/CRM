@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Bot, User, Send, CheckCheck } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, User } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
@@ -167,27 +167,34 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         <div className="flex items-center gap-2">
           {!contact.within_window && <Badge tone="warning">Ventana cerrada</Badge>}
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={toggleMode}
-            disabled={!convId}
-            className="flex items-center gap-1.5 rounded-full"
-          >
-            {mode === "human" ? <User size={11} /> : <Bot size={11} />}
-            {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
-          </Button>
+          {/* Acciones manuales solo en conversaciones activas (dentro de la ventana). Con la
+              ventana cerrada no se puede responder, así que se ocultan; las vencidas (+24h)
+              las cierra el cron de auto-cierre. */}
+          {contact.within_window && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleMode}
+                disabled={!convId}
+                className="flex items-center gap-1.5 rounded-full"
+              >
+                {mode === "human" ? <User size={11} /> : <Bot size={11} />}
+                {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
+              </Button>
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleArchive}
-            disabled={archiving || !convId}
-            className="flex items-center gap-1.5 rounded-full"
-          >
-            <CheckCheck size={11} strokeWidth={1.6} />
-            Finalizar
-          </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleArchive}
+                disabled={archiving || !convId}
+                className="flex items-center gap-1.5 rounded-full"
+              >
+                <CheckCheck size={11} strokeWidth={1.6} />
+                Finalizar
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -219,7 +226,9 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
       >
         {mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
-            El bot está respondiendo. Hacé click en &quot;Tomar&quot; para responder vos.
+            {contact.within_window
+              ? 'El bot está respondiendo. Hacé click en "Tomar" para responder vos.'
+              : "El bot está respondiendo esta conversación."}
           </p>
         ) : !contact.within_window ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--amber)" }}>

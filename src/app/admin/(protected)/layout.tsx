@@ -1,6 +1,9 @@
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
+import { eq } from "drizzle-orm"
+import { getDb } from "@/db"
+import { adminUsers } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { getTenantByIdFromDb } from "@/lib/tenants"
 import { AdminShell } from "@/components/admin/AdminShell"
@@ -11,8 +14,20 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
 
   const tenant = session.tenantId ? await getTenantByIdFromDb(session.tenantId) : null
 
+  const [me] = await getDb()
+    .select({ availability: adminUsers.availability })
+    .from(adminUsers)
+    .where(eq(adminUsers.id, session.userId))
+  const availability = me?.availability === "available" ? "available" : "away"
+
   return (
-    <AdminShell name={session.name} role={session.role} logoSrc={tenant?.logoPath} tenantName={tenant?.name}>
+    <AdminShell
+      name={session.name}
+      role={session.role}
+      logoSrc={tenant?.logoPath}
+      tenantName={tenant?.name}
+      availability={availability}
+    >
       {children}
     </AdminShell>
   )

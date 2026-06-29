@@ -5,12 +5,14 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { MessageSquare, Users, LogOut, Package } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
+import { AvailabilityToggle } from "./AvailabilityToggle"
 
 interface AdminShellProps {
   name: string
   role: "operator" | "superadmin"
   logoSrc?: string
   tenantName?: string
+  availability: "available" | "away"
   children: React.ReactNode
 }
 
@@ -20,7 +22,7 @@ const NAV = [
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
 ]
 
-export function AdminShell({ name, role, logoSrc, tenantName, children }: AdminShellProps) {
+export function AdminShell({ name, role, logoSrc, tenantName, availability, children }: AdminShellProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -65,6 +67,9 @@ export function AdminShell({ name, role, logoSrc, tenantName, children }: AdminS
         </Link>
       )}
     >
+      <div className="flex justify-end px-6 pt-4">
+        <AvailabilityToggle initial={availability} />
+      </div>
       {children}
     </SideNav>
     </ToastProvider>

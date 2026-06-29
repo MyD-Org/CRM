@@ -43,6 +43,13 @@
       "when": 1782421056486,
       "tag": "0005_wakeful_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782741857270,
+      "tag": "0006_greedy_polaris",
+      "breakpoints": true
     }
   ]
 }

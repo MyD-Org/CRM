@@ -8,6 +8,8 @@ export interface InboxConversation {
   mode: "bot" | "human"
   status: string
   assigned_operator_id: string | null
+  // Departamento al que se ruteó el handoff (cola por depto). Ver ADR 0006.
+  assigned_department: string | null
   // Nombre del operador asignado, resuelto en el CRM (ai-api solo conoce el UUID opaco).
   assigned_operator_name?: string | null
   last_inbound_at: string | null

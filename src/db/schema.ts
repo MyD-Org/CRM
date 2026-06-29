@@ -53,6 +53,11 @@ export const adminUsers = pgTable(
     role: text("role").notNull().default("operator"),
     // ej. 'ventas', 'cuentas-corrientes', 'soporte' — para routing automático de conversaciones
     department: text("department"),
+    // Presencia para asignación de handoff: 'available' = el operador está atendiendo y
+    // puede recibir conversaciones; 'away' = no se le asignan. Distinto de "cuenta activa"
+    // (passwordHash): existir ≠ estar disponible ahora. Default 'away'. Ver ADR 0006.
+    availability: text("availability").notNull().default("away"),
+    availabilityChangedAt: timestamp("availability_changed_at", { withTimezone: true }),
     // null mientras el usuario no haya aceptado la invitación y seteado contraseña
     passwordHash: text("password_hash"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
