@@ -166,6 +166,38 @@ export async function archiveConversation(
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
 }
 
+// Copiloto del operador (ADR 0007). Busca-o-crea el hilo de asistencia del contacto en ai-api y
+// devuelve la conversación pre-creada + un session token para que el widget del admin chatee.
+export interface AssistSession {
+  conversationId: string
+  token: string
+  agentId: string
+  expiresAt: string
+}
+
+export async function startAssist(
+  aiApiUrl: string,
+  aiTenantId: string,
+  endUserId: string,
+): Promise<{ ok: true; session: AssistSession } | { ok: false; error: string }> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/contacts/${endUserId}/assist`, { method: "POST" })
+  if (res.status === 409 || res.status === 404) {
+    const body = await res.json().catch(() => ({}))
+    return { ok: false, error: body.error ?? "assist_unavailable" }
+  }
+  if (!res.ok) return { ok: false, error: "assist_failed" }
+  const body = await res.json()
+  return {
+    ok: true,
+    session: {
+      conversationId: body.conversation_id,
+      token: body.token,
+      agentId: body.agent_id,
+      expiresAt: body.expires_at,
+    },
+  }
+}
+
 export async function sendReply(
   aiApiUrl: string,
   aiTenantId: string,
