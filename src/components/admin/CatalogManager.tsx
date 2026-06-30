@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Trash2, Package, Plus, X, Upload, Download } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Trash2, Package, Plus, X, Upload, Download, RefreshCw } from "lucide-react"
 import {
   Button,
   Input,
@@ -76,6 +76,35 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
   const [savingConditions, setSavingConditions] = useState(false)
 
   const conditionsChanged = JSON.stringify(conditions) !== JSON.stringify(savedConditions)
+
+  // Sincronización con Alegra (catálogo cacheado). Ver ADR catálogo Alegra.
+  type SyncLog = { status: string; itemsSynced: number; categoriesSynced: number; finishedAt: string | null; trigger: string } | null
+  const [lastSync, setLastSync] = useState<SyncLog>(null)
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/admin/catalog/sync")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setLastSync(d?.last ?? null))
+      .catch(() => {})
+  }, [])
+
+  async function runAlegraSync() {
+    setSyncing(true)
+    try {
+      const res = await fetch("/api/admin/catalog/sync", { method: "POST" })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        toast({ title: "Catálogo sincronizado", description: `${data.itemsSynced} productos · ${data.categoriesSynced} categorías`, tone: "success" })
+      } else {
+        toast({ title: "Error al sincronizar con Alegra", description: data.error, tone: "danger" })
+      }
+      const last = await fetch("/api/admin/catalog/sync").then((r) => r.json()).catch(() => null)
+      setLastSync(last?.last ?? null)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   async function confirmDelete() {
     if (!deleteId) return
@@ -154,6 +183,24 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
 
   return (
     <div className="space-y-4">
+
+      {/* Sincronización con Alegra (catálogo cacheado: productos, precios, categorías) */}
+      <div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--card)" }}>
+        <div className="flex items-center justify-between px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>Catálogo de Alegra</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
+              {lastSync?.finishedAt
+                ? `Última sincronización: ${new Date(lastSync.finishedAt).toLocaleString("es-AR")} · ${lastSync.itemsSynced} productos · ${lastSync.categoriesSynced} categorías${lastSync.status === "error" ? " · con errores" : ""}`
+                : "Todavía no se sincronizó el catálogo con Alegra."}
+            </p>
+          </div>
+          <Button variant="secondary" loading={syncing} onClick={runAlegraSync}>
+            <RefreshCw size={14} strokeWidth={1.6} />
+            Sincronizar con Alegra
+          </Button>
+        </div>
+      </div>
 
       {/* Dialog de confirmación de eliminación */}
       <Dialog

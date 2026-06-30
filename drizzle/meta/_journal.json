@@ -50,6 +50,13 @@
       "when": 1782741857270,
       "tag": "0006_greedy_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782843172982,
+      "tag": "0007_fat_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

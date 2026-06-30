@@ -25,6 +25,11 @@ export const tenants = pgTable("tenants", {
   flexxusBaseUrl: text("flexxus_base_url").notNull().default(""),
   flexxusToken: text("flexxus_token").notNull().default(""),
   flexxusMock: boolean("flexxus_mock").notNull().default(false),
+  // Credenciales Alegra (catálogo: productos, precios, categorías). Auth Basic email:token.
+  // alegraMock=true usa fixtures locales (sin pegarle a Alegra) hasta tener el token real.
+  alegraEmail: text("alegra_email").notNull().default(""),
+  alegraToken: text("alegra_token").notNull().default(""),
+  alegraMock: boolean("alegra_mock").notNull().default(false),
   whatsappNumber: text("whatsapp_number").notNull().default(""),
   resendFrom: text("resend_from").notNull(),
   aiApiUrl: text("ai_api_url").notNull().default(""),
@@ -137,6 +142,67 @@ export const catalogItems = pgTable(
     index("ci_tenant_code").on(t.tenantId, t.code),
     index("ci_price_list").on(t.priceListId),
   ],
+)
+
+// ── Catálogo cacheado desde Alegra (híbrido: cache local para navegar/buscar; el
+// precio/stock exacto se confirma en vivo en el momento decisivo). Ver ADR catálogo Alegra. ──
+
+// Categorías de ítems de Alegra (espejo local). Refrescadas por la sync.
+export const catalogCategories = pgTable(
+  "catalog_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    alegraId: text("alegra_id").notNull(),
+    name: text("name").notNull(),
+    parentAlegraId: text("parent_alegra_id"), // null = categoría raíz
+    status: text("status").notNull().default("active"), // 'active' | 'inactive' (stale)
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("cat_tenant_alegra").on(t.tenantId, t.alegraId)],
+)
+
+// Productos de Alegra (espejo local). El precio/stock acá es un SNAPSHOT de la última sync,
+// para mostrar y buscar; para el número exacto se confirma en vivo (getItemsLive). Ver ADR.
+export const catalogProducts = pgTable(
+  "catalog_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    alegraId: text("alegra_id").notNull(),
+    code: text("code"), // = reference de Alegra (puede faltar en algunos ítems)
+    name: text("name").notNull(),
+    description: text("description"),
+    categoryAlegraId: text("category_alegra_id"),
+    // Todas las listas de precio del ítem: [{ idPriceList, name, price }] (diseño flexible)
+    prices: jsonb("prices").notNull().default([]),
+    stock: numeric("stock"), // snapshot de inventario
+    status: text("status").notNull().default("active"), // 'active' | 'inactive' (stale/baja)
+    images: jsonb("images").notNull().default([]),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("cp_tenant_alegra").on(t.tenantId, t.alegraId),
+    index("cp_tenant_code").on(t.tenantId, t.code),
+    index("cp_tenant_category").on(t.tenantId, t.categoryAlegraId),
+  ],
+)
+
+// Bitácora de cada corrida de sync (observabilidad + "última sincronización" en el admin).
+export const catalogSyncLog = pgTable(
+  "catalog_sync_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    trigger: text("trigger").notNull(), // 'cron' | 'manual'
+    status: text("status").notNull().default("running"), // 'running' | 'ok' | 'error'
+    itemsSynced: integer("items_synced").notNull().default(0),
+    categoriesSynced: integer("categories_synced").notNull().default(0),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("csl_tenant_started").on(t.tenantId, t.startedAt)],
 )
 
 // Reglas de notificación por tenant (editables por SQL hasta que exista el panel)

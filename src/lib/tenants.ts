@@ -6,6 +6,9 @@ export interface TenantConfig {
   flexxusBaseUrl: string
   flexxusToken: string
   flexxusMock: boolean
+  alegraEmail: string
+  alegraToken: string
+  alegraMock: boolean
   whatsappNumber: string
   resendFrom: string
   aiApiBaseUrl: string
@@ -29,6 +32,10 @@ function buildTenantConfig(id: string): TenantConfig | null {
     flexxusBaseUrl: flexxusUrl,
     flexxusToken: process.env[`${prefix}_FLEXXUS_TOKEN`] ?? "",
     flexxusMock: isMock,
+    alegraEmail: process.env[`${prefix}_ALEGRA_EMAIL`] ?? "",
+    alegraToken: process.env[`${prefix}_ALEGRA_TOKEN`] ?? "",
+    // Sin credenciales todavía → arranca en mock (fixtures). Se apaga al setear el token real.
+    alegraMock: process.env[`${prefix}_ALEGRA_MOCK`] === "true" || isMock,
     whatsappNumber: process.env[`${prefix}_WHATSAPP`] ?? "",
     resendFrom: process.env[`${prefix}_RESEND_FROM`] ?? "portal@example.com",
     aiApiBaseUrl: process.env[`${prefix}_AI_API_URL`] ?? "",
@@ -76,6 +83,9 @@ export async function getTenantByIdFromDb(id: string): Promise<TenantConfig | nu
       flexxusBaseUrl: row.flexxusBaseUrl,
       flexxusToken: row.flexxusToken,
       flexxusMock: row.flexxusMock,
+      alegraEmail: row.alegraEmail,
+      alegraToken: row.alegraToken,
+      alegraMock: row.alegraMock,
       whatsappNumber: row.whatsappNumber,
       resendFrom: row.resendFrom,
       aiApiBaseUrl: row.aiApiUrl,

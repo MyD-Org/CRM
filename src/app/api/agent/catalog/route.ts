@@ -1,11 +1,14 @@
 import { eq, and, or, ilike } from "drizzle-orm"
 import { getDb } from "@/db"
-import { priceLists, catalogItems } from "@/db/schema"
+import { catalogProducts } from "@/db/schema"
+import type { AlegraPrice } from "@/lib/alegra"
 import { authAgentTenantRequest } from "@/lib/agent-auth"
 import { getTenantConfig } from "@/lib/tenant-context"
 
 // GET /api/agent/catalog?q=cable+10mm
-// Busca productos en la lista activa del tenant. Devuelve hasta 20 resultados.
+// Busca productos en la CACHE local del catálogo (sincronizada desde Alegra). Devuelve hasta 20.
+// Precios = snapshot de la última sync (referencia). El precio EXACTO se confirma en vivo con la
+// tool get_live_prices (/api/agent/prices) al armar el presupuesto. Ver ADR catálogo Alegra.
 export async function GET(req: Request) {
   try {
     const auth = authAgentTenantRequest(req)
@@ -23,40 +26,36 @@ export async function GET(req: Request) {
     if (!q) return Response.json({ error: "q es requerido" }, { status: 400 })
 
     const db = getDb()
-
-    // Buscar la lista activa del tenant
-    const [activeList] = await db
+    const rows = await db
       .select()
-      .from(priceLists)
-      .where(and(eq(priceLists.tenantId, tenant.id), eq(priceLists.active, true)))
-      .limit(1)
-
-    if (!activeList) {
-      return Response.json({ products: [], message: "No hay lista de precios cargada" })
-    }
-
-    const items = await db
-      .select()
-      .from(catalogItems)
+      .from(catalogProducts)
       .where(
         and(
-          eq(catalogItems.priceListId, activeList.id),
-          or(ilike(catalogItems.description, `%${q}%`), ilike(catalogItems.code, `%${q}%`)),
+          eq(catalogProducts.tenantId, tenant.id),
+          eq(catalogProducts.status, "active"),
+          or(ilike(catalogProducts.name, `%${q}%`), ilike(catalogProducts.code, `%${q}%`)),
         ),
       )
       .limit(20)
 
-    const columns = activeList.priceColumns as { key: string; label: string }[]
+    // Columnas de precio (union de listas presentes en los resultados), para que el agente sepa
+    // qué significa cada precio.
+    const colMap = new Map<string, string>()
+    for (const r of rows) for (const p of (r.prices as AlegraPrice[]) ?? []) colMap.set(p.idPriceList, p.name)
+    const priceColumns = [...colMap].map(([key, label]) => ({ key, label }))
 
-    console.log(`[agent/catalog] lista="${activeList.name}" → ${items.length} productos`)
+    console.log(`[agent/catalog] cache → ${rows.length} productos`)
 
     return Response.json({
-      category: activeList.name,
-      priceColumns: columns,
-      products: items.map((item) => ({
-        code: item.code,
-        description: item.description,
-        prices: item.prices,
+      priceColumns,
+      products: rows.map((r) => ({
+        id: r.alegraId, // para confirmar precio en vivo con get_live_prices
+        code: r.code,
+        name: r.name,
+        description: r.description,
+        stock: r.stock,
+        // precios de referencia (snapshot), keyed por lista
+        prices: Object.fromEntries(((r.prices as AlegraPrice[]) ?? []).map((p) => [p.idPriceList, String(p.price)])),
       })),
     })
   } catch (err) {
