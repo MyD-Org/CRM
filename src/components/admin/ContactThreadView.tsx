@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, User, Sparkles } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, Sparkles } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
@@ -219,16 +219,18 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
               las cierra el cron de auto-cierre. */}
           {contact.within_window && (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={toggleMode}
-                disabled={!convId}
-                className="flex items-center gap-1.5 rounded-full"
-              >
-                {mode === "human" ? <User size={11} /> : <Bot size={11} />}
-                {mode === "human" ? "Operador · Devolver al bot" : "Bot activo · Tomar"}
-              </Button>
+              {mode === "bot" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={toggleMode}
+                  disabled={!convId}
+                  className="flex items-center gap-1.5 rounded-full"
+                >
+                  <Bot size={11} />
+                  Bot activo · Tomar
+                </Button>
+              )}
 
               <Button
                 variant="secondary"
