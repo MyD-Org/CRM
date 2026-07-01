@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, User } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, User, Sparkles } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
+import { AiAssistPanel } from "./AiAssistPanel"
 
 const PAGE_SIZE = 30
 
@@ -27,6 +28,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState("")
   const [archiving, setArchiving] = useState(false)
+  const [assistOpen, setAssistOpen] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -145,7 +147,9 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
+      {/* Columna principal: la conversación. Se achica cuando el copiloto está abierto. */}
+      <div className="flex flex-col h-full flex-1 min-w-0">
       {/* Header */}
       <div
         className="flex items-center gap-3 px-5 py-3 shrink-0"
@@ -165,6 +169,18 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Copiloto de IA del operador (ADR 0007): disponible siempre, incluso con la ventana
+              cerrada (sirve para preparar un presupuesto antes de que el cliente reescriba). */}
+          <Button
+            variant={assistOpen ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setAssistOpen((o) => !o)}
+            className="flex items-center gap-1.5 rounded-full"
+          >
+            <Sparkles size={11} strokeWidth={1.6} />
+            Asistente IA
+          </Button>
+
           {!contact.within_window && <Badge tone="warning">Ventana cerrada</Badge>}
 
           {/* Acciones manuales solo en conversaciones activas (dentro de la ventana). Con la
@@ -253,6 +269,15 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         )}
         {sendError && <p className="text-xs mt-2 text-danger">{sendError}</p>}
       </div>
+      </div>
+
+      {/* Copiloto de IA, en flujo al costado: la conversación se achica, no se tapa. */}
+      <AiAssistPanel
+        open={assistOpen}
+        onClose={() => setAssistOpen(false)}
+        endUserId={contact.end_user_id}
+        contactName={contact.contact}
+      />
     </div>
   )
 }
