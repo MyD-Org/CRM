@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, Sparkles } from "lucide-react"
 import { Button, Badge, Textarea, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
-import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
+import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
 import { AiAssistPanel } from "./AiAssistPanel"
 
 const PAGE_SIZE = 30
@@ -206,7 +206,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--ink)" }}>{contact.contact}</p>
           <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
-            WhatsApp{contact.phone && contact.phone !== contact.contact ? ` · ${contact.phone}` : ""}
+            {channelLabel(contact.channel)}
+            {contact.phone && contact.phone !== contact.contact
+              ? ` · ${contact.phone}`
+              : <span style={{ color: "var(--ink-faint)" }}> · sin identificador</span>}
           </p>
         </div>
 

@@ -1,5 +1,20 @@
 import { mintInboxToken } from "./inbox-token"
 
+// Los mensajes llegan de múltiples canales (WhatsApp, Instagram, Messenger). Nombre
+// legible del canal para la UI; si no reconocemos el valor devolvemos lo que venga.
+export function channelLabel(channel: string | null | undefined): string {
+  switch (channel) {
+    case "whatsapp":
+      return "WhatsApp"
+    case "instagram":
+      return "Instagram"
+    case "messenger":
+      return "Messenger"
+    default:
+      return channel || "Canal desconocido"
+  }
+}
+
 export interface InboxConversation {
   id: string
   channel: string

@@ -67,7 +67,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       })
       const body = await res.json()
       if (res.ok) {
-        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role, department: body.department ?? u.department } : u))
+        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role, department: body.department ?? null } : u))
         setEditingId(null)
       } else {
         setEditError(body.error ?? "Error al guardar")

@@ -23,6 +23,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   return (
     <AdminShell
       name={session.name}
+      email={session.email}
       role={session.role}
       logoSrc={tenant?.logoPath}
       tenantName={tenant?.name}

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
-import type { InboxContact } from "@/lib/inbox-api"
+import { channelLabel, type InboxContact } from "@/lib/inbox-api"
 
 type Tab = "active" | "history"
 type Scope = "all" | "mine"
@@ -137,7 +137,7 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
                   <span className="truncate">
                     {c.last_message
                       ? c.last_message
-                      : `${c.channel}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
+                      : `${channelLabel(c.channel)}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
                   </span>
                   <span className="shrink-0">· {c.last_inbound_at ? formatTime(c.last_inbound_at) : "—"}</span>
                 </div>
