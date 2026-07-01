@@ -27,6 +27,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       logoSrc={tenant?.logoPath}
       tenantName={tenant?.name}
       availability={availability}
+      currentUserId={session.userId}
     >
       {children}
     </AdminShell>

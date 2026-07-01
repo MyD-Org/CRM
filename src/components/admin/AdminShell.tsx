@@ -1,11 +1,14 @@
 "use client"
 
+import { useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { MessageSquare, Users, LogOut, Package } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
 import { AvailabilityToggle } from "./AvailabilityToggle"
+import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
+import type { InboxContact } from "@/lib/inbox-api"
 
 interface AdminShellProps {
   name: string
@@ -13,6 +16,7 @@ interface AdminShellProps {
   logoSrc?: string
   tenantName?: string
   availability: "available" | "away"
+  currentUserId: string
   children: React.ReactNode
 }
 
@@ -22,11 +26,37 @@ const NAV = [
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
 ]
 
-export function AdminShell({ name, role, logoSrc, tenantName, availability, children }: AdminShellProps) {
+export function AdminShell({ name, role, logoSrc, tenantName, availability, currentUserId, children }: AdminShellProps) {
   const pathname = usePathname()
   const router = useRouter()
 
+  const [warning, setWarning] = useState<{ action: "away" | "logout"; contacts: PendingContact[] } | null>(null)
+  const resolveWarning = useRef<((proceed: boolean) => void) | null>(null)
+
+  // Antes de ausentarse o cerrar sesión, chequea si el operador tiene conversaciones
+  // asignadas dentro de la ventana de 24hs y sin responder; si las hay, pide confirmación.
+  async function guardAgainstPendingReplies(action: "away" | "logout"): Promise<boolean> {
+    const res = await fetch("/api/admin/inbox/contacts?scope=active")
+    if (!res.ok) return true
+    const contacts: InboxContact[] = await res.json()
+    const pending = contacts.filter((c) => c.assigned_operator_id === currentUserId && c.awaiting_reply)
+    if (pending.length === 0) return true
+
+    return new Promise<boolean>((resolve) => {
+      resolveWarning.current = resolve
+      setWarning({ action, contacts: pending })
+    })
+  }
+
+  function closeWarning(proceed: boolean) {
+    resolveWarning.current?.(proceed)
+    resolveWarning.current = null
+    setWarning(null)
+  }
+
   async function handleLogout() {
+    const ok = await guardAgainstPendingReplies("logout")
+    if (!ok) return
     await fetch("/api/admin/auth/logout", { method: "POST" })
     router.push("/admin/login")
   }
@@ -68,10 +98,22 @@ export function AdminShell({ name, role, logoSrc, tenantName, availability, chil
       )}
     >
       <div className="flex justify-end px-6 pt-4">
-        <AvailabilityToggle initial={availability} />
+        <AvailabilityToggle
+          initial={availability}
+          onBeforeAway={() => guardAgainstPendingReplies("away")}
+        />
       </div>
       {children}
     </SideNav>
+    {warning && (
+      <PendingRepliesDialog
+        open
+        action={warning.action}
+        contacts={warning.contacts}
+        onCancel={() => closeWarning(false)}
+        onConfirm={() => closeWarning(true)}
+      />
+    )}
     </ToastProvider>
   )
 }

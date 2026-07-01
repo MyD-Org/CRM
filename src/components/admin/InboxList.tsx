@@ -6,7 +6,8 @@ import { MessageSquare, Clock, Bot, User, MessageCircleWarning } from "lucide-re
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
 import type { InboxContact } from "@/lib/inbox-api"
 
-type Tab = "active" | "history" | "mine"
+type Tab = "active" | "history"
+type Scope = "all" | "mine"
 
 interface Props {
   initialContacts: InboxContact[]
@@ -16,14 +17,16 @@ interface Props {
 export function InboxList({ initialContacts, currentUserId }: Props) {
   const [contacts, setContacts] = useState(initialContacts)
   const [tab, setTab] = useState<Tab>("active")
+  const [scope, setScope] = useState<Scope>("all")
 
-  // El scope del fetch depende de la solapa: "Activas" trae solo ventana abierta;
-  // "Históricas" y "Mías" traen todos (a "Mías" se la filtra por operador en el cliente).
+  // El fetch depende solo de la solapa principal: "Activas" trae solo ventana abierta;
+  // "Históricas" trae todos. "Todas / Mis conversaciones" es una sub-solapa que filtra
+  // esa misma lista en el cliente, no dispara otro fetch.
   useEffect(() => {
-    const scope = tab === "active" ? "active" : "all"
+    const fetchScope = tab === "active" ? "active" : "all"
     let cancelled = false
     const load = async () => {
-      const res = await fetch(`/api/admin/inbox/contacts?scope=${scope}`)
+      const res = await fetch(`/api/admin/inbox/contacts?scope=${fetchScope}`)
       if (res.ok && !cancelled) setContacts(await res.json())
     }
     load()
@@ -33,12 +36,12 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
 
   const mine = contacts.filter((c) => c.assigned_operator_id === currentUserId)
   const pendingCount = contacts.filter((c) => c.awaiting_reply).length
-  const visible = tab === "mine" ? mine : contacts
+  const visible = scope === "mine" ? mine : contacts
 
   return (
     <div className="flex flex-col gap-3">
       <Tabs
-        variant="pill"
+        variant="underline"
         value={tab}
         onValueChange={(v) => setTab(v as Tab)}
         items={[
@@ -56,6 +59,15 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
             ),
           },
           { value: "history", label: "Históricas" },
+        ]}
+      />
+
+      <Tabs
+        variant="pill"
+        value={scope}
+        onValueChange={(v) => setScope(v as Scope)}
+        items={[
+          { value: "all", label: "Todas" },
           {
             value: "mine",
             label: (
@@ -76,7 +88,7 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
         <EmptyState
           icon={<MessageSquare size={28} strokeWidth={1.2} />}
           title={
-            tab === "mine" ? "No tenés contactos asignados"
+            scope === "mine" ? "No tenés contactos asignados"
               : tab === "history" ? "No hay contactos en el historial"
                 : "No hay conversaciones activas"
           }
