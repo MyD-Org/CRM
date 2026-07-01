@@ -29,6 +29,37 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   const [sendError, setSendError] = useState("")
   const [archiving, setArchiving] = useState(false)
   const [assistOpen, setAssistOpen] = useState(false)
+  // Ancho del panel del copiloto (px), arrastrable desde la barra divisoria. Se recuerda en
+  // localStorage. Inicializador lazy (SSR-safe): el panel arranca cerrado, así que no hay mismatch.
+  const [assistWidth, setAssistWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 380
+    const saved = Number(window.localStorage.getItem("assistWidth"))
+    return saved >= 320 && saved <= 760 ? saved : 380
+  })
+
+  // Arrastre de la barra divisoria: el panel está pegado al borde derecho, así que su ancho es
+  // (ancho de ventana − X del mouse). Se acota entre 320 y 760px y se persiste al soltar.
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault()
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(Math.max(window.innerWidth - ev.clientX, 320), 760)
+      setAssistWidth(w)
+    }
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      setAssistWidth((w) => {
+        localStorage.setItem("assistWidth", String(w))
+        return w
+      })
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }
 
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -271,12 +302,27 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
       </div>
       </div>
 
+      {/* Barra divisoria arrastrable: redimensiona conversación ↔ copiloto. */}
+      {assistOpen && (
+        <div
+          onMouseDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionar panel del asistente"
+          className="shrink-0 cursor-col-resize transition-colors"
+          style={{ width: 5, background: "var(--border)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--blue)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border)")}
+        />
+      )}
+
       {/* Copiloto de IA, en flujo al costado: la conversación se achica, no se tapa. */}
       <AiAssistPanel
         open={assistOpen}
         onClose={() => setAssistOpen(false)}
         endUserId={contact.end_user_id}
         contactName={contact.contact}
+        width={assistWidth}
       />
     </div>
   )

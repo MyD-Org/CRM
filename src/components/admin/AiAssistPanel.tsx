@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void
   endUserId: string
   contactName: string
+  /** Ancho del panel en px (arrastrable desde la barra divisoria). Default 380. */
+  width?: number
 }
 
 interface AssistInit {
@@ -22,7 +24,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, onClose, endUserId, contactName }: Props) {
+export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380 }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -64,7 +66,7 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName }: Props) 
   return (
     <aside
       className="flex flex-col h-full shrink-0"
-      style={{ width: 380, background: "var(--card)", borderLeft: "1px solid var(--border)" }}
+      style={{ width, background: "var(--card)", borderLeft: "1px solid var(--border)" }}
     >
       <div
         className="flex items-center justify-between px-4 py-3 shrink-0"
