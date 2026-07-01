@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, Sparkles } from "lucide-react"
-import { Button, Badge, Textarea } from "@myd-org/ui"
+import { Button, Badge, Textarea, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
 import { AiAssistPanel } from "./AiAssistPanel"
@@ -18,12 +18,15 @@ interface Props {
 
 export function ContactThreadView({ contact, initialPage, currentUserId }: Props) {
   const router = useRouter()
+  const { toast } = useToast()
   const convId = contact.current_conversation_id
   const [messages, setMessages] = useState<ContactMessage[]>(initialPage.messages)
   const [nextCursor, setNextCursor] = useState(initialPage.next_cursor)
   const [hasMore, setHasMore] = useState(initialPage.has_more)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [mode, setMode] = useState<"bot" | "human">(contact.mode)
+  // Status de la sesión actual. Local para reflejar en vivo el "Asignarme" (reabre → active) sin recargar.
+  const [status, setStatus] = useState<"active" | "closed">(contact.status)
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState("")
@@ -128,8 +131,11 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     })
     if (!res.ok) return
     setMode(next)
-    // Al tomar la conversación, asignársela al operador actual.
+    // Al tomar la conversación: se reabre la sesión (el back la pasa a 'active') y se
+    // asigna al operador actual. Así, si estaba finalizada, el próximo mensaje del cliente
+    // sigue en ESTA conversación en vez de arrancar una nueva.
     if (next === "human") {
+      setStatus("active")
       await fetch(`/api/admin/inbox/${convId}/assign`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ operatorId: currentUserId }),
@@ -141,7 +147,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     if (!convId) return
     setArchiving(true)
     try {
-      await fetch(`/api/admin/inbox/${convId}/archive`, { method: "POST" })
+      const res = await fetch(`/api/admin/inbox/${convId}/archive`, { method: "POST" })
+      if (!res.ok) {
+        toast({ title: "No se pudo finalizar la conversación", tone: "danger" })
+        return
+      }
+      toast({ title: "Conversación finalizada", description: "Vuelve a modo bot y queda sin asignar.", tone: "success" })
       router.push("/admin/inbox")
     } finally {
       setArchiving(false)
@@ -228,10 +239,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
                   className="flex items-center gap-1.5 rounded-full"
                 >
                   <Bot size={11} />
-                  Bot activo · Tomar
+                  Bot activo · Asignarme
                 </Button>
               )}
 
+              {/* No ofrecemos "Finalizar" sobre una sesión ya finalizada. */}
+              {status !== "closed" && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -242,6 +255,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
                 <CheckCheck size={11} strokeWidth={1.6} />
                 Finalizar
               </Button>
+              )}
             </>
           )}
         </div>
@@ -276,7 +290,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         {mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
             {contact.within_window
-              ? 'El bot está respondiendo. Hacé click en "Tomar" para responder vos.'
+              ? 'El bot está respondiendo. Hacé click en "Asignarme" para responder vos.'
               : "El bot está respondiendo esta conversación."}
           </p>
         ) : !contact.within_window ? (
@@ -325,6 +339,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         endUserId={contact.end_user_id}
         contactName={contact.contact}
         width={assistWidth}
+        lastInboundAt={contact.last_inbound_at}
+        withinWindow={contact.within_window}
       />
     </div>
   )

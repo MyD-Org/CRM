@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
-import { Button } from "@myd-org/ui"
+import { Button, Badge } from "@myd-org/ui"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
 import "@myd-org/ai-widget/styles"
 
@@ -13,6 +13,9 @@ interface Props {
   contactName: string
   /** Ancho del panel en px (arrastrable desde la barra divisoria). Default 380. */
   width?: number
+  /** Último mensaje del cliente: de ahí sale el contexto que usa el copiloto (misma sesión). */
+  lastInboundAt: string | null
+  withinWindow: boolean
 }
 
 interface AssistInit {
@@ -24,7 +27,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380 }: Props) {
+export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -74,7 +77,12 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
       >
         <div className="min-w-0">
           <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>Asistente IA</p>
-          <p className="text-xs truncate" style={{ color: "var(--ink-soft)" }}>Contexto: {contactName}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-xs truncate" style={{ color: "var(--ink-soft)" }}>
+              Contexto: {contactName}{lastInboundAt ? ` · sesión del ${formatSessionDate(lastInboundAt)}` : ""}
+            </p>
+            {!withinWindow && <Badge tone="warning" className="text-[10px] px-1.5 py-0">Ventana cerrada</Badge>}
+          </div>
         </div>
         <Button variant="ghost" size="icon" aria-label="Cerrar" onClick={onClose}>
           <X size={16} strokeWidth={1.6} />
@@ -102,4 +110,8 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
       </div>
     </aside>
   )
+}
+
+function formatSessionDate(iso: string) {
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })
 }

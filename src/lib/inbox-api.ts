@@ -34,6 +34,9 @@ export interface InboxContact {
   contact: string
   phone: string | null
   mode: "bot" | "human"
+  // Status de la sesión actual (channel_identities.conversationId). Si el operador finalizó y
+  // el cliente todavía no volvió a escribir, sigue en "closed" aunque mode ya volvió a "bot".
+  status: "active" | "closed"
   assigned_operator_id: string | null
   assigned_operator_name?: string | null
   last_inbound_at: string | null

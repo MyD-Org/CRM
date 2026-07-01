@@ -131,12 +131,16 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs truncate mt-0.5" style={{ color: "var(--ink-soft)" }}>
-                  {c.last_message
-                    ? c.last_message
-                    : `${c.channel}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
-                  {" · "}{c.last_inbound_at ? formatTime(c.last_inbound_at) : "—"}
-                </p>
+                {/* Mensaje (trunca) y hora en la misma línea, pero la hora es shrink-0 para que
+                    no se la coma el truncate cuando el mensaje es largo. */}
+                <div className="flex items-baseline gap-1 mt-0.5 text-xs" style={{ color: "var(--ink-soft)" }}>
+                  <span className="truncate">
+                    {c.last_message
+                      ? c.last_message
+                      : `${c.channel}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
+                  </span>
+                  <span className="shrink-0">· {c.last_inbound_at ? formatTime(c.last_inbound_at) : "—"}</span>
+                </div>
               </div>
 
               <WindowBadge within={c.within_window} />

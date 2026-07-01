@@ -4,7 +4,7 @@
 @source "../../node_modules/@myd-org/ui/dist";
 
 :root {
-  --bg: #f1f2f4;
+  --bg: #f7f8fa;
   --card: #ffffff;
   --ink: #16191d;
   --ink-soft: #5b626b;
@@ -34,7 +34,7 @@
   --color-muted: #5b626b;
   --color-subtle: #8a9099;
   --color-surface: #ffffff;
-  --color-bg: #f1f2f4;
+  --color-bg: #f7f8fa;
   --color-border: rgba(0, 0, 0, 0.06);
   --color-border-strong: #cfd3d9;
   --color-danger: #d2150f;
