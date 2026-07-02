@@ -260,6 +260,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Dueño actual (informativo, va primero): quién tiene asignada la conversación
+              cuando la tiene otro operador. El botón para tomarla va con las demás acciones. */}
+          {mode === "human" && assignedOperatorId !== currentUserId && contact.assigned_operator_name && (
+            <Badge tone="info">Asignada a {contact.assigned_operator_name}</Badge>
+          )}
+
           {/* Copiloto de IA del operador (ADR 0007): disponible siempre, incluso con la ventana
               cerrada (sirve para preparar un presupuesto antes de que el cliente reescriba). */}
           <Button
@@ -295,22 +301,17 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
               {/* Modo humano pero la tiene otro operador (o está sin asignar en la cola): se
                   puede pasar a tu nombre. No bloquea a nadie; solo cambia el dueño visible. */}
               {mode === "human" && assignedOperatorId !== currentUserId && (
-                <>
-                  {contact.assigned_operator_name && (
-                    <Badge tone="info">Asignada a {contact.assigned_operator_name}</Badge>
-                  )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleAssignToMe}
-                    disabled={!convId}
-                    title="Pasar esta conversación a tu nombre"
-                    className="flex items-center gap-1.5 rounded-full"
-                  >
-                    <UserPlus size={11} strokeWidth={1.6} />
-                    Asignarme
-                  </Button>
-                </>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAssignToMe}
+                  disabled={!convId}
+                  title="Pasar esta conversación a tu nombre"
+                  className="flex items-center gap-1.5 rounded-full"
+                >
+                  <UserPlus size={11} strokeWidth={1.6} />
+                  Asignarme
+                </Button>
               )}
 
               {/* No ofrecemos "Finalizar" sobre una sesión ya finalizada. */}
