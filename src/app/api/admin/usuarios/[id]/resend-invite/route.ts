@@ -10,7 +10,8 @@ import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 
 // POST /api/admin/usuarios/:id/resend-invite
 // Genera un token nuevo (invalida el anterior) y reintenta el envío del email.
-// Devuelve siempre el inviteUrl para que el admin pueda copiarlo manualmente.
+// El inviteUrl (con el token crudo) se devuelve solo fuera de producción, para copiar
+// el link a mano en dev. En prod el token viaja únicamente por email.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId || session.role !== "superadmin") {
@@ -67,5 +68,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     emailSent = false
   }
 
-  return NextResponse.json({ ok: true, emailSent, emailError, inviteUrl, expiresAt })
+  const isProd = process.env.NODE_ENV === "production"
+  return NextResponse.json({ ok: true, emailSent, emailError, expiresAt, ...(isProd ? {} : { inviteUrl }) })
 }

@@ -8,10 +8,10 @@ import { getItemsLive } from "@/lib/alegra"
 // Ver ADR catálogo Alegra (cache para buscar, live para el número que se compromete).
 export async function GET(req: Request) {
   try {
-    const auth = authAgentTenantRequest(req)
+    const tenant = await getTenantConfig()
+    const auth = authAgentTenantRequest(req, tenant.id)
     if (!auth) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-    const tenant = await getTenantConfig()
     const url = new URL(req.url)
     const ids = (url.searchParams.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean)
     if (!ids.length) return Response.json({ error: "ids es requerido" }, { status: 400 })

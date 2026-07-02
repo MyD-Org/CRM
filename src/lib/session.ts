@@ -1,10 +1,11 @@
 import { SessionOptions } from "iron-session"
 import type { SessionData, OtpSessionData } from "@/types"
+import { SESSION_SECRET } from "@/lib/session-secret"
 
 export type { SessionData, OtpSessionData }
 
 export const sessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET ?? "development-secret-change-in-production-32chars",
+  password: SESSION_SECRET,
   cookieName: "portal-session",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",
@@ -16,7 +17,7 @@ export const sessionOptions: SessionOptions = {
 }
 
 export const otpSessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET ?? "development-secret-change-in-production-32chars",
+  password: SESSION_SECRET,
   cookieName: "portal-otp",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",

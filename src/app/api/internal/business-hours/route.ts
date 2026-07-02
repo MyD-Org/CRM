@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
+import { bearerMatches } from "@/lib/secure-compare"
 
 // Endpoint interno: ai-api consulta los horarios de atención del tenant para
 // incluirlos en el mensaje de handoff automático. Auth via INTERNAL_SECRET.
 export async function GET(req: Request) {
-  const auth = req.headers.get("authorization")
-  if (!process.env.INTERNAL_SECRET || auth !== `Bearer ${process.env.INTERNAL_SECRET}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.INTERNAL_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 

@@ -11,13 +11,13 @@ import { getTenantConfig } from "@/lib/tenant-context"
 // tool get_live_prices (/api/agent/prices) al armar el presupuesto. Ver ADR catálogo Alegra.
 export async function GET(req: Request) {
   try {
-    const auth = authAgentTenantRequest(req)
+    const tenant = await getTenantConfig()
+    const auth = authAgentTenantRequest(req, tenant.id)
     if (!auth) {
       console.warn("[agent/catalog] 401 — request sin crm_token válido (Authorization Bearer)")
       return Response.json({ error: "unauthorized" }, { status: 401 })
     }
 
-    const tenant = await getTenantConfig()
     const url = new URL(req.url)
     const q = url.searchParams.get("q")?.trim() ?? ""
 

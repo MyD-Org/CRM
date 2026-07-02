@@ -29,7 +29,7 @@ export async function POST() {
         display_name: session.razonsocial,
         // Token con el que las tools del agente consultan /api/agent/* del CRM
         // en nombre del usuario logueado.
-        claims: { crm_token: mintAgentToken(session.codigocliente) },
+        claims: { crm_token: mintAgentToken(session.codigocliente, tenant.id) },
       }),
     })
 

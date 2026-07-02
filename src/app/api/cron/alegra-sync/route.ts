@@ -2,12 +2,12 @@ import { getDb } from "@/db"
 import { tenants as tenantsTable } from "@/db/schema"
 import { getTenantByIdFromDb } from "@/lib/tenants"
 import { syncCatalog } from "@/lib/alegra-sync"
+import { bearerMatches } from "@/lib/secure-compare"
 
 // Sincroniza el catálogo de Alegra a la cache de todos los tenants con Alegra configurado.
 // Lo invoca Vercel Cron (o curl en dev) con CRON_SECRET. Best-effort por tenant. Ver ADR catálogo.
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization")
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 

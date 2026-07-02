@@ -1,4 +1,5 @@
 import type { SessionOptions } from "iron-session"
+import { SESSION_SECRET } from "@/lib/session-secret"
 
 export interface AdminSessionData {
   userId: string
@@ -9,7 +10,7 @@ export interface AdminSessionData {
 }
 
 export const adminSessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET ?? "development-secret-change-in-production-32chars",
+  password: SESSION_SECRET,
   cookieName: "admin-session",
   cookieOptions: {
     secure: process.env.NODE_ENV === "production",

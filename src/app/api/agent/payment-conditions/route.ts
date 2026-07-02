@@ -8,13 +8,13 @@ import { getTenantConfig } from "@/lib/tenant-context"
 // Devuelve las condiciones de pago configuradas para el tenant.
 export async function GET(req: Request) {
   try {
-    const auth = authAgentTenantRequest(req)
+    const tenant = await getTenantConfig()
+    const auth = authAgentTenantRequest(req, tenant.id)
     if (!auth) {
       console.warn("[agent/payment-conditions] 401 — request sin crm_token válido (Authorization Bearer)")
       return Response.json({ error: "unauthorized" }, { status: 401 })
     }
 
-    const tenant = await getTenantConfig()
     const db = getDb()
 
     const [row] = await db
