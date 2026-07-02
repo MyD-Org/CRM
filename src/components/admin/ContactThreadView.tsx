@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, Sparkles } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
@@ -27,6 +27,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   const [mode, setMode] = useState<"bot" | "human">(contact.mode)
   // Status de la sesión actual. Local para reflejar en vivo el "Asignarme" (reabre → active) sin recargar.
   const [status, setStatus] = useState<"active" | "closed">(contact.status)
+  // Operador asignado (local, para reflejar en vivo el "Asignarme" sin recargar). Cualquiera
+  // puede responder cualquier conversación; esto solo permite pasártela a tu nombre para que
+  // quede claro (en la lista y en el chip) que ahora la seguís vos.
+  const [assignedOperatorId, setAssignedOperatorId] = useState<string | null>(contact.assigned_operator_id)
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState("")
@@ -140,11 +144,31 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     // sigue en ESTA conversación en vez de arrancar una nueva.
     if (next === "human") {
       setStatus("active")
+      setAssignedOperatorId(currentUserId)
       await fetch(`/api/admin/inbox/${convId}/assign`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ operatorId: currentUserId }),
       })
     }
+  }
+
+  // Pasar la conversación a tu nombre aunque ya la tenga otro operador (o esté sin asignar en
+  // la cola). No bloquea a nadie —cualquiera puede seguir respondiendo—, solo cambia el dueño
+  // visible: al reasignar, el chip pasa a "Asignado a vos" y el operador anterior lo ve.
+  async function handleAssignToMe() {
+    if (!convId) return
+    const res = await fetch(`/api/admin/inbox/${convId}/assign`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operatorId: currentUserId }),
+    })
+    if (!res.ok) {
+      toast({ title: "No se pudo asignar la conversación", tone: "danger" })
+      return
+    }
+    setAssignedOperatorId(currentUserId)
+    setMode("human")
+    setStatus("active")
+    toast({ title: "Te asignaste la conversación", tone: "success" })
   }
 
   async function handleArchive() {
@@ -266,6 +290,27 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
                   <Bot size={11} />
                   Bot activo · Asignarme
                 </Button>
+              )}
+
+              {/* Modo humano pero la tiene otro operador (o está sin asignar en la cola): se
+                  puede pasar a tu nombre. No bloquea a nadie; solo cambia el dueño visible. */}
+              {mode === "human" && assignedOperatorId !== currentUserId && (
+                <>
+                  {contact.assigned_operator_name && (
+                    <Badge tone="info">Asignada a {contact.assigned_operator_name}</Badge>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleAssignToMe}
+                    disabled={!convId}
+                    title="Pasar esta conversación a tu nombre"
+                    className="flex items-center gap-1.5 rounded-full"
+                  >
+                    <UserPlus size={11} strokeWidth={1.6} />
+                    Asignarme
+                  </Button>
+                </>
               )}
 
               {/* No ofrecemos "Finalizar" sobre una sesión ya finalizada. */}
