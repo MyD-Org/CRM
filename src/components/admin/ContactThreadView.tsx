@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, Sparkles } from "lucide-react"
-import { Button, Badge, Textarea, useToast } from "@myd-org/ui"
+import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
-import type { InboxContact, ContactMessage, ContactMessagesPage } from "@/lib/inbox-api"
+import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
 import { AiAssistPanel } from "./AiAssistPanel"
 
 const PAGE_SIZE = 30
@@ -30,6 +30,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState("")
+  // Presupuesto pendiente de confirmar cuando "Enviar al canal" pisaría un borrador en curso.
+  const [pendingBudget, setPendingBudget] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
   const [assistOpen, setAssistOpen] = useState(false)
   // Ancho del panel del copiloto (px), arrastrable desde la barra divisoria. Se recuerda en
@@ -66,6 +68,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
 
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Compose textarea: el copiloto prefila acá el texto de una budget card ("Enviar al canal").
+  const replyRef = useRef<HTMLTextAreaElement>(null)
   // Altura previa al prepend de histórico, para restaurar la posición de scroll.
   const prependHeight = useRef<number | null>(null)
   // ¿El usuario está pegado al fondo? Si sí, autoscrolleamos al llegar mensajes nuevos.
@@ -159,6 +163,24 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     }
   }
 
+  // Prefila el compose con el presupuesto serializado y lo enfoca. NO auto-envía.
+  function applyBudgetToCompose(text: string) {
+    setReply(text)
+    // El textarea solo existe en modo humano + ventana abierta; el focus se aplica si está montado.
+    requestAnimationFrame(() => replyRef.current?.focus())
+  }
+
+  // "Enviar al canal" desde una budget card del copiloto (design #66). Si ya hay un borrador en
+  // curso, pedimos confirmación (Dialog del design system) antes de pisarlo; si está vacío, entra
+  // directo.
+  function handleSendToChannel(text: string) {
+    if (reply.trim()) {
+      setPendingBudget(text)
+      return
+    }
+    applyBudgetToCompose(text)
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     if (!reply.trim() || sending || !convId) return
@@ -206,7 +228,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--ink)" }}>{contact.contact}</p>
           <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
-            WhatsApp{contact.phone && contact.phone !== contact.contact ? ` · ${contact.phone}` : ""}
+            {channelLabel(contact.channel)}
+            {contact.phone && contact.phone !== contact.contact
+              ? ` · ${contact.phone}`
+              : <span style={{ color: "var(--ink-faint)" }}> · sin identificador</span>}
           </p>
         </div>
 
@@ -300,6 +325,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         ) : (
           <form onSubmit={handleSend} className="flex gap-2">
             <Textarea
+              ref={replyRef}
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               placeholder="Escribí tu respuesta..."
@@ -341,6 +367,28 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         width={assistWidth}
         lastInboundAt={contact.last_inbound_at}
         withinWindow={contact.within_window}
+        onSendToChannel={handleSendToChannel}
+      />
+
+      <Dialog
+        open={pendingBudget !== null}
+        onOpenChange={(open) => { if (!open) setPendingBudget(null) }}
+        size="sm"
+        title="Reemplazar el mensaje"
+        description="Ya tenés un mensaje escrito en el compose. ¿Querés reemplazarlo por el presupuesto?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingBudget(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (pendingBudget !== null) applyBudgetToCompose(pendingBudget)
+                setPendingBudget(null)
+              }}
+            >
+              Reemplazar
+            </Button>
+          </>
+        }
       />
     </div>
   )

@@ -12,6 +12,7 @@ import type { InboxContact } from "@/lib/inbox-api"
 
 interface AdminShellProps {
   name: string
+  email: string
   role: "operator" | "superadmin"
   logoSrc?: string
   tenantName?: string
@@ -26,7 +27,7 @@ const NAV = [
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
 ]
 
-export function AdminShell({ name, role, logoSrc, tenantName, availability, currentUserId, children }: AdminShellProps) {
+export function AdminShell({ name, email, role, logoSrc, tenantName, availability, currentUserId, children }: AdminShellProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -87,7 +88,7 @@ export function AdminShell({ name, role, logoSrc, tenantName, availability, curr
       }))}
       user={{
         name,
-        subtitle: role === "superadmin" ? "Superadmin" : "Operador",
+        subtitle: `${email} · ${role === "superadmin" ? "Superadmin" : "Operador"}`,
         logoutIcon: <LogOut size={15} strokeWidth={1.6} />,
         onLogout: handleLogout,
       }}

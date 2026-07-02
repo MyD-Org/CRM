@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await session.save()
   }
 
-  return NextResponse.json({ id: updated.id, name: updated.name, role: updated.role })
+  return NextResponse.json({ id: updated.id, name: updated.name, role: updated.role, department: updated.department })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

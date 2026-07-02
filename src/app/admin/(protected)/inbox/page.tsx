@@ -34,7 +34,7 @@ export default async function InboxPage() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
-        <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de WhatsApp del canal</p>
+        <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
       </div>
 
       {configError ? (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { Button, Badge } from "@myd-org/ui"
 import { ChatPanel } from "@myd-org/ai-widget/preset"
@@ -16,6 +16,9 @@ interface Props {
   /** Último mensaje del cliente: de ahí sale el contexto que usa el copiloto (misma sesión). */
   lastInboundAt: string | null
   withinWindow: boolean
+  /** Acción "Enviar al canal" de las budget cards: recibe el texto serializado de la card y lo
+   *  prefila en el compose de la conversación (no auto-envía). Lo forwardea a <ChatPanel>. */
+  onSendToChannel?: (text: string) => void
 }
 
 interface AssistInit {
@@ -27,7 +30,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow }: Props) {
+export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -64,6 +67,19 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
       .finally(() => setLoading(false))
   }, [open, endUserId, fetchAssist])
 
+  // Config estable por hilo: recrearla en cada render haría que el widget recree su cliente
+  // y recargue el historial en pleno streaming (borra el mensaje optimista y las cards).
+  const chatConfig = useMemo(
+    () =>
+      init && {
+        baseUrl: "/ai-api",
+        agentId: init.agentId,
+        conversationId: init.conversationId,
+        fetchToken: async () => (await fetchAssist()).token,
+      },
+    [init, fetchAssist],
+  )
+
   if (!open) return null
 
   return (
@@ -94,17 +110,13 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
           <p className="text-xs text-center py-6" style={{ color: "var(--ink-faint)" }}>Abriendo asistente…</p>
         )}
         {error && <p className="text-xs text-center py-6 px-4 text-danger">{error}</p>}
-        {init && (
+        {chatConfig && (
           <ChatPanel
-            config={{
-              baseUrl: "/ai-api",
-              agentId: init.agentId,
-              conversationId: init.conversationId,
-              fetchToken: async () => (await fetchAssist()).token,
-            }}
+            config={chatConfig}
             branding={{ title: "Asistente IA", subtitle: "Copiloto de ventas", primaryColor: "#0c3ed6" }}
             showActivity
             enableCopy
+            onSendToChannel={onSendToChannel}
           />
         )}
       </div>
