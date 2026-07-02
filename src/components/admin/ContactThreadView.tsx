@@ -45,6 +45,13 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     const saved = Number(window.localStorage.getItem("assistWidth"))
     return saved >= 320 && saved <= 760 ? saved : 380
   })
+  // Alto del área de escritura (px), arrastrable desde la barra superior del compose. Se recuerda
+  // en localStorage. Inicializador lazy (SSR-safe): default ≈ 2 filas.
+  const [composeHeight, setComposeHeight] = useState<number>(() => {
+    if (typeof window === "undefined") return 56
+    const saved = Number(window.localStorage.getItem("composeHeight"))
+    return saved >= 56 && saved <= 320 ? saved : 56
+  })
 
   // Arrastre de la barra divisoria: el panel está pegado al borde derecho, así que su ancho es
   // (ancho de ventana − X del mouse). Se acota entre 320 y 760px y se persiste al soltar.
@@ -67,6 +74,33 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)
     document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }
+
+  // Arrastre de la barra superior del compose: arrastrar hacia arriba agranda el área de escritura.
+  // Como el compose está anclado abajo, el alto es (Y inicial − Y del mouse) + alto inicial. Se acota
+  // entre 56 y 320px y se persiste al soltar.
+  function startResizeCompose(e: React.MouseEvent) {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = composeHeight
+    const onMove = (ev: MouseEvent) => {
+      const h = Math.min(Math.max(startH + (startY - ev.clientY), 56), 320)
+      setComposeHeight(h)
+    }
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      setComposeHeight((h) => {
+        localStorage.setItem("composeHeight", String(h))
+        return h
+      })
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+    document.body.style.cursor = "row-resize"
     document.body.style.userSelect = "none"
   }
 
@@ -372,21 +406,39 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
             Ventana de 24h cerrada — el cliente debe enviarte un mensaje para reabrir la ventana.
           </p>
         ) : (
-          <form onSubmit={handleSend} className="flex gap-2">
-            <Textarea
-              ref={replyRef}
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              placeholder="Escribí tu respuesta..."
-              rows={2}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as unknown as React.FormEvent) }
-              }}
-              className="flex-1 resize-none"
-            />
-            <Button type="submit" size="icon" disabled={!reply.trim() || sending} className="self-end">
-              <Send size={16} strokeWidth={1.6} />
-            </Button>
+          <form onSubmit={handleSend} className="flex flex-col gap-2">
+            {/* Barra arrastrable: redimensiona el alto del área de escritura (arrastrar ↕). */}
+            <div
+              onMouseDown={startResizeCompose}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Redimensionar área de escritura"
+              className="flex items-center justify-center cursor-row-resize -mt-1 mb-0.5 group"
+              style={{ height: 8 }}
+            >
+              <div
+                className="transition-colors"
+                style={{ width: 28, height: 2, borderRadius: 999, background: "var(--border)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--ink-faint)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border)")}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Textarea
+                ref={replyRef}
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="Escribí tu respuesta..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as unknown as React.FormEvent) }
+                }}
+                className="flex-1 resize-none"
+                style={{ height: composeHeight }}
+              />
+              <Button type="submit" size="icon" disabled={!reply.trim() || sending} className="self-end">
+                <Send size={16} strokeWidth={1.6} />
+              </Button>
+            </div>
           </form>
         )}
         {sendError && <p className="text-xs mt-2 text-danger">{sendError}</p>}
