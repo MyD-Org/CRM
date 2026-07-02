@@ -406,15 +406,15 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
             Ventana de 24h cerrada — el cliente debe enviarte un mensaje para reabrir la ventana.
           </p>
         ) : (
-          <form onSubmit={handleSend} className="flex flex-col gap-2">
+          <form onSubmit={handleSend} className="flex flex-col -mt-2">
             {/* Barra arrastrable: redimensiona el alto del área de escritura (arrastrar ↕). */}
             <div
               onMouseDown={startResizeCompose}
               role="separator"
               aria-orientation="horizontal"
               aria-label="Redimensionar área de escritura"
-              className="flex items-center justify-center cursor-row-resize -mt-1 mb-0.5 group"
-              style={{ height: 8 }}
+              className="flex items-center justify-center cursor-row-resize group"
+              style={{ height: 12 }}
             >
               <div
                 className="transition-colors"
