@@ -1,10 +1,10 @@
 import { runNotifications } from "@/lib/notifications"
+import { bearerMatches } from "@/lib/secure-compare"
 
 // Disparo manual — uso interno hasta que exista el panel de administración.
 // Acepta filtros opcionales: { tenantId, codigocliente }
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization")
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 

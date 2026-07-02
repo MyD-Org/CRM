@@ -5,6 +5,9 @@ import { getTenantConfig } from "@/lib/tenant-context"
 import { getCliente } from "@/lib/flexxus"
 import type { SessionData, OtpSessionData } from "@/types"
 
+// Intentos de verificación permitidos por código antes de invalidarlo.
+const MAX_OTP_ATTEMPTS = 5
+
 export async function POST(request: Request) {
   try {
     const tenant = await getTenantConfig()
@@ -17,7 +20,12 @@ export async function POST(request: Request) {
 
     const cookieStore = await cookies()
 
-    const otpSession = await getIronSession<OtpSessionData>(cookieStore, otpSessionOptions)
+    // `attempts` no está en OtpSessionData; se extiende localmente. Vive en la cookie
+    // sellada, por lo que el cliente no puede resetearlo para saltear el límite.
+    const otpSession = await getIronSession<OtpSessionData & { attempts?: number }>(
+      cookieStore,
+      otpSessionOptions,
+    )
 
     if (!otpSession.otp || !otpSession.otpExpiry || !otpSession.identifier) {
       return Response.json({ error: "Sesión de verificación expirada. Solicitá un nuevo código." }, { status: 400 })
@@ -29,6 +37,17 @@ export async function POST(request: Request) {
     }
 
     if (otpSession.otp !== code) {
+      // Límite de intentos: tras MAX_OTP_ATTEMPTS fallos invalidamos el código.
+      const attempts = (otpSession.attempts ?? 0) + 1
+      if (attempts >= MAX_OTP_ATTEMPTS) {
+        otpSession.destroy()
+        return Response.json(
+          { error: "Demasiados intentos fallidos. Solicitá un nuevo código." },
+          { status: 429 },
+        )
+      }
+      otpSession.attempts = attempts
+      await otpSession.save()
       return Response.json({ error: "Código incorrecto" }, { status: 400 })
     }
 

@@ -93,7 +93,13 @@ export async function POST(req: NextRequest) {
   }
 
   const db = getDb()
-  const existing = await db.select({ id: adminUsers.id }).from(adminUsers).where(eq(adminUsers.email, body.email.toLowerCase()))
+  // Unicidad de email SCOPEADA al tenant: el mismo email puede existir en otro tenant
+  // (multi-tenant). Chequear global bloquearía altas legítimas y filtraría existencia
+  // de usuarios de otros tenants.
+  const existing = await db
+    .select({ id: adminUsers.id })
+    .from(adminUsers)
+    .where(and(eq(adminUsers.email, body.email.toLowerCase()), eq(adminUsers.tenantId, session.tenantId)))
   if (existing.length) return NextResponse.json({ error: "El email ya está en uso" }, { status: 409 })
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId))
@@ -114,5 +120,12 @@ export async function POST(req: NextRequest) {
 
   const { sent: emailSent, errorMsg: emailError } = await trySendInviteEmail({ tenant, user, role: body.role, inviteUrl })
 
-  return NextResponse.json({ id: user.id, ok: true, emailSent, emailError, inviteUrl }, { status: 201 })
+  // El token crudo viaja SOLO por email. En prod no se devuelve en el body (evita
+  // filtrarlo por logs/red); si el email falla, el admin usa el botón de reenvío.
+  // En dev sí se expone para poder copiar el link sin servidor de mail configurado.
+  const isProd = process.env.NODE_ENV === "production"
+  return NextResponse.json(
+    { id: user.id, ok: true, emailSent, emailError, ...(isProd ? {} : { inviteUrl }) },
+    { status: 201 },
+  )
 }

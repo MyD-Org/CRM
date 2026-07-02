@@ -1,6 +1,7 @@
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { listConversations, archiveConversation } from "@/lib/inbox-api"
+import { bearerMatches } from "@/lib/secure-compare"
 
 const HOURS_24 = 24 * 60 * 60 * 1000
 
@@ -20,8 +21,7 @@ async function autoCloseStale(aiApiUrl: string, aiTenantId: string): Promise<num
 }
 
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization")
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 

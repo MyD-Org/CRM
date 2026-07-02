@@ -4,10 +4,10 @@ import { authAgentRequest } from "@/lib/agent-auth"
 
 export async function GET(req: Request) {
   try {
-    const auth = authAgentRequest(req)
+    const tenant = await getTenantConfig()
+    const auth = authAgentRequest(req, tenant.id)
     if (!auth) return Response.json({ error: "unauthorized" }, { status: 401 })
 
-    const tenant = await getTenantConfig()
     const facturas = await getFacturas(tenant, auth.codigocliente)
 
     const status = new URL(req.url).searchParams.get("status")
