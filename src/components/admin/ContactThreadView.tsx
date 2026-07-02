@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
@@ -263,7 +263,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
           {/* Dueño actual (informativo, va primero): quién tiene asignada la conversación
               cuando la tiene otro operador. El botón para tomarla va con las demás acciones. */}
           {mode === "human" && assignedOperatorId !== currentUserId && contact.assigned_operator_name && (
-            <Badge tone="info">Asignada a {contact.assigned_operator_name}</Badge>
+            <Badge tone="success" className="flex items-center gap-1">
+              <User size={9} />
+              Asignada a {contact.assigned_operator_name}
+            </Badge>
           )}
 
           {/* Copiloto de IA del operador (ADR 0007): disponible siempre, incluso con la ventana
