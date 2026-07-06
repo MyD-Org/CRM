@@ -145,14 +145,18 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
         <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar este usuario?</p>
       </Dialog>
 
-      {isSuperadmin && (
-        <div className="flex justify-end mb-4">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Usuarios</h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Operadores del backoffice</p>
+        </div>
+        {isSuperadmin && (
           <Button onClick={() => { setShowForm((p) => !p); setFormError("") }}>
             <UserPlus size={15} strokeWidth={1.6} />
             Invitar usuario
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showForm && (
         <div
