@@ -99,7 +99,7 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
       {/* Header */}
       <div
         className="flex items-center gap-3 px-5 py-3 shrink-0"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--card)" }}
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)" }}
       >
         <Link href="/admin/inbox">
           <Button variant="ghost" size="icon" aria-label="Volver">
@@ -156,7 +156,7 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
       {/* Input de respuesta */}
       <div
         className="shrink-0 px-5 py-3"
-        style={{ borderTop: "1px solid var(--border)", background: "var(--card)" }}
+        style={{ borderTop: "1px solid var(--border)", background: "var(--bg)" }}
       >
         {mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
