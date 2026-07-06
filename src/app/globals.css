@@ -4,17 +4,17 @@
 @source "../../node_modules/@myd-org/ui/dist";
 
 :root {
-  --bg: #f7f8fa;
+  --bg: #eef1f5;
   --card: #ffffff;
   --ink: #16191d;
   --ink-soft: #5b626b;
   --ink-faint: #8a9099;
-  --border: #dde0e4;
-  --border-strong: #cfd3d9;
+  --border: #d8dee6;
+  --border-strong: #c3cbd8;
   --blue: #0c3ed6;
   --blue-hover: #0930a6;
   --blue-bright: #1f8cff;
-  --blue-soft: #e9eefc;
+  --blue-soft: #dbe6fb;
   --red: #d2150f;
   --red-soft: #fdecec;
   --green: #1b7a45;
@@ -29,14 +29,15 @@
   /* Override de roles del DS con la paleta del CRM */
   --color-primary: #0c3ed6;
   --color-primary-hover: #0930a6;
-  --color-primary-soft: #e9eefc;
+  --color-primary-soft: #dbe6fb;
   --color-text: #16191d;
   --color-muted: #5b626b;
   --color-subtle: #8a9099;
   --color-surface: #ffffff;
-  --color-bg: #f7f8fa;
-  --color-border: rgba(0, 0, 0, 0.06);
-  --color-border-strong: #cfd3d9;
+  --color-elevated: #e3e8f0;
+  --color-bg: #eef1f5;
+  --color-border: rgba(15, 23, 42, 0.08);
+  --color-border-strong: #c3cbd8;
   --color-danger: #d2150f;
   --color-danger-soft: #fdecec;
   --color-success: #1b7a45;
@@ -91,6 +92,36 @@ body {
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* El SideNav de @myd-org/ui usa bg-surface (misma variable que cards, inputs y
+   diálogos) para su <aside>. Esta regla lo saca del blanco sin tocar --color-surface
+   globalmente, así el resto de la UI no se ve afectado. */
+aside.bg-surface {
+  background-color: var(--color-bg);
+  border-right-color: transparent;
+}
+
+/* Con el borde vertical del aside ya transparente, las divisorias horizontales
+   bajo el logo y sobre el usuario quedaban como las únicas líneas duras del
+   sidebar. Las suavizamos para que todo el panel quede parejo. */
+aside.bg-surface > div.border-b,
+aside.bg-surface > div.border-t {
+  border-color: transparent;
+}
+
+/* Ítem activo del nav: el pill bg-primary-soft casi no se nota contra el
+   glow azulado del contenido, así que sumamos una barra de acento a la
+   izquierda (box-shadow para no correr el padding/ícono). */
+nav[aria-label="Navegación principal"] .bg-primary-soft {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+/* Mismo glow radial del login (app/admin/(auth)/layout.tsx), aplicado al wrapper
+   raíz del SideNav. Selector específico para no afectar a FileDropZone, que
+   también usa bg-bg pero sin h-screen/overflow-hidden. */
+.flex.h-screen.overflow-hidden.bg-bg {
+  background-image: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(31, 140, 255, 0.18) 0%, transparent 70%);
 }
 
 /* Scrollbar */
