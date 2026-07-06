@@ -50,10 +50,10 @@ export function AvailabilityToggle({ initial, onBeforeAway }: Props) {
       disabled={pending || checking}
       aria-pressed={available}
       title={available ? "Estás recibiendo conversaciones" : "No se te asignan conversaciones"}
-      className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-subtle/10 disabled:opacity-60"
+      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-text transition-colors hover:bg-subtle/10 disabled:opacity-60"
     >
       <span
-        className={`h-2 w-2 rounded-full ${available ? "bg-green-500" : "bg-subtle"}`}
+        className={`h-2.5 w-2.5 rounded-full ${available ? "bg-green-500" : "bg-subtle"}`}
         aria-hidden
       />
       {available ? "Disponible" : "Ausente"}
