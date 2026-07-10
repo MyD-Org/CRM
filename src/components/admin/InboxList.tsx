@@ -26,7 +26,10 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
     const fetchScope = tab === "active" ? "active" : "all"
     let cancelled = false
     const load = async () => {
-      const res = await fetch(`/api/admin/inbox/contacts?scope=${fetchScope}`)
+      // `no-store`: sin esto el navegador cachea el GET (misma URL en cada poll) y la lista
+      // se queda con datos viejos —p. ej. una conversación recién asignada sigue "Sin asignar"—
+      // hasta un reload manual.
+      const res = await fetch(`/api/admin/inbox/contacts?scope=${fetchScope}`, { cache: "no-store" })
       if (res.ok && !cancelled) setContacts(await res.json())
     }
     load()

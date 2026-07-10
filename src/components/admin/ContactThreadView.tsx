@@ -122,7 +122,9 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
   // Polling de la primera página (lo reciente) cada 5s.
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/admin/inbox/contacts/${contact.end_user_id}/messages?limit=${PAGE_SIZE}`)
+      // `no-store`: evita que el navegador sirva del cache el mismo GET en cada poll y deje
+      // el thread sin mensajes nuevos hasta un reload.
+      const res = await fetch(`/api/admin/inbox/contacts/${contact.end_user_id}/messages?limit=${PAGE_SIZE}`, { cache: "no-store" })
       if (!res.ok) return
       const page: ContactMessagesPage = await res.json()
       setMessages((prev) => mergeRecent(prev, page.messages))
