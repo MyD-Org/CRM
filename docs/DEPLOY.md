@@ -85,9 +85,16 @@ actualizalos también allá.
 | `CENTRAL_LED_AI_AGENT_ID` | De `.env.local` |
 | `CENTRAL_LED_AI_TENANT_ID` | De `.env.local` |
 
+### Necesaria en BUILD (no en runtime)
+- `GITHUB_TOKEN` — el `.npmrc` la usa para bajar `@myd-org/ui` de GitHub Packages
+  (`npm.pkg.github.com`). Sin ella el build falla con `401 Unauthorized`. Usar un token
+  **classic con solo el scope `read:packages`** (no un PAT amplio). No se usa en runtime.
+
 ### NO cargar en prod
-- `GITHUB_TOKEN` — no se usa en runtime.
 - `AI_CHAT_ENABLED` — flag de dev; en prod el chat se controla con Vercel Flags (`ai-chat-enabled`).
+
+> Nota: `@myd-org/ai-widget` está vendorizado en `vendor/` y referenciado con path relativo,
+> así que no requiere registry ni token.
 
 ## 4. Checklist post-deploy
 - [ ] Migraciones + seed corridos contra Neon.
