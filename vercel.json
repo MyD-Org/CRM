@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/auto-return-bot",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
