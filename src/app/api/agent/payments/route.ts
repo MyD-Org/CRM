@@ -1,5 +1,5 @@
 import { getTenantConfig } from "@/lib/tenant-context"
-import { getPagos } from "@/lib/flexxus"
+import { getPagos } from "@/lib/erp"
 import { authAgentRequest } from "@/lib/agent-auth"
 
 export async function GET(req: Request) {

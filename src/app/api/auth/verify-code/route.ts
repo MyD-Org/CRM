@@ -2,7 +2,7 @@ import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
 import { sessionOptions, otpSessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
-import { getCliente } from "@/lib/flexxus"
+import { getClienteByIdentifier } from "@/lib/erp"
 import type { SessionData, OtpSessionData } from "@/types"
 
 // Intentos de verificación permitidos por código antes de invalidarlo.
@@ -51,7 +51,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Código incorrecto" }, { status: 400 })
     }
 
-    const clienteData = await getCliente(tenant, otpSession.identifier)
+    const clienteData = await getClienteByIdentifier(tenant, otpSession.identifier)
+    if (!clienteData) {
+      return Response.json({ error: "No encontramos una cuenta asociada. Contactate con atención al cliente." }, { status: 404 })
+    }
 
     const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
     session.isLoggedIn = true

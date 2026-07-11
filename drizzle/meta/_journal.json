@@ -57,6 +57,13 @@
       "when": 1782843172982,
       "tag": "0007_fat_mad_thinker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783785198342,
+      "tag": "0008_regular_harpoon",
+      "breakpoints": true
     }
   ]
 }

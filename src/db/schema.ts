@@ -22,11 +22,8 @@ export const tenants = pgTable("tenants", {
   name: text("name").notNull(),
   subtitle: text("subtitle").notNull().default(""),
   logoPath: text("logo_path").notNull(),
-  flexxusBaseUrl: text("flexxus_base_url").notNull().default(""),
-  flexxusToken: text("flexxus_token").notNull().default(""),
-  flexxusMock: boolean("flexxus_mock").notNull().default(false),
-  // Credenciales Alegra (catálogo: productos, precios, categorías). Auth Basic email:token.
-  // alegraMock=true usa fixtures locales (sin pegarle a Alegra) hasta tener el token real.
+  // Credenciales Alegra — ERP del portal (clientes, facturas, pagos, catálogo, cotizaciones).
+  // Auth Basic email:token. alegraMock=true usa fixtures locales hasta tener el token real.
   alegraEmail: text("alegra_email").notNull().default(""),
   alegraToken: text("alegra_token").notNull().default(""),
   alegraMock: boolean("alegra_mock").notNull().default(false),

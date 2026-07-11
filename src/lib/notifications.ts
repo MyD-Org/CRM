@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm"
 import { Resend } from "resend"
 import { getDb } from "@/db"
 import { notificationLog, notificationRules, tenants as tenantsTable } from "@/db/schema"
-import { getClientes, getFacturas } from "@/lib/flexxus"
+import { getClientes, getFacturas } from "@/lib/erp"
 import type { TenantConfig } from "@/lib/tenants"
 import type { Cliente, Factura } from "@/types"
 
@@ -49,9 +49,6 @@ function tenantConfigFromRow(row: typeof tenantsTable.$inferSelect): TenantConfi
     name: row.name,
     subtitle: row.subtitle,
     logoPath: row.logoPath,
-    flexxusBaseUrl: row.flexxusBaseUrl,
-    flexxusToken: row.flexxusToken,
-    flexxusMock: row.flexxusMock,
     alegraEmail: row.alegraEmail,
     alegraToken: row.alegraToken,
     alegraMock: row.alegraMock,

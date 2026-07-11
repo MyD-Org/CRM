@@ -1,7 +1,7 @@
 # Funcionalidades del sistema — Portal CRM
 
 > Estado al día de la última actualización. Portal B2B de autogestión para clientes
-> de cuenta corriente, con datos del ERP **Flexxus** y chat de soporte con IA.
+> de cuenta corriente, con datos del ERP **Alegra** y chat de soporte con IA.
 
 ## Índice
 
@@ -11,7 +11,7 @@
 4. [Portal del cliente](#portal-del-cliente)
 5. [Notificaciones](#notificaciones)
 6. [Chat de soporte con IA](#chat-de-soporte-con-ia)
-7. [Integración con Flexxus](#integración-con-flexxus)
+7. [Integración con Alegra (ERP)](#integración-con-alegra-erp)
 8. [Base de datos](#base-de-datos)
 9. [Feature flags](#feature-flags)
 10. [Referencia de endpoints](#referencia-de-endpoints)
@@ -31,7 +31,7 @@
 - **Vercel Flags** (feature flags) y **Vercel Cron** (tareas programadas)
 
 Flujo general: el navegador entra al portal → el middleware resuelve el tenant →
-las páginas (server components) leen datos de Flexxus y de la DB propia → el cliente
+las páginas (server components) leen datos de Alegra y de la DB propia → el cliente
 se autentica por OTP → opera sobre su cuenta corriente.
 
 ---
@@ -39,7 +39,7 @@ se autentica por OTP → opera sobre su cuenta corriente.
 ## Multitenant
 
 Un mismo deploy sirve a múltiples clientes (tenants), cada uno con su config aislada
-(Flexxus, branding, WhatsApp, chat IA).
+(Alegra, branding, WhatsApp, chat IA).
 
 - **`src/middleware.ts`** — resuelve el tenant por subdominio (`cliente.dominio.com`)
   o por `TENANT_OVERRIDE` en dev. Corre en Edge runtime: solo valida que el ID exista
@@ -59,7 +59,8 @@ Login sin contraseña, por código de un solo uso (6 dígitos).
   OTP de 6 dígitos válido **10 minutos** y lo guarda en una cookie de sesión OTP
   separada. *(Hoy el código se loguea por consola; falta cablear el envío real por email/SMS.)*
 - **`POST /api/auth/verify-code`** — valida el código; si es correcto, busca el cliente
-  en Flexxus y crea la sesión (`isLoggedIn`, `codigocliente`, `razonsocial`, `cuit`, `email`).
+  en Alegra (contacto, por email/CUIT) y crea la sesión (`isLoggedIn`, `codigocliente`,
+  `razonsocial`, `cuit`, `email`). El `codigocliente` es el id del contacto en Alegra.
 - **`POST /api/auth/logout`** — destruye la sesión.
 
 Dos cookies: `portal-session` (sesión principal) y `portal-otp` (verificación, TTL 10 min).
@@ -90,7 +91,7 @@ Ruta protegida `/portal/dashboard` (redirige a `/portal` si no hay sesión).
 
 Vista de solo lectura con: condición de pago y crédito (barra de uso, roja >85%),
 lista de precios y descuentos, vendedor asignado (con tel/mail), transporte y entregas.
-Los datos viven en la **DB propia** (Flexxus no las almacena).
+Los datos viven en la **DB propia** (el ERP no las almacena).
 
 ### Header (`PortalHeader.tsx`)
 
@@ -135,7 +136,7 @@ Si no hay `RESEND_API_KEY`, hace **dry-run** (loguea sin enviar).
 Tipo `conditions_changed` ("se modificaron tus condiciones") ya soportado en la UI.
 
 > **Pendiente**: que `conditions_changed` se genere solo al editar una condición, y
-> notificaciones de nuevo pago / nuevo presupuesto (a definir al conectar Flexxus real).
+> notificaciones de nuevo pago / nuevo presupuesto (a definir al conectar Alegra real).
 
 ---
 
@@ -158,16 +159,44 @@ con las tools del agente consultando los datos reales del CRM.
 
 ---
 
-## Integración con Flexxus
+## Integración con Alegra (ERP)
 
-**`src/lib/flexxus.ts`** — capa de acceso al ERP. Cada función acepta `flexxusMock`:
-si está activo devuelve datos de `mock-data.ts`, si no pega a la API real.
+Alegra es el **ERP** del portal: reemplazó a Flexxus. Dos capas:
 
-- `getCliente`, `getClientes`, `getFacturas`, `getPagos`, `getPresupuestos`
-- `getCondiciones` — **excepción**: las condiciones comerciales NO están en Flexxus,
+**`src/lib/alegra.ts`** — cliente de la API de Alegra (auth HTTP Basic `email:token`).
+Credenciales por tenant (`{PREFIX}_ALEGRA_EMAIL/TOKEN`); sin credenciales corre en
+**mock** (`mock-alegra.ts`). El mock se apaga solo al setear el token.
+
+- **Catálogo**: `listAllCategories`, `listAllItems` — sync a cache local
+  (`alegra-sync.ts`, cron `/api/cron/alegra-sync`) — y `getItemsLive` (precio/stock al momento).
+- **Contactos (clientes)**: `searchContacts`, `getContact`, `listAllContacts`.
+- **Cuenta corriente**: `listInvoicesByContact`, `listPaymentsByContact`, `getContactBalance`
+  (deuda total / vencido / a vencer, derivado de las facturas abiertas).
+- **Config de venta**: `listPriceLists`, `listPaymentTerms` (`/terms`), `listSellers`,
+  `listTaxes`, `listCurrencies`.
+- **Cotizaciones (estimates)**: `createEstimate`, `getEstimate`, `listEstimatesByContact`,
+  `deleteEstimate`. Es la **única escritura** permitida contra Alegra: una cotización no es
+  documento fiscal y se puede borrar por API. No exponer creación de facturas/pagos.
+
+**`src/lib/erp.ts`** — adaptador que traduce Alegra a los tipos de dominio del portal
+(`Cliente`, `Factura`, `Pago`, `Presupuesto`). Es lo que consumen el portal (dashboard,
+login, condiciones), los endpoints `/api/agent/*` y el gestor de cobranza. En modo
+`alegraMock` devuelve los fixtures de `mock-data.ts` — el portal funciona en dev sin
+credenciales. Fechas normalizadas a `DD/MM/YYYY`; estados de Alegra mapeados a
+`FacturaEstado`/`PresupuestoEstado`.
+
+- `getCliente`, `getClienteByIdentifier` (login por email/CUIT), `getClientes`,
+  `getFacturas`, `getPagos`, `getPresupuestos`.
+- `getCondiciones` — **excepción**: las condiciones comerciales NO están en Alegra,
   se leen de la DB propia (con fallback a mock).
 
-Endpoints proxy de lectura (server-side): `/api/flexxus/{cliente,facturas,pagos,presupuestos}`.
+> ⚠ Las cuentas de Alegra son **reales** (no hay sandbox). Smoke test contra una cuenta:
+> `npm run alegra:smoke -- --tenant new-avantec` (solo lecturas) o con `--write-test`
+> (crea una cotización marcada TEST y la **borra en el mismo run**).
+>
+> **Límite de crédito**: Alegra no expone un límite de crédito por contacto, así que hoy
+> `Cliente.limitecredito` es 0 (la barra de uso de crédito del portal no muestra tope).
+> A resolver desde la DB propia si se necesita.
 
 ---
 
@@ -204,10 +233,6 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | POST | `/api/auth/send-code` | — | Genera y "envía" el OTP |
 | POST | `/api/auth/verify-code` | OTP cookie | Valida OTP y crea sesión |
 | POST | `/api/auth/logout` | sesión | Cierra sesión |
-| GET | `/api/flexxus/cliente` | sesión | Datos del cliente |
-| GET | `/api/flexxus/facturas` | sesión | Facturas |
-| GET | `/api/flexxus/pagos` | sesión | Pagos |
-| GET | `/api/flexxus/presupuestos` | sesión | Presupuestos |
 | GET | `/api/notifications/log` | sesión | Historial de notificaciones |
 | PATCH | `/api/notifications/log` | sesión | Marca leídas (`ids` o `all`) |
 | POST | `/api/notifications/send` | `CRON_SECRET` | Disparo manual del gestor de cobranza |
@@ -216,6 +241,10 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | GET | `/api/agent/invoices` | agent token | Facturas (para el agente) |
 | GET | `/api/agent/payments` | agent token | Pagos (para el agente) |
 | GET | `/api/agent/account-balance` | agent token | Saldo (para el agente) |
+| GET | `/api/agent/contacts` | agent token | Busca clientes en Alegra (`?q=`) |
+| POST | `/api/agent/quotes` | agent token | Crea una cotización en Alegra |
+| GET | `/api/agent/quotes` | agent token | Cotizaciones de un contacto (`?contact_id=`) |
+| GET | `/api/agent/sales-config` | agent token | Listas de precio, condiciones de pago, vendedores, impuestos, monedas + link del shop |
 
 ---
 
@@ -227,7 +256,11 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | `RESEND_API_KEY` | Envío de emails (sin esto, dry-run) |
 | `TENANT_IDS` | Lista de tenants activos |
 | `TENANT_OVERRIDE` | Forzar un tenant en dev |
-| `CENTRAL_LED_*` | Config del tenant (NAME, SUBTITLE, LOGO, FLEXXUS_URL, FLEXXUS_TOKEN, MOCK, WHATSAPP, RESEND_FROM, AI_API_URL, AI_API_KEY, AI_AGENT_ID) |
+| `CENTRAL_LED_*` | Config del tenant (NAME, SUBTITLE, LOGO, MOCK, WHATSAPP, RESEND_FROM, AI_API_URL, AI_API_KEY, AI_AGENT_ID) |
+| `{PREFIX}_MOCK` | `true` → el portal corre con fixtures (`mock-data.ts`) sin pegarle a Alegra |
+| `{PREFIX}_ALEGRA_EMAIL` / `{PREFIX}_ALEGRA_TOKEN` | Credenciales de Alegra del tenant (sin token → mock) |
+| `{PREFIX}_ALEGRA_MOCK` | Fuerza el mock de Alegra aunque haya token |
+| `NEXT_PUBLIC_SHOP_URL` | Link de la tienda que comparte el agente (`sales-config`) |
 | `DATABASE_URL` | Conexión Postgres |
 | `CRON_SECRET` | Protege los endpoints de notificaciones |
 | `AI_CHAT_ENABLED` | Activa el chat en dev |
@@ -243,4 +276,5 @@ npm run lint         # eslint
 npm run db:generate  # generar migración desde el schema
 npm run db:migrate   # aplicar migraciones
 npm run db:seed      # seed inicial
+npm run alegra:smoke # smoke test de Alegra (-- --tenant <id> [--write-test])
 ```

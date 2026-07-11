@@ -3,7 +3,7 @@ import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
 import { sessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
-import { getCliente, getCondiciones } from "@/lib/flexxus"
+import { getCliente, getCondiciones } from "@/lib/erp"
 import { CondicionesClient } from "@/components/portal/CondicionesClient"
 import type { SessionData } from "@/types"
 

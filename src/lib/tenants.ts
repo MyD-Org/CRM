@@ -3,9 +3,6 @@ export interface TenantConfig {
   name: string
   subtitle: string
   logoPath: string
-  flexxusBaseUrl: string
-  flexxusToken: string
-  flexxusMock: boolean
   alegraEmail: string
   alegraToken: string
   alegraMock: boolean
@@ -19,23 +16,22 @@ export interface TenantConfig {
 
 function buildTenantConfig(id: string): TenantConfig | null {
   const prefix = id.toUpperCase().replace(/-/g, "_")
-  const flexxusUrl = process.env[`${prefix}_FLEXXUS_URL`] ?? ""
   const isMock = process.env[`${prefix}_MOCK`] === "true"
+  const hasAlegra = Boolean(process.env[`${prefix}_ALEGRA_TOKEN`])
 
-  if (!flexxusUrl && !isMock) return null
+  // Alegra es el ERP del portal. Un tenant es válido en modo mock (fixtures de dev) o con
+  // credenciales reales de Alegra.
+  if (!isMock && !hasAlegra) return null
 
   return {
     id,
     name: process.env[`${prefix}_NAME`] ?? id,
     subtitle: process.env[`${prefix}_SUBTITLE`] ?? "",
     logoPath: process.env[`${prefix}_LOGO`] ?? `/logos/${id}.svg`,
-    flexxusBaseUrl: flexxusUrl,
-    flexxusToken: process.env[`${prefix}_FLEXXUS_TOKEN`] ?? "",
-    flexxusMock: isMock,
     alegraEmail: process.env[`${prefix}_ALEGRA_EMAIL`] ?? "",
     alegraToken: process.env[`${prefix}_ALEGRA_TOKEN`] ?? "",
-    // Sin credenciales todavía → arranca en mock (fixtures). Se apaga al setear el token real.
-    alegraMock: process.env[`${prefix}_ALEGRA_MOCK`] === "true" || isMock,
+    // Sin credenciales de Alegra → el portal corre en mock (fixtures). Setear el token real lo apaga.
+    alegraMock: process.env[`${prefix}_ALEGRA_MOCK`] === "true" || (isMock && !hasAlegra),
     whatsappNumber: process.env[`${prefix}_WHATSAPP`] ?? "",
     resendFrom: process.env[`${prefix}_RESEND_FROM`] ?? "portal@example.com",
     aiApiBaseUrl: process.env[`${prefix}_AI_API_URL`] ?? "",
@@ -80,9 +76,6 @@ export async function getTenantByIdFromDb(id: string): Promise<TenantConfig | nu
       name: row.name,
       subtitle: row.subtitle,
       logoPath: row.logoPath,
-      flexxusBaseUrl: row.flexxusBaseUrl,
-      flexxusToken: row.flexxusToken,
-      flexxusMock: row.flexxusMock,
       alegraEmail: row.alegraEmail,
       alegraToken: row.alegraToken,
       alegraMock: row.alegraMock,

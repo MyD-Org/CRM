@@ -82,6 +82,13 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
   const [lastSync, setLastSync] = useState<SyncLog>(null)
   const [syncing, setSyncing] = useState(false)
 
+  // Se computa como statement (no en el JSX) porque el análisis de flujo de TS no estrecha
+  // `lastSync` de forma fiable dentro de este árbol JSX.
+  const syncStatusLabel =
+    lastSync && lastSync.finishedAt
+      ? `Última sincronización: ${new Date(lastSync.finishedAt).toLocaleString("es-AR")} · ${lastSync.itemsSynced} productos · ${lastSync.categoriesSynced} categorías${lastSync.status === "error" ? " · con errores" : ""}`
+      : "Todavía no se sincronizó el catálogo con Alegra."
+
   useEffect(() => {
     fetch("/api/admin/catalog/sync")
       .then((r) => (r.ok ? r.json() : null))
@@ -191,9 +198,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>Catálogo de Alegra</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
-              {lastSync?.finishedAt
-                ? `Última sincronización: ${new Date(lastSync.finishedAt).toLocaleString("es-AR")} · ${lastSync.itemsSynced} productos · ${lastSync.categoriesSynced} categorías${lastSync.status === "error" ? " · con errores" : ""}`
-                : "Todavía no se sincronizó el catálogo con Alegra."}
+              {syncStatusLabel}
             </p>
           </div>
           <Button variant="secondary" loading={syncing} onClick={runAlegraSync}>
