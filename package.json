@@ -16,7 +16,7 @@
     "alegra:smoke": "tsx --env-file-if-exists=.env.local scripts/alegra-smoke.ts"
   },
   "dependencies": {
-    "@myd-org/ai-widget": "file:../../../../../tmp/myd-org-ai-widget-0.1.5.tgz",
+    "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.5.tgz",
     "@myd-org/ui": "^0.4.0",
     "@vercel/flags": "^3.1.1",
     "drizzle-orm": "^0.45.2",
