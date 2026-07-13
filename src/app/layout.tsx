@@ -8,9 +8,11 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: `Portal de Clientes — ${tenant.name}`,
       description: `Portal de clientes de ${tenant.name}${tenant.subtitle ? ` — ${tenant.subtitle}` : ""}`,
+      // Favicon por tenant, por convención: public/logos/{tenantId}-icon.svg
+      icons: { icon: `/logos/${tenant.id}-icon.svg` },
     }
   } catch {
-    return { title: "Portal de Clientes" }
+    return { title: "Portal de Clientes", icons: { icon: "/logos/central-led-icon.svg" } }
   }
 }
 
