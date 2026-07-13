@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="60%">
+      <stop offset="0%" stop-color="#2a5bff"></stop>
+      <stop offset="45%" stop-color="#1638d6"></stop>
+      <stop offset="78%" stop-color="#071033"></stop>
+      <stop offset="100%" stop-color="#05070f"></stop>
+    </radialGradient>
+    <linearGradient id="cGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#eaf6ff"></stop>
+      <stop offset="35%" stop-color="#4fd0ff"></stop>
+      <stop offset="70%" stop-color="#1c8fe0"></stop>
+      <stop offset="100%" stop-color="#0d5fb0"></stop>
+    </linearGradient>
+    <radialGradient id="pinGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ff6b5b"></stop>
+      <stop offset="60%" stop-color="#e0281a"></stop>
+      <stop offset="100%" stop-color="#a6160c"></stop>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="blur"></feGaussianBlur>
+      <feMerge>
+        <feMergeNode in="blur"></feMergeNode>
+        <feMergeNode in="SourceGraphic"></feMergeNode>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"></circle>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#ffffff" stroke-width="5" opacity="0.85"></circle>
+
+  <path d="M 338 178 A 106 106 0 1 0 338 334" fill="none" stroke="#0a2a55" stroke-width="76" stroke-linecap="round"></path>
+  <path d="M 338 178 A 106 106 0 1 0 338 334" fill="none" stroke="url(#cGrad)" stroke-width="60" stroke-linecap="round" filter="url(#glow)"></path>
+  <path d="M 338 178 A 106 106 0 1 0 338 334" fill="none" stroke="#ffffff" stroke-width="60" stroke-linecap="round" opacity="0.55" style="mix-blend-mode:overlay"></path>
+
+  <g transform="translate(110,250)">
+    <path d="M75 0 C33.6 0 0 33.6 0 75 C0 131.25 75 190 75 190 C75 190 150 131.25 150 75 C150 33.6 116.4 0 75 0 Z" fill="url(#pinGrad)" stroke="#7a0f08" stroke-width="4"></path>
+    <circle cx="75" cy="72" r="32" fill="#3a0a05" opacity="0.35"></circle>
+  </g>
+</svg>
