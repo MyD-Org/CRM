@@ -66,7 +66,7 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
 
   const logo = logoSrc ? (
     <div className="flex flex-col gap-1">
-      <Image src={logoSrc} alt={tenantName ?? "Logo"} width={120} height={32} style={{ width: 120, height: "auto" }} priority />
+      <Image src={logoSrc} alt={tenantName ?? "Logo"} width={120} height={32} style={{ width: 120, height: "auto" }} priority unoptimized />
       <p className="text-[10px] font-medium uppercase tracking-wider text-subtle">Backoffice</p>
     </div>
   ) : (

@@ -33,8 +33,4 @@
   <path d="M 338 178 A 106 106 0 1 0 338 334" fill="none" stroke="url(#cGrad)" stroke-width="60" stroke-linecap="round" filter="url(#glow)"></path>
   <path d="M 338 178 A 106 106 0 1 0 338 334" fill="none" stroke="#ffffff" stroke-width="60" stroke-linecap="round" opacity="0.55" style="mix-blend-mode:overlay"></path>
 
-  <g transform="translate(110,250)">
-    <path d="M75 0 C33.6 0 0 33.6 0 75 C0 131.25 75 190 75 190 C75 190 150 131.25 150 75 C150 33.6 116.4 0 75 0 Z" fill="url(#pinGrad)" stroke="#7a0f08" stroke-width="4"></path>
-    <circle cx="75" cy="72" r="32" fill="#3a0a05" opacity="0.35"></circle>
-  </g>
 </svg>
