@@ -17,6 +17,10 @@ import {
   listSellers,
   listTaxes,
   listCurrencies,
+  listInvoicesByContact,
+  listPaymentsByContact,
+  getContactBalance,
+  listEstimatesByContact,
   createEstimate,
   getEstimate,
   deleteEstimate,
@@ -104,6 +108,66 @@ async function main() {
   if (contactQuery) {
     const viaLib = await searchContacts(config, contactQuery, 5)
     console.log(`  (searchContacts de la lib devolvió ${viaLib.length} resultados)`)
+  }
+
+  // ── Cuenta corriente por contacto (facturas, pagos, saldo, cotizaciones) — todo lectura ──
+  section("Cuenta corriente (/invoices, /payments, saldo, /estimates)")
+  const money = (n: number) => n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const explicitContactId = argValue("--contact-id")
+  // Probe barato (limit=1) para saber qué contacto tiene facturas, sin paginar todo.
+  async function hasInvoices(cid: string): Promise<boolean> {
+    const res = await fetch(`https://api.alegra.com/api/v1/invoices?client_id=${cid}&limit=1`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`, Accept: "application/json" },
+    })
+    if (!res.ok) return false
+    const arr = (await res.json()) as unknown[]
+    return Array.isArray(arr) && arr.length > 0
+  }
+
+  let targetId = explicitContactId
+  let targetName = explicitContactId ? contacts.find((c) => String(c.id) === explicitContactId)?.name ?? explicitContactId : ""
+  if (!targetId) {
+    console.log("  Buscando un contacto de la muestra que tenga facturas…")
+    for (const c of contacts) {
+      const cid = String(c.id)
+      const yes = await hasInvoices(cid)
+      console.log(`    [${cid}] ${c.name ?? ""}: ${yes ? "tiene facturas" : "sin facturas"}`)
+      if (yes) {
+        targetId = cid
+        targetName = String(c.name ?? cid)
+        break
+      }
+    }
+  }
+
+  if (!targetId) {
+    console.log("  Ningún contacto de la muestra tiene facturas — pasá --contact-id N o --contact-query <nombre>.")
+  } else {
+    console.log(`\n  → Detalle de cuenta corriente: [${targetId}] ${targetName}`)
+
+    const invoices = await listInvoicesByContact(config, targetId)
+    console.log(`\n  Facturas (${invoices.length}):`)
+    for (const inv of invoices.slice(0, 8)) {
+      console.log(`    ${inv.number ?? inv.alegraId} | ${inv.date} | venc ${inv.dueDate ?? "-"} | total ${money(inv.total)} | saldo ${money(inv.balance)} | ${inv.status}`)
+    }
+    if (invoices.length > 8) console.log(`    … (${invoices.length - 8} más)`)
+
+    const payments = await listPaymentsByContact(config, targetId)
+    console.log(`\n  Pagos/recibos (${payments.length}):`)
+    for (const p of payments.slice(0, 8)) {
+      console.log(`    ${p.number ?? p.alegraId} | ${p.date} | ${money(p.amount)} | ${p.method} | imputado a ${p.invoices.length} fact.`)
+    }
+    if (payments.length > 8) console.log(`    … (${payments.length - 8} más)`)
+
+    const balance = await getContactBalance(config, targetId)
+    console.log(`\n  Saldo cuenta corriente:`)
+    console.log(`    total ${money(balance.total)} | vencido ${money(balance.overdue)} | a vencer ${money(balance.toFallDue)}`)
+
+    const estimates = await listEstimatesByContact(config, targetId)
+    console.log(`\n  Cotizaciones existentes (${estimates.length}):`)
+    for (const e of estimates.slice(0, 5)) {
+      console.log(`    ${e.number ?? e.alegraId} | ${e.date} | total ${money(e.total)} | ${e.status}`)
+    }
   }
 
   if (!writeTest) {
