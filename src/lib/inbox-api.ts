@@ -148,6 +148,24 @@ export async function getContactMessages(
   return res.json()
 }
 
+// Kill switch global del bot del tenant. Al apagarlo, el bot deja de responder en TODAS
+// las conversaciones (los mensajes entrantes se persisten en el inbox pero no se invoca
+// el modelo). Estado en tenants.settings.botEnabled del lado de la ai-api.
+export async function getBotStatus(aiApiUrl: string, aiTenantId: string): Promise<boolean> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, "/v1/inbox/bot-status")
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+  const body = await res.json()
+  return body.botEnabled
+}
+
+export async function setBotStatus(aiApiUrl: string, aiTenantId: string, enabled: boolean): Promise<void> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, "/v1/inbox/bot-status", {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+}
+
 export async function setMode(
   aiApiUrl: string,
   aiTenantId: string,
