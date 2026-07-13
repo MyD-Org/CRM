@@ -32,14 +32,15 @@ Credenciales del cliente del portal, en la DB propia (Alegra no guarda nada de e
 | `id` | pk | |
 | `tenant_id` | fk `tenants` | |
 | `codigocliente` | text | **vínculo con Alegra** (id de contacto) |
-| `cuit` | text | handle de login |
-| `email` | text nullable | capturado en 1er ingreso; login + recuperación |
-| `password_hash` | text nullable | scrypt vía `admin-crypto`; null si solo usa Google |
+| `cuit` | text | handle de login; **normalizado a solo dígitos** al guardar y al buscar (en Alegra viene con guiones, el cliente tipea sin) |
+| `email` | text nullable | null solo hasta el setup (ahí es **obligatorio**); login + recuperación |
+| `password_hash` | text | scrypt vía `admin-crypto`; siempre presente (provisoria o definitiva) — Google es un extra, nunca el único método |
 | `google_id` | text nullable | `sub` de Google; null si no vinculó |
 | `must_change_password` | boolean, default true | fuerza el setup inicial |
 | `provisional_expires_at` | timestamp nullable | vencimiento de la provisoria (7 días) |
 | `status` | text, default `active` | `active` / `disabled` |
 | `failed_attempts` | int, default 0 | anti-fuerza-bruta |
+| `locked_until` | timestamp nullable | lockout temporal (ver Seguridad) |
 | `last_login_at` | timestamp nullable | |
 | `created_at`, `updated_at` | timestamp | |
 
@@ -56,23 +57,27 @@ Espejo de `admin_password_tokens` para el reset por email: `id`, `portal_user_id
 Nueva página admin que lista contactos de Alegra (reusa `getClientes`, ya implementada) con búsqueda por CUIT/nombre y botón **"Generar acceso"**:
 
 1. Genera una provisoria aleatoria (crypto, ~12 chars).
-2. Crea/actualiza la fila `portal_users`: `must_change=true`, `password_hash` de la provisoria, `provisional_expires_at = now + 7d`, `codigocliente` y `cuit` del contacto.
+2. Crea/actualiza la fila `portal_users`: `must_change=true`, `password_hash` de la provisoria, `provisional_expires_at = now + 7d`, `codigocliente` y `cuit` (normalizado) del contacto.
 3. Muestra la provisoria **una sola vez** para copiar y entregar al cliente.
+
+**Regenerar** usa el mismo botón: si la fila ya existe, resetea `password_hash`, `provisional_expires_at`, `must_change=true`, `failed_attempts=0` y `locked_until=null`. Sirve tanto para provisoria vencida como para destrabar a un cliente bloqueado.
 
 ### Primer ingreso del cliente
 
-1. Login con **CUIT + provisoria**.
+1. Login con **CUIT + provisoria**. Si la provisoria está vencida (`provisional_expires_at < now`): error claro — "tu clave provisoria venció, pedile una nueva a tu vendedor" — y el operador la regenera desde el admin.
 2. `must_change=true` → redirige a `/portal/setup` con sesión parcial "pending-setup".
-3. Form: **nueva contraseña + email** (+ opcional "Vincular Google").
+3. Form: **nueva contraseña + email (ambos obligatorios)** (+ opcional "Vincular Google"). Si vincula Google y aún no tipeó email, se pre-llena con el de Google (editable).
 4. `POST /api/auth/setup`: valida, hashea la nueva contraseña, guarda email, `must_change=false`. Si vincula Google, round-trip OAuth **dentro de esta sesión autenticada** que persiste el `google_id`.
 5. Sesión completa → dashboard.
 
 ### Ingresos siguientes
 
-- **Contraseña**: `POST /api/auth/login` → busca por CUIT o email → `verifyPassword` → sesión completa (poblada desde Alegra con `getCliente(codigocliente)`, igual que hoy `verify-code`) → dashboard. Incrementa `failed_attempts`; lockout tras 5.
+- **Contraseña**: `POST /api/auth/login` → busca por CUIT (normalizado) o email → `verifyPassword` → sesión completa (poblada desde Alegra con `getCliente(codigocliente)`, igual que hoy `verify-code`) → dashboard. Incrementa `failed_attempts`; lockout tras 5 (ver Seguridad).
 - **Google**: `GET /api/auth/google/start` (redirect con `state` CSRF en cookie corta) → `GET /api/auth/google/callback` (intercambia code → verifica `id_token` con audience = client id → `google_id` + email) → busca por `google_id`:
   - vinculado y activo → sesión completa → dashboard.
   - no vinculado → error: "tu Google no está asociado, ingresá con CUIT + la contraseña que te pasaron".
+
+**El callback tiene doble rol**, discriminado por el `state`: modo `login` (arriba) y modo `link` (vincular desde el setup o la cuenta). `link` solo procede si existe una sesión pending-setup o completa activa; sin sesión, se rechaza. El `state` firmado en cookie corta cubre CSRF en ambos modos.
 
 ### Recuperación
 
@@ -88,7 +93,9 @@ Nueva página admin que lista contactos de Alegra (reusa `getClientes`, ya imple
 
 - Provisoria: aleatoria (crypto), hasheada (scrypt), `must_change`, vence a 7 días. **Nunca el CUIT.**
 - Google: match por `google_id` (`sub`), vinculado **solo** en sesión autenticada; verificación del `id_token` con `google-auth-library` (audience = client id); `state` param para CSRF.
-- Rate-limit en `login` y `forgot`; lockout tras 5 intentos fallidos (`failed_attempts`), espejo del `MAX_OTP_ATTEMPTS` actual.
+- Lockout por cuenta (en DB, funciona en serverless): tras 5 intentos fallidos (`failed_attempts`, espejo del `MAX_OTP_ATTEMPTS` actual) se setea `locked_until = now + 15 min`. Se destraba solo al vencer, o antes si el operador regenera la provisoria o el cliente resetea por email. Login exitoso resetea el contador.
+- `forgot`: cooldown por usuario en DB — máximo 1 token de reset cada 5 minutos. (Rate-limit por IP queda fuera de v1: en Vercel serverless un limiter en memoria no persiste; si hiciera falta, WAF de Vercel.)
+- CUIT normalizado a solo dígitos en alta y login (evita fallos por guiones).
 - Unicidad de email por tenant en el setup (no reclamar el email de otro cliente).
 - Cookie sellada `httpOnly` sin cambios.
 
@@ -104,11 +111,13 @@ Los endpoints `send-code` / `verify-code` y la UI de OTP quedan **reemplazados**
 ## Testing
 
 - Reusa tests de `admin-crypto`.
-- Unit: generación de provisoria, `verifyPassword`, lookup por `google_id`, token de reset, unicidad de email.
-- Integración: login por CUIT/email/Google, gate de setup (`must_change` bloquea el dashboard), recuperación, rate-limit.
+- Unit: generación de provisoria, `verifyPassword`, normalización de CUIT (con/sin guiones), lookup por `google_id`, token de reset, unicidad de email.
+- Integración: login por CUIT/email/Google, provisoria vencida, gate de setup (`must_change` bloquea el dashboard), lockout y destrabe (15 min / regeneración / reset), callback en modo `link` sin sesión (rechazo), recuperación con cooldown.
 
 ## Fuera de alcance (v1)
 
 - Auto-registro del cliente sin operador.
 - Write-back del email capturado a Alegra (enriquecer el contacto) — evaluar en una iteración posterior.
 - Otros proveedores sociales (solo Google).
+- **Múltiples usuarios por cliente**: v1 tiene 1 usuario por contacto de Alegra (una persona por empresa). Limitación conocida y aceptada; si un B2B necesita más personas, se evalúa en v2 (tabla de miembros por cliente).
+- Rate-limit por IP (ver Seguridad).
