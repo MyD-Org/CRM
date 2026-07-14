@@ -64,6 +64,13 @@
       "when": 1783785198342,
       "tag": "0008_regular_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784049870879,
+      "tag": "0009_lonely_silver_surfer",
+      "breakpoints": true
     }
   ]
 }

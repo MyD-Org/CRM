@@ -115,7 +115,9 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 días para aceptar invitación
   await db.insert(adminPasswordTokens).values({ userId: user.id, tokenHash, type: "invite", expiresAt })
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"
+  // Base URL: preferimos derivarla del request (funciona en prod/preview/local sin
+  // configurar nada); NEXT_PUBLIC_BASE_URL queda como override opcional.
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? req.nextUrl.origin
   const inviteUrl = `${baseUrl}/admin/reset-password/${token}`
 
   const { sent: emailSent, errorMsg: emailError } = await trySendInviteEmail({ tenant, user, role: body.role, inviteUrl })

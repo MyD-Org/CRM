@@ -54,6 +54,9 @@ export interface InboxContact {
   status: "active" | "closed"
   assigned_operator_id: string | null
   assigned_operator_name?: string | null
+  // Departamento al que el bot ruteó el handoff (cola por depto). Se resuelve en el CRM
+  // cruzando con las conversaciones de ai-api; útil para mostrar a qué depto espera.
+  assigned_department?: string | null
   last_inbound_at: string | null
   within_window: boolean
   awaiting_reply: boolean
@@ -209,18 +212,8 @@ export async function setMode(
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
 }
 
-export async function assignConversation(
-  aiApiUrl: string,
-  aiTenantId: string,
-  conversationId: string,
-  operatorId: string,
-): Promise<void> {
-  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/assign`, {
-    method: "POST",
-    body: JSON.stringify({ operatorId }),
-  })
-  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
-}
+// Nota: la asignación de operador YA NO se guarda en ai-api. El CRM es la fuente de verdad
+// (tabla conversation_assignments en Neon). Ver lib/assignment.ts y ADR 0006.
 
 export async function archiveConversation(
   aiApiUrl: string,

@@ -6,7 +6,7 @@ import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { getContact } from "@/lib/inbox-api"
-import { operatorNamesByIds } from "@/lib/operator-names"
+import { enrichContact } from "@/lib/inbox-contacts"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ endUserId: string }> }) {
   const { endUserId } = await params
@@ -25,9 +25,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ endUser
     return NextResponse.json({ error: "contact_not_found" }, { status: 404 })
   }
 
-  const nameById = await operatorNamesByIds([contact.assigned_operator_id])
-  return NextResponse.json({
-    ...contact,
-    assigned_operator_name: contact.assigned_operator_id ? nameById.get(contact.assigned_operator_id) ?? null : null,
-  })
+  // Operador (fuente de verdad: CRM) + departamento (de ai-api).
+  const enriched = await enrichContact(
+    { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId },
+    contact,
+  )
+  return NextResponse.json(enriched)
 }
