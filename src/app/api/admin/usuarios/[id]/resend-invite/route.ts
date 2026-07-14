@@ -12,7 +12,7 @@ import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 // Genera un token nuevo (invalida el anterior) y reintenta el envío del email.
 // El inviteUrl (con el token crudo) se devuelve siempre para que el superadmin copie
 // el link a mano desde la UI mientras no haya servidor de mail configurado.
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId || session.role !== "superadmin") {
     return NextResponse.json({ error: "Se requiere rol superadmin" }, { status: 403 })
@@ -37,7 +37,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   await db.insert(adminPasswordTokens).values({ userId: user.id, tokenHash, type: "invite", expiresAt })
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"
+  // Base URL: preferimos derivarla del request (funciona en prod/preview/local sin
+  // configurar nada); NEXT_PUBLIC_BASE_URL queda como override opcional.
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? req.nextUrl.origin
   const inviteUrl = `${baseUrl}/admin/reset-password/${token}`
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, session.tenantId))
