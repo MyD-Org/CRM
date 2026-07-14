@@ -52,7 +52,7 @@ export default async function InboxPage() {
           {configError}
         </div>
       ) : (
-        <InboxList initialContacts={contacts} currentUserId={session.userId} />
+        <InboxList initialContacts={contacts} currentUserId={session.userId} initialBotEnabled={botEnabled} />
       )}
     </div>
   )

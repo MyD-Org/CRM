@@ -12,10 +12,12 @@ type Scope = "all" | "mine"
 interface Props {
   initialContacts: InboxContact[]
   currentUserId: string
+  initialBotEnabled: boolean
 }
 
-export function InboxList({ initialContacts, currentUserId }: Props) {
+export function InboxList({ initialContacts, currentUserId, initialBotEnabled }: Props) {
   const [contacts, setContacts] = useState(initialContacts)
+  const [botEnabled, setBotEnabled] = useState(initialBotEnabled)
   const [tab, setTab] = useState<Tab>("active")
   const [scope, setScope] = useState<Scope>("all")
 
@@ -31,6 +33,11 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
       // hasta un reload manual.
       const res = await fetch(`/api/admin/inbox/contacts?scope=${fetchScope}`, { cache: "no-store" })
       if (res.ok && !cancelled) setContacts(await res.json())
+      // Estado del kill switch: si el bot está pausado, las conversaciones en modo bot NO las
+      // atiende nadie, así que se muestran "Sin asignar" (no "Bot"). Se pollea para reflejar
+      // el toggle sin recargar.
+      const bs = await fetch("/api/admin/inbox/bot-status", { cache: "no-store" }).catch(() => null)
+      if (bs?.ok && !cancelled) setBotEnabled((await bs.json()).botEnabled)
     }
     load()
     const interval = setInterval(load, 10_000)
@@ -126,7 +133,7 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
                   <p className="text-sm font-medium truncate" style={{ color: "var(--ink)" }}>
                     {c.contact}
                   </p>
-                  <ModeChip mode={c.mode} operatorName={c.assigned_operator_name ?? null} department={c.assigned_department ?? null} />
+                  <ModeChip mode={c.mode} operatorName={c.assigned_operator_name ?? null} department={c.assigned_department ?? null} botPaused={!botEnabled} />
                   {c.awaiting_reply && (
                     <Badge tone="warning" className="flex items-center gap-1 shrink-0">
                       <MessageCircleWarning size={9} />
@@ -164,8 +171,18 @@ function departmentLabel(dept: string): string {
   return DEPARTMENT_LABELS[dept] ?? dept
 }
 
-function ModeChip({ mode, operatorName, department }: { mode: string; operatorName: string | null; department: string | null }) {
+function ModeChip({ mode, operatorName, department, botPaused }: { mode: string; operatorName: string | null; department: string | null; botPaused: boolean }) {
   if (mode !== "human") {
+    // Bot pausado (kill switch): en modo bot no lo atiende nadie, así que no mostramos "Bot"
+    // (haría creer que el bot la tiene) sino "Sin asignar", que necesita que un humano la tome.
+    if (botPaused) {
+      return (
+        <Badge tone="warning" className="flex items-center gap-1">
+          <User size={9} />
+          Sin asignar
+        </Badge>
+      )
+    }
     return (
       <Badge tone="info" className="flex items-center gap-1">
         <Bot size={9} />

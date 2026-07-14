@@ -14,9 +14,10 @@ interface Props {
   contact: InboxContact
   initialPage: ContactMessagesPage
   currentUserId: string
+  botEnabled: boolean
 }
 
-export function ContactThreadView({ contact, initialPage, currentUserId }: Props) {
+export function ContactThreadView({ contact, initialPage, currentUserId, botEnabled }: Props) {
   const router = useRouter()
   const { toast } = useToast()
   const convId = contact.current_conversation_id
@@ -418,7 +419,15 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
         className="shrink-0 px-5 py-3"
         style={{ borderTop: "1px solid var(--border)", background: "var(--bg)" }}
       >
-        {mode === "bot" ? (
+        {mode === "bot" && !botEnabled ? (
+          // Kill switch activo: el bot NO está atendiendo. No decimos "el bot responde"
+          // (sería engañoso); avisamos que quedó sin atender y hay que tomarla.
+          <p className="text-xs text-center py-1" style={{ color: "var(--amber)" }}>
+            {contact.within_window
+              ? 'El bot está pausado — nadie la está atendiendo. Hacé click en "Asignarme" para responder vos.'
+              : "El bot está pausado — esta conversación quedó sin atender."}
+          </p>
+        ) : mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
             {contact.within_window
               ? 'El bot está respondiendo. Hacé click en "Asignarme" para responder vos.'
