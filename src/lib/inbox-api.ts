@@ -166,6 +166,35 @@ export async function setBotStatus(aiApiUrl: string, aiTenantId: string, enabled
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
 }
 
+// Panel de gasto del bot (Feature B). Agrega usage_records del tenant en la ai-api.
+export interface UsageTotals {
+  botTurns: number
+  tokens: number
+  costUsd: number
+}
+export interface DailyUsage extends UsageTotals {
+  date: string // 'YYYY-MM-DD'
+}
+export interface ModelUsage extends UsageTotals {
+  model: string
+}
+export interface UsageSummary {
+  today: UsageTotals
+  month: UsageTotals
+  daily: DailyUsage[]
+  byModel: ModelUsage[]
+}
+
+export async function getUsageSummary(
+  aiApiUrl: string,
+  aiTenantId: string,
+  days = 30,
+): Promise<UsageSummary> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/usage?days=${days}`)
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+  return res.json()
+}
+
 export async function setMode(
   aiApiUrl: string,
   aiTenantId: string,

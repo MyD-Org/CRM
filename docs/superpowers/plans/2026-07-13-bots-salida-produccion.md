@@ -78,15 +78,24 @@ cliente no queda hablando solo; alguien lo atiende.
 
 Los datos ya existen; es exponerlos y mostrarlos.
 
+> **Decisión (2026-07-13, con Ema)**: el panel de gasto/uso **va a vivir en el proyecto
+> `ia-dashboard`, no en el CRM**. Por ahora se dejó implementado en el CRM pero **detrás
+> de un feature flag apagado por default** (`BOT_USAGE_PANEL_ENABLED`, ver `src/lib/flags.ts`),
+> para poder activarlo puntualmente y sacarlo limpio cuando migre. El endpoint de la
+> ai-api (`GET /v1/inbox/usage`) queda y probablemente lo reuse ia-dashboard.
+
 ### Tareas
 
-- [ ] **ai-api**: endpoint staff `GET /v1/inbox/usage?from=&to=` que agregue
-      `usage_records` del tenant: total mensajes, tokens, costo USD estimado, con
-      breakdown por día (para un mini-gráfico) y por modelo.
-- [ ] **CRM**: ruta proxy `GET /api/admin/inbox/usage` + helper en `inbox-api.ts`.
-- [ ] **CRM**: card/página "Uso del bot" en el admin: gasto del mes, del día,
-      mensajes respondidos, y estado de los límites configurados.
-- [ ] **platform**: documentar el endpoint en `contracts/crm-ai-api.md`.
+- [x] **ai-api**: endpoint staff `GET /v1/inbox/usage?days=N` que agrega `usage_records`
+      del tenant: hoy, mes, breakdown diario y por modelo (`src/usage/summary.ts` +
+      `src/routes/inbox.ts`). Fronteras de día/mes en horario AR. Test: `test/usage/summary.test.ts`.
+      Verificado vivo: hoy/mes/diario/por-modelo con datos reales.
+- [x] **CRM**: ruta proxy `GET /api/admin/inbox/usage` + `getUsageSummary` en `inbox-api.ts`.
+- [x] **CRM**: página "Uso del bot" (`/admin/uso` + `UsagePanel.tsx`): tiles hoy/mes,
+      selector de rango, mini-gráfico diario, desglose por modelo. **Gateada por flag**
+      (`botUsagePanelEnabled`) y solo superadmin.
+- [ ] **platform**: documentar el endpoint en `contracts/crm-ai-api.md`. ← pendiente
+- [ ] **ia-dashboard**: migrar el panel a ese proyecto (consumiendo el mismo endpoint). ← futuro
 
 ### Protecciones de costo que NO requieren código (hacer YA)
 
@@ -102,11 +111,18 @@ Los datos ya existen; es exponerlos y mostrarlos.
 
 ### 🔴 Bloqueantes para salir
 
-- [ ] **Alertas de errores**. Hoy todo error termina en `app.log.error` y nadie lo ve.
-      Mínimo: Sentry (gratis a este volumen) en ai-api y CRM, o alerta simple
-      (email/WhatsApp) cuando falla un turno del bot o un envío a Meta.
-      Complemento barato: badge en el admin de "mensajes no entregados" (los
-      `'failed'` ya están en `channel_messages`).
+- [x] **Alertas de errores — Sentry wireado en ambos repos (2026-07-13)**, gateado por
+      DSN (no-op sin la env var):
+  - **ai-api**: `src/observability/sentry.ts` (`initSentry`/`captureError`/`flushSentry`).
+    Init en `server.ts`; captura en el error handler 5xx (`app.ts`) y en el catch del
+    **turno del bot** (`inbound.ts` — la señal "el bot se rompió"). Env: `SENTRY_DSN`.
+  - **CRM**: `src/instrumentation.ts` (server, `onRequestError`) + `src/instrumentation-client.ts`
+    (browser). Sin `withSentryConfig` (no toca Turbopack; build verificada OK). Env:
+    `SENTRY_DSN` (server) y `NEXT_PUBLIC_SENTRY_DSN` (cliente).
+  - **Pendiente (acción del usuario)**: crear la cuenta/proyecto en Sentry y cargar los
+    DSN en las envs de prod (Vercel + Railway). Hasta entonces no reporta nada.
+  - Complemento barato futuro: badge en el admin de "mensajes no entregados" (los
+    `'failed'` ya están en `channel_messages`).
 - [ ] **WhatsApp real de Meta** (hoy la cuenta de Central LED es sandbox, `isTest=true`):
   - [ ] App de Meta en modo **Live** (no development).
   - [ ] Número real verificado + display name aprobado.
