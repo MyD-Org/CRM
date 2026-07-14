@@ -44,6 +44,20 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   const [editSaving, setEditSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  // Modal con el link de invitación para copiar y compartir (mientras no haya mail)
+  const [inviteModal, setInviteModal] = useState<{ url: string; name: string } | null>(null)
+  const [modalCopied, setModalCopied] = useState(false)
+
+  async function openInviteModal(url: string, name: string) {
+    setInviteModal({ url, name })
+    setModalCopied(false)
+    try {
+      await navigator.clipboard.writeText(url)
+      setModalCopied(true)
+    } catch {
+      /* el usuario puede copiar manualmente desde el input */
+    }
+  }
 
   function startEdit(user: AdminUser) {
     setEditingId(user.id)
@@ -89,16 +103,18 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       })
       const body = await res.json()
       if (res.ok) {
-        if (body.emailSent === false) {
-          toast({ title: "Usuario creado", description: "El mail no pudo enviarse. Copiá el link desde la card.", tone: "warning" })
-        } else {
-          toast({ title: "Invitación enviada", description: `Se envió un mail a ${form.email}.`, tone: "success" })
-        }
         if (body.inviteUrl) setPendingUrls((p) => ({ ...p, [body.id]: body.inviteUrl }))
+        const createdName = form.name
         setForm({ name: "", email: "", role: "operator", department: "" })
         setShowForm(false)
         const listRes = await fetch("/api/admin/usuarios")
         if (listRes.ok) setUsers(await listRes.json())
+        if (body.emailSent) {
+          toast({ title: "Invitación enviada", description: `Se envió un mail a ${body.email ?? "el usuario"}.`, tone: "success" })
+        } else if (body.inviteUrl) {
+          // Sin servidor de mail: mostramos el link para que el admin se lo pase a la persona
+          await openInviteModal(body.inviteUrl, createdName)
+        }
       } else {
         setFormError(body.error ?? "Error al crear usuario")
       }
@@ -143,6 +159,41 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
         }
       >
         <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar este usuario?</p>
+      </Dialog>
+
+      <Dialog
+        open={inviteModal !== null}
+        onOpenChange={(open) => { if (!open) setInviteModal(null) }}
+        title="Compartí el link de invitación"
+        description={inviteModal ? `Enviale este link a ${inviteModal.name} para que cree su contraseña y acceda a su cuenta.` : undefined}
+        headerBorder={false}
+        footer={
+          <div className="flex gap-2 justify-end">
+            <Button onClick={() => setInviteModal(null)}>Listo</Button>
+          </div>
+        }
+      >
+        {inviteModal && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <Input readOnly value={inviteModal.url} className="flex-1 text-xs" onFocus={(e) => e.currentTarget.select()} />
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(inviteModal.url)
+                  setModalCopied(true)
+                  setTimeout(() => setModalCopied(false), 2000)
+                }}
+              >
+                {modalCopied ? <><Check size={14} /> Copiado</> : <><Link size={14} /> Copiar</>}
+              </Button>
+            </div>
+            <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+              El link vence en 7 días. Podés volver a copiarlo desde la columna <strong>Estado</strong>{" "}
+              mientras la invitación siga pendiente.
+            </p>
+          </div>
+        )}
       </Dialog>
 
       <div className="flex items-start justify-between mb-6">
@@ -307,14 +358,13 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                           return
                         }
                         const data = await res.json()
-                        if (data.inviteUrl) {
-                          setPendingUrls((p) => ({ ...p, [user.id]: data.inviteUrl }))
-                          await navigator.clipboard.writeText(data.inviteUrl)
-                        }
+                        if (data.inviteUrl) setPendingUrls((p) => ({ ...p, [user.id]: data.inviteUrl }))
                         if (data.emailSent) {
+                          if (data.inviteUrl) await navigator.clipboard.writeText(data.inviteUrl)
                           toast({ title: "Invitación reenviada", description: `Mail enviado a ${user.email}. Link copiado.`, tone: "success" })
-                        } else {
-                          toast({ title: "Mail no pudo enviarse", description: "El link fue copiado al portapapeles.", tone: "warning" })
+                        } else if (data.inviteUrl) {
+                          // Sin servidor de mail: mostramos el link nuevo para compartir
+                          await openInviteModal(data.inviteUrl, user.name)
                         }
                         const listRes = await fetch("/api/admin/usuarios")
                         if (listRes.ok) setUsers(await listRes.json())
@@ -455,7 +505,7 @@ function InviteStatus({
             style={{ color: "var(--ink-soft)", background: "var(--elevated)" }}
           >
             <RefreshCw size={10} className={resending ? "animate-spin" : ""} />
-            {copied ? "¡Copiado!" : expired ? "Regenerar" : "Reenviar"}
+            {copied ? "¡Copiado!" : expired ? "Regenerar link" : "Obtener link"}
           </button>
         )}
       </div>

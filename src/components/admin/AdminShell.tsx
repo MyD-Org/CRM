@@ -40,9 +40,16 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
   // Antes de ausentarse o cerrar sesión, chequea si el operador tiene conversaciones
   // asignadas dentro de la ventana de 24hs y sin responder; si las hay, pide confirmación.
   async function guardAgainstPendingReplies(action: "away" | "logout"): Promise<boolean> {
-    const res = await fetch("/api/admin/inbox/contacts?scope=active")
-    if (!res.ok) return true
-    const contacts: InboxContact[] = await res.json()
+    let contacts: InboxContact[]
+    try {
+      const res = await fetch("/api/admin/inbox/contacts?scope=active")
+      if (!res.ok) return true
+      contacts = await res.json()
+    } catch {
+      // Fallo de red al chequear pendientes: no bloqueamos el logout/ausencia (fail-open),
+      // igual que cuando el server responde !ok. Evita un "Failed to fetch" no capturado.
+      return true
+    }
     const pending = contacts.filter((c) => c.assigned_operator_id === currentUserId && c.awaiting_reply)
     if (pending.length === 0) return true
 

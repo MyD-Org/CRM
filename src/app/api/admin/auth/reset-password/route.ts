@@ -4,6 +4,31 @@ import { getDb } from "@/db"
 import { adminUsers, adminPasswordTokens } from "@/db/schema"
 import { hashPassword, hashToken } from "@/lib/admin-crypto"
 
+// GET /api/admin/auth/reset-password?token=... — valida el token SIN consumirlo y
+// devuelve el email de la cuenta y el estado, para que la página muestre de qué cuenta
+// se trata y avise al instante si el link venció o ya fue usado.
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get("token")
+  if (!token) return NextResponse.json({ valid: false }, { status: 400 })
+
+  const db = getDb()
+  const tokenHash = hashToken(token)
+  const [row] = await db
+    .select({
+      email: adminUsers.email,
+      usedAt: adminPasswordTokens.usedAt,
+      expiresAt: adminPasswordTokens.expiresAt,
+    })
+    .from(adminPasswordTokens)
+    .innerJoin(adminUsers, eq(adminPasswordTokens.userId, adminUsers.id))
+    .where(eq(adminPasswordTokens.tokenHash, tokenHash))
+
+  if (!row) return NextResponse.json({ valid: false })
+  if (row.usedAt) return NextResponse.json({ valid: false, used: true })
+  if (row.expiresAt < new Date()) return NextResponse.json({ valid: false, expired: true })
+  return NextResponse.json({ valid: true, email: row.email })
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body?.token || !body?.password) {
