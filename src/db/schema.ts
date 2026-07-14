@@ -67,6 +67,25 @@ export const adminUsers = pgTable(
   (t) => [uniqueIndex("admin_users_email").on(t.email)],
 )
 
+// Catálogo de departamentos por tenant — se usa como fuente única para:
+// (a) el select del formulario de usuarios en el backoffice, y
+// (b) el catálogo de derivación que ai-api inyecta en el agente vía /api/internal/departments.
+// El valor guardado en admin_users.department y en conversation_assignments.department
+// referencia `key` (slug estable). `label` es el nombre visible y se puede renombrar
+// sin migrar datos. La lista es editable por tenant (no todos tienen "Cuentas Corrientes").
+export const departments = pgTable(
+  "departments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("departments_tenant_key").on(t.tenantId, t.key)],
+)
+
 // Tokens para recuperar contraseña e invitaciones (mismo flujo):
 // se genera un token aleatorio, se guarda el hash SHA-256, se envía el token plano por email.
 export const adminPasswordTokens = pgTable(

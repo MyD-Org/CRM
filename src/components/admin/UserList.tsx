@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2 } from "lucide-react"
 import { Button, Input, Field, Select, Badge, Alert, Avatar, Dialog, useToast } from "@myd-org/ui"
 
@@ -16,12 +16,9 @@ interface AdminUser {
   inviteAcceptedAt: Date | string | null
 }
 
-const DEPARTMENT_OPTIONS = [
-  { value: "", label: "Sin departamento" },
-  { value: "ventas", label: "Ventas" },
-  { value: "cuentas-corrientes", label: "Cuentas Corrientes" },
-  { value: "soporte", label: "Soporte" },
-]
+// Opción neutra que permite "quitar" el departamento del usuario. El resto de las
+// opciones se cargan desde /api/admin/departments (tabla por tenant).
+const NO_DEPARTMENT_OPTION = { value: "", label: "Sin departamento" }
 
 interface Props {
   initialUsers: AdminUser[]
@@ -47,6 +44,21 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   // Modal con el link de invitación para copiar y compartir (mientras no haya mail)
   const [inviteModal, setInviteModal] = useState<{ url: string; name: string } | null>(null)
   const [modalCopied, setModalCopied] = useState(false)
+  const [departments, setDepartments] = useState<{ key: string; label: string }[]>([])
+
+  useEffect(() => {
+    fetch("/api/admin/departments")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { key: string; label: string }[]) => setDepartments(data))
+      .catch(() => setDepartments([]))
+  }, [])
+
+  const departmentOptions = [
+    NO_DEPARTMENT_OPTION,
+    ...departments.map((d) => ({ value: d.key, label: d.label })),
+  ]
+  const departmentLabel = (key: string | null) =>
+    key ? departments.find((d) => d.key === key)?.label ?? key : null
 
   async function openInviteModal(url: string, name: string) {
     setInviteModal({ url, name })
@@ -251,7 +263,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                 <Select
                   value={form.department}
                   onValueChange={(v) => setForm((p) => ({ ...p, department: v }))}
-                  options={DEPARTMENT_OPTIONS}
+                  options={departmentOptions}
                 />
               </Field>
             </div>
@@ -316,12 +328,12 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                       <Select
                         value={editForm.department}
                         onValueChange={(v) => setEditForm((p) => ({ ...p, department: v }))}
-                        options={DEPARTMENT_OPTIONS}
+                        options={departmentOptions}
                         className="w-44"
                       />
                     ) : (
                       <span className="text-sm" style={{ color: user.department ? "var(--ink)" : "var(--ink-faint)" }}>
-                        {DEPARTMENT_OPTIONS.find((d) => d.value === user.department)?.label ?? "—"}
+                        {departmentLabel(user.department) ?? "—"}
                       </span>
                     )}
                   </td>
