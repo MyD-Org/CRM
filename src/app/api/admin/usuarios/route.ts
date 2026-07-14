@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { Resend } from "resend"
 import { getDb } from "@/db"
 import { adminUsers, adminPasswordTokens, tenants } from "@/db/schema"
@@ -120,12 +120,11 @@ export async function POST(req: NextRequest) {
 
   const { sent: emailSent, errorMsg: emailError } = await trySendInviteEmail({ tenant, user, role: body.role, inviteUrl })
 
-  // El token crudo viaja SOLO por email. En prod no se devuelve en el body (evita
-  // filtrarlo por logs/red); si el email falla, el admin usa el botón de reenvío.
-  // En dev sí se expone para poder copiar el link sin servidor de mail configurado.
-  const isProd = process.env.NODE_ENV === "production"
+  // Devolvemos el inviteUrl siempre (también en prod): mientras no haya servidor de
+  // mail configurado, el superadmin copia el link desde la UI y lo comparte a mano.
+  // La respuesta viaja por HTTPS al superadmin autenticado que crea la invitación.
   return NextResponse.json(
-    { id: user.id, ok: true, emailSent, emailError, ...(isProd ? {} : { inviteUrl }) },
+    { id: user.id, ok: true, emailSent, emailError, inviteUrl },
     { status: 201 },
   )
 }
