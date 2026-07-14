@@ -35,7 +35,7 @@ export default async function UsuariosPage() {
   const userList = users.map((u) => ({ ...u, hasPassword: !!u.passwordHash, passwordHash: undefined }))
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <UserList initialUsers={userList} currentUserId={session.userId} currentRole={session.role} />
     </div>
   )

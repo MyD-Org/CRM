@@ -112,7 +112,7 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
         </Link>
       )}
     >
-      <div className="flex justify-end px-6 pt-4">
+      <div className="flex justify-end px-4 md:px-6 pt-4">
         <AvailabilityToggle
           initial={availability}
           onBeforeAway={() => guardAgainstPendingReplies("away")}

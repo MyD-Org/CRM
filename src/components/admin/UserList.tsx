@@ -216,7 +216,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
         >
           <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--ink)" }}>Invitar nuevo usuario</h2>
           <form onSubmit={handleCreate} className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Nombre">
                 <Input
                   type="text"
@@ -236,7 +236,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Rol">
                 <Select
                   value={form.role}

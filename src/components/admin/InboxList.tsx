@@ -109,7 +109,7 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
             <Link
               key={c.end_user_id}
               href={`/admin/inbox/c/${c.end_user_id}`}
-              className="flex items-center gap-4 px-4 py-3 rounded-[var(--radius)] transition-colors hover:opacity-90 overflow-hidden"
+              className="flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 rounded-[var(--radius)] transition-colors hover:opacity-90 overflow-hidden"
               style={{
                 background: c.awaiting_reply ? "var(--amber-soft)" : "var(--card)",
                 border: `1px solid ${c.awaiting_reply ? "var(--amber)" : "var(--border)"}`,
@@ -211,7 +211,9 @@ function WindowBadge({ within }: { within: boolean }) {
   return (
     <Badge tone={within ? "success" : "neutral"} className="flex items-center gap-1 shrink-0">
       <Clock size={10} />
-      {within ? "Ventana abierta" : "Ventana cerrada"}
+      {/* En mobile abreviamos ("Abierta"/"Cerrada") para no comerle ancho a la fila. */}
+      <span className="md:hidden">{within ? "Abierta" : "Cerrada"}</span>
+      <span className="hidden md:inline">{within ? "Ventana abierta" : "Ventana cerrada"}</span>
     </Badge>
   )
 }

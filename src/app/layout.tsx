@@ -1,6 +1,13 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { getTenantConfig } from "@/lib/tenant-context"
 import "./globals.css"
+
+// Sin esto, los navegadores mobile renderizan a ~980px y achican todo (hay que hacer
+// pinch-zoom). Con device-width el layout responsive del CRM funciona en el celular.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   try {

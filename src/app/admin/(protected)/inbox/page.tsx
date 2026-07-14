@@ -37,8 +37,8 @@ export default async function InboxPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="p-4 md:p-6">
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
