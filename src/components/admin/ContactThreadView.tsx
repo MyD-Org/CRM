@@ -354,8 +354,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                   disabled={!convId}
                   className="flex items-center gap-1.5 rounded-full"
                 >
-                  <Bot size={11} />
-                  Bot activo · Asignarme
+                  {botEnabled ? <Bot size={11} /> : <User size={11} />}
+                  {botEnabled ? "Bot activo · Asignarme" : "Sin asignar · Asignarme"}
                 </Button>
               )}
 
