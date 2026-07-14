@@ -22,8 +22,9 @@ export async function GET(req: Request) {
 
   // Reconcilia la cola en cada poll: adopta asignaciones viejas y reparte pendientes al
   // operador disponible menos cargado. Best-effort (no rompe el listado). Ver ADR 0006.
-  await assignPendingConversations(tenantRef)
+  // Reutilizamos las conversaciones que trajo la reconciliación para no re-consultarlas.
+  const convs = await assignPendingConversations(tenantRef)
 
-  const enriched = await listEnrichedContacts(tenantRef, scope)
+  const enriched = await listEnrichedContacts(tenantRef, scope, convs)
   return NextResponse.json(enriched)
 }

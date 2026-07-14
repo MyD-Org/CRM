@@ -110,26 +110,33 @@ export function pickLeastLoaded(candidates: Operator[], load: Map<string, number
  * departamento (o de todos, si no tiene depto). Best-effort: errores no rompen el inbox.
  * Se llama al cargar el inbox, al pollear contactos y al ponerse un operador disponible.
  * Ver ADR 0006 (disparador "el CRM la levanta de la cola").
+ *
+ * Devuelve las conversaciones que usó (o null si no se pudieron traer) para que el caller las
+ * reutilice y no re-consulte a ai-api (ej. el listado de contactos que corre justo después).
+ * Acepta `convs` ya traídas para el caso inverso.
  */
 export async function assignPendingConversations(tenant: {
   id: string
   aiApiUrl: string
   aiTenantId: string
-}): Promise<void> {
-  let convs: InboxConversation[]
-  try {
-    convs = await listConversations(tenant.aiApiUrl, tenant.aiTenantId)
-  } catch {
-    return
+}, convs?: InboxConversation[]): Promise<InboxConversation[] | null> {
+  let list = convs
+  if (!list) {
+    try {
+      list = await listConversations(tenant.aiApiUrl, tenant.aiTenantId)
+    } catch {
+      return null
+    }
   }
+  const convsList = list
 
   const assignments = await getAssignments(tenant.id)
   const assignedConvIds = new Set(assignments.map((a) => a.conversationId))
-  const activeConvIds = new Set(convs.filter((c) => c.status !== "closed").map((c) => c.id))
+  const activeConvIds = new Set(convsList.filter((c) => c.status !== "closed").map((c) => c.id))
 
   // Migración transparente: conversaciones que ai-api ya tenía asignadas pero el CRM no.
   // Las adoptamos a la DB del CRM sin tocar ai-api. Una sola vez por conversación.
-  for (const conv of convs) {
+  for (const conv of convsList) {
     if (conv.assigned_operator_id && !assignedConvIds.has(conv.id) && conv.status !== "closed") {
       try {
         await assignInCrm(tenant.id, conv.id, conv.assigned_operator_id, conv.assigned_department ?? null)
@@ -141,10 +148,10 @@ export async function assignPendingConversations(tenant: {
     }
   }
 
-  const pending = convs.filter(
+  const pending = convsList.filter(
     (c) => c.mode === "human" && c.status !== "closed" && !assignedConvIds.has(c.id),
   )
-  if (!pending.length) return
+  if (!pending.length) return convsList
 
   const load = loadFromAssignments(assignments, activeConvIds)
   // Cache de operadores disponibles por departamento (incl. "" = todos) para no re-consultar.
@@ -167,4 +174,5 @@ export async function assignPendingConversations(tenant: {
       // best-effort: si falla la asignación de una, seguimos con las demás
     }
   }
+  return convsList
 }
