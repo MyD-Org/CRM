@@ -6,6 +6,7 @@ import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { listContacts, getBotStatus } from "@/lib/inbox-api"
 import { assignPendingConversations } from "@/lib/assignment"
+import { botKillSwitchVisible } from "@/lib/flags"
 import { InboxList } from "@/components/admin/InboxList"
 import { BotKillSwitch } from "@/components/admin/BotKillSwitch"
 
@@ -33,6 +34,8 @@ export default async function InboxPage() {
     }
   }
 
+  const showBotSwitch = await botKillSwitchVisible()
+
   return (
     <div className="p-6">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -40,7 +43,7 @@ export default async function InboxPage() {
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
-        {!configError && <BotKillSwitch initialEnabled={botEnabled} />}
+        {!configError && showBotSwitch && <BotKillSwitch initialEnabled={botEnabled} />}
       </div>
 
       {configError ? (
