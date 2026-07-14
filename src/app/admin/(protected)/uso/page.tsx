@@ -35,7 +35,7 @@ export default async function UsoPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="mb-6">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Uso del bot</h1>
         <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>

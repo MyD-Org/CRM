@@ -254,7 +254,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           }
         >
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Nombre de la lista">
                 <Input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="ej: Cables en general" />
               </Field>

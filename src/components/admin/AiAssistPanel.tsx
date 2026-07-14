@@ -84,7 +84,10 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
 
   return (
     <aside
-      className="flex flex-col h-full shrink-0"
+      // Desktop (md+): panel lateral en flujo de ancho arrastrable (la conversación se achica).
+      // Mobile (< md): overlay full-screen (fixed inset-0) para no aplastar la conversación; el
+      //   `!w-full` (con !important) pisa el `width` inline del arrastre, que no aplica al tacto.
+      className="flex flex-col h-full shrink-0 max-md:fixed max-md:inset-0 max-md:z-40 max-md:!w-full max-md:border-l-0"
       style={{ width, background: "var(--card)", borderLeft: "1px solid var(--border)" }}
     >
       <div

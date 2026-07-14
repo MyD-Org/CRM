@@ -119,8 +119,8 @@ nav[aria-label="Navegación principal"] .bg-primary-soft {
 
 /* Mismo glow radial del login (app/admin/(auth)/layout.tsx), aplicado al wrapper
    raíz del SideNav. Selector específico para no afectar a FileDropZone, que
-   también usa bg-bg pero sin h-screen/overflow-hidden. */
-.flex.h-screen.overflow-hidden.bg-bg {
+   también usa bg-bg pero sin h-dvh/overflow-hidden. */
+.flex.h-dvh.overflow-hidden.bg-bg {
   background-image: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(31, 140, 255, 0.18) 0%, transparent 70%);
 }
 

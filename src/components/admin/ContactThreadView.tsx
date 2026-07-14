@@ -296,9 +296,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     <div className="flex h-full">
       {/* Columna principal: la conversación. Se achica cuando el copiloto está abierto. */}
       <div className="flex flex-col h-full flex-1 min-w-0">
-      {/* Header */}
+      {/* Header. En mobile envuelve (flex-wrap) para que las acciones bajen a otra línea en vez
+          de desbordar, y deja padding-left para el botón hamburguesa flotante del SideNav. */}
       <div
-        className="flex items-center gap-3 px-5 py-3 shrink-0"
+        className="flex items-center gap-3 px-3 md:px-5 py-3 shrink-0 flex-wrap gap-y-2"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)" }}
       >
         <Link href="/admin/inbox">
@@ -317,7 +318,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end ml-auto">
           {/* Dueño actual (informativo, va primero): quién tiene asignada la conversación
               cuando la tiene otro operador. El botón para tomarla va con las demás acciones. */}
           {mode === "human" && assignedOperatorId !== currentUserId && contact.assigned_operator_name && (
@@ -445,7 +446,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
               role="separator"
               aria-orientation="horizontal"
               aria-label="Redimensionar área de escritura"
-              className="flex items-center justify-center cursor-row-resize group"
+              className="flex items-center justify-center cursor-row-resize group max-md:hidden"
               style={{ height: 12 }}
             >
               <div
@@ -484,7 +485,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           role="separator"
           aria-orientation="vertical"
           aria-label="Redimensionar panel del asistente"
-          className="shrink-0 cursor-col-resize transition-colors"
+          className="shrink-0 cursor-col-resize transition-colors max-md:hidden"
           style={{ width: 5, background: "var(--border)" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--blue)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--border)")}
@@ -553,7 +554,7 @@ function MessageBubble({ message, onRetry }: { message: ContactMessage; onRetry:
 
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[70%]">
+      <div className="max-w-[85%] md:max-w-[70%]">
         {isOutbound && (
           <p className="text-[10px] mb-1 text-right" style={{ color: "var(--ink-faint)" }}>
             {isHuman ? "Operador" : isBot ? "Bot" : "Asistente"}
