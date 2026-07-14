@@ -6,7 +6,7 @@ import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { getContact, getContactMessages } from "@/lib/inbox-api"
-import { operatorNamesByIds } from "@/lib/operator-names"
+import { enrichContact } from "@/lib/inbox-contacts"
 import { ContactThreadView } from "@/components/admin/ContactThreadView"
 
 export const dynamic = "force-dynamic"
@@ -34,11 +34,11 @@ export default async function ContactThreadPage({ params }: { params: Promise<{ 
   if (!result) notFound()
   const [contact, page] = result
 
-  const nameById = await operatorNamesByIds([contact.assigned_operator_id])
-  const enrichedContact = {
-    ...contact,
-    assigned_operator_name: contact.assigned_operator_id ? nameById.get(contact.assigned_operator_id) ?? null : null,
-  }
+  // Operador (fuente de verdad: CRM) + departamento (de ai-api).
+  const enrichedContact = await enrichContact(
+    { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId },
+    contact,
+  )
 
   return <ContactThreadView contact={enrichedContact} initialPage={page} currentUserId={session.userId} />
 }

@@ -126,7 +126,7 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
                   <p className="text-sm font-medium truncate" style={{ color: "var(--ink)" }}>
                     {c.contact}
                   </p>
-                  <ModeChip mode={c.mode} operatorName={c.assigned_operator_name ?? null} />
+                  <ModeChip mode={c.mode} operatorName={c.assigned_operator_name ?? null} department={c.assigned_department ?? null} />
                   {c.awaiting_reply && (
                     <Badge tone="warning" className="flex items-center gap-1 shrink-0">
                       <MessageCircleWarning size={9} />
@@ -155,7 +155,16 @@ export function InboxList({ initialContacts, currentUserId }: Props) {
   )
 }
 
-function ModeChip({ mode, operatorName }: { mode: string; operatorName: string | null }) {
+const DEPARTMENT_LABELS: Record<string, string> = {
+  ventas: "Ventas",
+  "cuentas-corrientes": "Cuentas Corrientes",
+  soporte: "Soporte",
+}
+function departmentLabel(dept: string): string {
+  return DEPARTMENT_LABELS[dept] ?? dept
+}
+
+function ModeChip({ mode, operatorName, department }: { mode: string; operatorName: string | null; department: string | null }) {
   if (mode !== "human") {
     return (
       <Badge tone="info" className="flex items-center gap-1">
@@ -165,7 +174,7 @@ function ModeChip({ mode, operatorName }: { mode: string; operatorName: string |
     )
   }
   // En modo humano nunca mostramos el genérico "Humano": o el operador asignado, o un
-  // "Sin asignar" en alerta para que se vea que esa conversación necesita dueño.
+  // "Sin asignar" en alerta que además indica a qué departamento está esperando (si lo hay).
   return operatorName
     ? (
       <Badge tone="success" className="flex items-center gap-1">
@@ -176,7 +185,7 @@ function ModeChip({ mode, operatorName }: { mode: string; operatorName: string |
     : (
       <Badge tone="warning" className="flex items-center gap-1">
         <User size={9} />
-        Sin asignar
+        {department ? `Esperando ${departmentLabel(department)}` : "Sin asignar"}
       </Badge>
     )
 }

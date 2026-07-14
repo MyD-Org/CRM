@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
-import { listContacts } from "@/lib/inbox-api"
-import { operatorNamesByIds } from "@/lib/operator-names"
+import { assignPendingConversations } from "@/lib/assignment"
+import { listEnrichedContacts } from "@/lib/inbox-contacts"
 
 export async function GET(req: Request) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
@@ -18,12 +18,12 @@ export async function GET(req: Request) {
   }
 
   const scope = new URL(req.url).searchParams.get("scope") === "all" ? "all" : "active"
-  const contacts = await listContacts(tenant.aiApiUrl, tenant.aiTenantId, scope)
+  const tenantRef = { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId }
 
-  const nameById = await operatorNamesByIds(contacts.map((c) => c.assigned_operator_id))
-  const enriched = contacts.map((c) => ({
-    ...c,
-    assigned_operator_name: c.assigned_operator_id ? nameById.get(c.assigned_operator_id) ?? null : null,
-  }))
+  // Reconcilia la cola en cada poll: adopta asignaciones viejas y reparte pendientes al
+  // operador disponible menos cargado. Best-effort (no rompe el listado). Ver ADR 0006.
+  await assignPendingConversations(tenantRef)
+
+  const enriched = await listEnrichedContacts(tenantRef, scope)
   return NextResponse.json(enriched)
 }

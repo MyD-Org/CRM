@@ -239,3 +239,29 @@ export const notificationLog = pgTable(
     uniqueIndex("nl_dedup").on(t.tenantId, t.codigocliente, t.facturaId, t.type, t.channel),
   ],
 )
+
+// Asignación conversación → operador, DUEÑA en el CRM (no en ai-api). Ver ADR 0006.
+// El bot de ai-api solo etiqueta el departamento y deriva a humano sin dueño; el CRM
+// decide y persiste acá qué operador atiende cada conversación, para que no se mezclen.
+// El unique(tenant, conversation) garantiza un único operador por conversación.
+export const conversationAssignments = pgTable(
+  "conversation_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    // conversationId es el UUID opaco de la conversación en ai-api.
+    conversationId: text("conversation_id").notNull(),
+    operatorId: uuid("operator_id")
+      .notNull()
+      .references(() => adminUsers.id, { onDelete: "cascade" }),
+    // Snapshot informativo del depto al que se ruteó el handoff (viene de ai-api).
+    department: text("department"),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("ca_tenant_conversation").on(t.tenantId, t.conversationId),
+    index("ca_tenant_operator").on(t.tenantId, t.operatorId),
+  ],
+)

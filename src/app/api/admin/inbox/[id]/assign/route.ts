@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
-import { assignConversation, listConversations } from "@/lib/inbox-api"
-import { availableOperators, loadMapOf, pickLeastLoaded } from "@/lib/assignment"
+import { listConversations } from "@/lib/inbox-api"
+import { assignInCrm, availableOperators, getAssignments, loadFromAssignments, pickLeastLoaded } from "@/lib/assignment"
 
 // POST /api/admin/inbox/:id/assign
 //
@@ -31,11 +31,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let targetOperatorId: string
 
+  // Depto de la conversación (lo etiquetó el bot en ai-api): lo usamos para elegir
+  // candidatos y para guardarlo como snapshot en la asignación del CRM.
+  const convs = await listConversations(tenant.aiApiUrl, tenant.aiTenantId).catch(() => [])
+  const conv = convs.find((c) => c.id === id)
+  const convDepartment = conv?.assigned_department ?? null
+
   if (typeof body.operatorId === "string" && body.operatorId.trim()) {
     targetOperatorId = body.operatorId.trim()
   } else if (body.strategy === "least-loaded") {
     // Mismo criterio que la reconciliación automática (ADR 0006): operadores DISPONIBLES
-    // del depto + menos cargado. Lógica compartida en lib/assignment.ts.
+    // del depto + menos cargado. La carga se cuenta desde la DB del CRM (fuente de verdad).
     const operators = await availableOperators(session.tenantId, body.department ?? null)
     if (!operators.length) {
       const reason = body.department
@@ -44,8 +50,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: reason }, { status: 404 })
     }
 
-    const convs = await listConversations(tenant.aiApiUrl, tenant.aiTenantId)
-    const chosen = pickLeastLoaded(operators, loadMapOf(convs))
+    const assignments = await getAssignments(session.tenantId)
+    const activeConvIds = new Set(convs.filter((c) => c.status !== "closed").map((c) => c.id))
+    const chosen = pickLeastLoaded(operators, loadFromAssignments(assignments, activeConvIds))
     targetOperatorId = chosen!.id
   } else {
     return NextResponse.json(
@@ -54,6 +61,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
-  await assignConversation(tenant.aiApiUrl, tenant.aiTenantId, id, targetOperatorId)
+  await assignInCrm(session.tenantId, id, targetOperatorId, body.department ?? convDepartment)
   return NextResponse.json({ ok: true, assigned_operator_id: targetOperatorId })
 }
