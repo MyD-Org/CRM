@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User, AlertTriangle, RefreshCw } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
@@ -270,6 +270,27 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
     }
   }
 
+  async function handleRetry(message: ContactMessage): Promise<boolean> {
+    const res = await fetch(`/api/admin/inbox/${message.conversation_id}/messages/${message.id}/retry`, {
+      method: "POST",
+    })
+    if (res.ok) {
+      // Entregado: sacamos la marca de "no entregado" de esa burbuja.
+      setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, delivery_status: null } : m))
+      toast({ title: "Mensaje reenviado", description: "El cliente ya lo recibió.", tone: "success" })
+      return true
+    }
+    const body = await res.json().catch(() => ({}))
+    toast({
+      title: "No se pudo reenviar",
+      description: body.error === "window_closed"
+        ? "La ventana de 24h está cerrada. El cliente debe escribirte primero."
+        : "Intentá de nuevo en unos segundos.",
+      tone: "danger",
+    })
+    return false
+  }
+
   return (
     <div className="flex h-full">
       {/* Columna principal: la conversación. Se achica cuando el copiloto está abierto. */}
@@ -385,7 +406,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId }: Props
           return (
             <div key={msg.id} className="flex flex-col gap-3">
               {newSession && <SessionDivider date={msg.created_at} />}
-              <MessageBubble message={msg} />
+              <MessageBubble message={msg} onRetry={handleRetry} />
             </div>
           )
         })}
@@ -509,10 +530,17 @@ function SessionDivider({ date }: { date: string }) {
   )
 }
 
-function MessageBubble({ message }: { message: ContactMessage }) {
+function MessageBubble({ message, onRetry }: { message: ContactMessage; onRetry: (m: ContactMessage) => Promise<boolean> }) {
   const isOutbound = message.role === "assistant"
   const isHuman = message.source === "human"
   const isBot = message.source === "bot"
+  const failed = message.delivery_status === "failed"
+  const [retrying, setRetrying] = useState(false)
+
+  async function retry() {
+    setRetrying(true)
+    try { await onRetry(message) } finally { setRetrying(false) }
+  }
 
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
@@ -527,14 +555,32 @@ function MessageBubble({ message }: { message: ContactMessage }) {
           style={{
             background: isOutbound ? (isHuman ? "var(--green)" : "var(--blue)") : "var(--card)",
             color: isOutbound ? "#fff" : "var(--ink)",
-            border: isOutbound ? "none" : "1px solid var(--border)",
+            border: failed ? "1px solid var(--color-danger)" : isOutbound ? "none" : "1px solid var(--border)",
+            opacity: failed ? 0.85 : 1,
           }}
         >
           {message.text}
         </div>
-        <p className="text-[10px] mt-1" style={{ color: "var(--ink-faint)", textAlign: isOutbound ? "right" : "left" }}>
-          {formatTime(message.created_at)}
-        </p>
+        {failed ? (
+          <div className="flex items-center gap-2 mt-1 justify-end">
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-danger)" }}>
+              <AlertTriangle size={11} /> No entregado al cliente
+            </span>
+            <button
+              onClick={retry}
+              disabled={retrying}
+              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
+              style={{ color: "var(--blue)", background: "var(--blue-soft)" }}
+            >
+              <RefreshCw size={10} className={retrying ? "animate-spin" : ""} />
+              {retrying ? "Reenviando..." : "Reintentar"}
+            </button>
+          </div>
+        ) : (
+          <p className="text-[10px] mt-1" style={{ color: "var(--ink-faint)", textAlign: isOutbound ? "right" : "left" }}>
+            {formatTime(message.created_at)}
+          </p>
+        )}
       </div>
     </div>
   )

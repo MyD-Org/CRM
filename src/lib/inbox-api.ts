@@ -67,6 +67,8 @@ export interface InboxContact {
 // Mensaje dentro del thread mergeado del contacto: trae conversation_id para los divisores.
 export interface ContactMessage extends InboxMessage {
   conversation_id: string
+  // 'failed' = el envío al canal (WhatsApp/IG) falló → el cliente no lo recibió. null = OK.
+  delivery_status?: string | null
 }
 
 export interface ContactMessagesPage {
@@ -210,6 +212,24 @@ export async function setMode(
     body: JSON.stringify({ mode, ...(operatorName ? { operatorName } : {}) }),
   })
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+}
+
+// Reintenta la entrega de una burbuja saliente que quedó 'failed'. Devuelve ok o el motivo
+// (p.ej. window_closed) para mostrarlo en el inbox.
+export async function retryMessage(
+  aiApiUrl: string,
+  aiTenantId: string,
+  conversationId: string,
+  messageId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await inboxFetch(
+    aiApiUrl, aiTenantId,
+    `/v1/inbox/conversations/${conversationId}/messages/${messageId}/retry`,
+    { method: "POST" },
+  )
+  if (res.ok) return { ok: true }
+  const body = await res.json().catch(() => ({}))
+  return { ok: false, error: body.error ?? "send_failed" }
 }
 
 // Nota: la asignación de operador YA NO se guarda en ai-api. El CRM es la fuente de verdad
