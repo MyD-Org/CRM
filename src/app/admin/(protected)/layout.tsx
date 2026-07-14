@@ -6,6 +6,7 @@ import { getDb } from "@/db"
 import { adminUsers } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { getTenantByIdFromDb } from "@/lib/tenants"
+import { botUsagePanelEnabled } from "@/lib/flags"
 import { AdminShell } from "@/components/admin/AdminShell"
 
 export default async function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,8 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
     .where(eq(adminUsers.id, session.userId))
   const availability = me?.availability === "available" ? "available" : "away"
 
+  const usagePanelEnabled = await botUsagePanelEnabled()
+
   return (
     <AdminShell
       name={session.name}
@@ -29,6 +32,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       tenantName={tenant?.name}
       availability={availability}
       currentUserId={session.userId}
+      usagePanelEnabled={usagePanelEnabled}
     >
       {children}
     </AdminShell>

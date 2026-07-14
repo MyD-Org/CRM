@@ -35,6 +35,17 @@ export const aiChatEnabled = flag<boolean>({
   decide: () => process.env.AI_CHAT_ENABLED === "true",
 })
 
+// Panel de gasto del bot ("Uso del bot") en el admin. Apagado por default: la feature
+// va a migrar al proyecto ia-dashboard; queda gateada en el CRM hasta entonces. Activar
+// con BOT_USAGE_PANEL_ENABLED=true.
+export const botUsagePanelEnabled = flag<boolean>({
+  key: "bot-usage-panel-enabled",
+  defaultValue: false,
+  description: "Muestra el panel de gasto/uso del bot en el admin (migrará a ia-dashboard)",
+  origin: "https://vercel.com/docs/workflow-collaboration/feature-flags",
+  decide: () => process.env.BOT_USAGE_PANEL_ENABLED === "true",
+})
+
 // Gate del toggle global del bot en el inbox del admin.
 // En prod: conectar un provider (Edge Config) y armar reglas por user.id en el dashboard.
 // En dev/fallback: allowlist local en BOT_KILL_SWITCH_USER_IDS (IDs separados por coma).

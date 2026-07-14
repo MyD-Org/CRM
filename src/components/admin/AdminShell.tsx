@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { MessageSquare, Users, LogOut, Package } from "lucide-react"
+import { MessageSquare, Users, LogOut, Package, BarChart3 } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
 import { AvailabilityToggle } from "./AvailabilityToggle"
 import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
@@ -18,16 +18,19 @@ interface AdminShellProps {
   tenantName?: string
   availability: "available" | "away"
   currentUserId: string
+  usagePanelEnabled?: boolean
   children: React.ReactNode
 }
 
+// `flag`: entradas gateadas por feature flag (evaluado server-side y pasado por prop).
 const NAV = [
   { href: "/admin/inbox", label: "Inbox", icon: <MessageSquare size={16} strokeWidth={1.6} /> },
+  { href: "/admin/uso", label: "Uso del bot", icon: <BarChart3 size={16} strokeWidth={1.6} />, superadminOnly: true, flag: "usagePanel" as const },
   { href: "/admin/catalogo", label: "Catálogo", icon: <Package size={16} strokeWidth={1.6} />, superadminOnly: true },
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
 ]
 
-export function AdminShell({ name, email, role, logoSrc, tenantName, availability, currentUserId, children }: AdminShellProps) {
+export function AdminShell({ name, email, role, logoSrc, tenantName, availability, currentUserId, usagePanelEnabled, children }: AdminShellProps) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -62,7 +65,11 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
     router.push("/admin/login")
   }
 
-  const visibleNav = NAV.filter((item) => !item.superadminOnly || role === "superadmin")
+  const visibleNav = NAV.filter((item) => {
+    if (item.superadminOnly && role !== "superadmin") return false
+    if (item.flag === "usagePanel" && !usagePanelEnabled) return false
+    return true
+  })
 
   const logo = logoSrc ? (
     <div className="flex flex-col gap-1">
