@@ -18,6 +18,7 @@
   "dependencies": {
     "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.5.tgz",
     "@myd-org/ui": "file:vendor/myd-org-ui-0.4.0.tgz",
+    "@sentry/nextjs": "^10.65.0",
     "@vercel/flags": "^3.1.1",
     "drizzle-orm": "^0.45.2",
     "iron-session": "^8.0.4",
