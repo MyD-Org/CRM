@@ -1,4 +1,4 @@
-import { listContacts, listConversations, type InboxContact } from "./inbox-api"
+import { listContacts, listConversations, type InboxContact, type InboxConversation } from "./inbox-api"
 import { getAssignments } from "./assignment"
 import { operatorNamesByIds } from "./operator-names"
 
@@ -6,13 +6,16 @@ import { operatorNamesByIds } from "./operator-names"
 // - assigned_operator_id / _name → de conversation_assignments (Neon), NO de ai-api.
 // - assigned_department → del handoff que etiqueta el bot en ai-api (listConversations).
 // No dispara reconciliación: los callers la corren antes según su disparador (ADR 0006).
+// Acepta `convs` ya traídas (ej. las que devuelve assignPendingConversations) para no
+// re-consultar listConversations a ai-api en el mismo request.
 export async function listEnrichedContacts(
   tenant: { id: string; aiApiUrl: string; aiTenantId: string },
   scope: "active" | "all" = "active",
+  convs?: InboxConversation[] | null,
 ): Promise<InboxContact[]> {
   const [contacts, conversations, assignments] = await Promise.all([
     listContacts(tenant.aiApiUrl, tenant.aiTenantId, scope),
-    listConversations(tenant.aiApiUrl, tenant.aiTenantId).catch(() => []),
+    convs ?? listConversations(tenant.aiApiUrl, tenant.aiTenantId).catch(() => []),
     getAssignments(tenant.id),
   ])
 

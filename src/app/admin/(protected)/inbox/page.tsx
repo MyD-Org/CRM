@@ -27,8 +27,9 @@ export default async function InboxPage() {
     try {
       // Levanta de la cola las conversaciones derivadas sin operador y les asigna el
       // menos cargado del depto antes de listar. Best-effort (no rompe el inbox). ADR 0006.
-      await assignPendingConversations(tenantRef)
-      contacts = await listEnrichedContacts(tenantRef, "active")
+      // Reutilizamos las conversaciones que trajo la reconciliación para no re-consultarlas.
+      const convs = await assignPendingConversations(tenantRef)
+      contacts = await listEnrichedContacts(tenantRef, "active", convs)
       botEnabled = await getBotStatus(tenant.aiApiUrl, tenant.aiTenantId)
     } catch {
       configError = "No se pudo conectar con la API. Verificá la configuración."
