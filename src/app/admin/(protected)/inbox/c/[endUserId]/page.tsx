@@ -5,7 +5,7 @@ import { notFound } from "next/navigation"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
-import { getContact, getContactMessages } from "@/lib/inbox-api"
+import { getContact, getContactMessages, getBotStatus } from "@/lib/inbox-api"
 import { enrichContact } from "@/lib/inbox-contacts"
 import { ContactThreadView } from "@/components/admin/ContactThreadView"
 
@@ -39,6 +39,8 @@ export default async function ContactThreadPage({ params }: { params: Promise<{ 
     { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId },
     contact,
   )
+  // Estado del kill switch: si el bot está pausado, el footer no dice "el bot responde".
+  const botEnabled = await getBotStatus(tenant.aiApiUrl, tenant.aiTenantId).catch(() => true)
 
-  return <ContactThreadView contact={enrichedContact} initialPage={page} currentUserId={session.userId} />
+  return <ContactThreadView contact={enrichedContact} initialPage={page} currentUserId={session.userId} botEnabled={botEnabled} />
 }
