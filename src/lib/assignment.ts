@@ -20,18 +20,36 @@ export interface Assignment {
   department: string | null
 }
 
-/** Operadores DISPONIBLES (presencia + cuenta activa) del tenant, opcionalmente de un depto. */
+// Canonicaliza un departamento para comparar sin importar formato: el CRM guarda slugs
+// ("ventas", "cuentas-corrientes") pero el bot rutea el handoff con la etiqueta que genera
+// el modelo ("Ventas", "Cuentas Corrientes"). Normalizamos a minúscula, sin acentos y con
+// guiones para que matcheen. Así "Cuentas Corrientes" ≡ "cuentas-corrientes".
+export function normalizeDepartment(d: string | null | undefined): string {
+  return (d ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-")
+}
+
+/**
+ * Operadores DISPONIBLES (presencia + cuenta activa) del tenant, opcionalmente de un depto.
+ * El match de departamento es tolerante al formato (ver normalizeDepartment): el filtro por
+ * depto se hace en memoria porque el valor que llega del handoff puede venir como etiqueta.
+ */
 export async function availableOperators(tenantId: string, department?: string | null): Promise<Operator[]> {
-  const conditions = [
-    eq(adminUsers.tenantId, tenantId),
-    isNotNull(adminUsers.passwordHash),
-    eq(adminUsers.availability, "available"),
-  ]
-  if (department) conditions.push(eq(adminUsers.department, department))
-  return getDb()
+  const rows = await getDb()
     .select({ id: adminUsers.id, department: adminUsers.department })
     .from(adminUsers)
-    .where(and(...conditions))
+    .where(and(
+      eq(adminUsers.tenantId, tenantId),
+      isNotNull(adminUsers.passwordHash),
+      eq(adminUsers.availability, "available"),
+    ))
+  if (!department) return rows
+  const target = normalizeDepartment(department)
+  return rows.filter((op) => normalizeDepartment(op.department) === target)
 }
 
 /** Todas las asignaciones persistidas del tenant (CRM es la fuente de verdad). */
