@@ -71,6 +71,13 @@
       "when": 1784049870879,
       "tag": "0009_lonely_silver_surfer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784067555170,
+      "tag": "0010_white_cobalt_man",
+      "breakpoints": true
     }
   ]
 }
