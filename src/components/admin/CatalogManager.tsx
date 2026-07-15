@@ -191,8 +191,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
   return (
     <div className="space-y-4">
 
-      {/* Sincronización con Alegra (catálogo cacheado: productos, precios, categorías) — oculto de la UI */}
-      {false && (
+      {/* Sincronización con Alegra (catálogo cacheado: productos, precios, categorías) */}
       <div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--card)" }}>
         <div className="flex items-center justify-between px-5 py-4">
           <div>
@@ -207,7 +206,6 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           </Button>
         </div>
       </div>
-      )}
 
       {/* Dialog de confirmación de eliminación */}
       <Dialog
