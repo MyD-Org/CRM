@@ -7,6 +7,10 @@ import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { getTenantByIdFromDb } from "@/lib/tenants"
 import { syncCatalog } from "@/lib/alegra-sync"
 
+// Catálogos grandes pueden necesitar varias tandas de páginas a Alegra (30 items/página,
+// tope de la API). El default de la plataforma no alcanzaba y la sync daba 504.
+export const maxDuration = 300
+
 // POST: dispara una sincronización manual del catálogo con Alegra (botón del admin).
 export async function POST() {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)

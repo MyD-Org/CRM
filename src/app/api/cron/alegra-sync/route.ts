@@ -4,6 +4,9 @@ import { getTenantByIdFromDb } from "@/lib/tenants"
 import { syncCatalog } from "@/lib/alegra-sync"
 import { bearerMatches } from "@/lib/secure-compare"
 
+// Sincroniza TODOS los tenants en una sola invocación: necesita más margen que la sync manual.
+export const maxDuration = 300
+
 // Sincroniza el catálogo de Alegra a la cache de todos los tenants con Alegra configurado.
 // Lo invoca Vercel Cron (o curl en dev) con CRON_SECRET. Best-effort por tenant. Ver ADR catálogo.
 export async function POST(req: Request) {

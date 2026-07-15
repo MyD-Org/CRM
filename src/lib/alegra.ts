@@ -180,6 +180,12 @@ async function alegraFetch(
 }
 
 // Pagina un endpoint de Alegra (start/limit) hasta agotar, mapeando cada fila a un tipo normalizado.
+// Alegra topea el limit en 30/página. Para catálogos grandes, pedir una página a la vez
+// (await secuencial) tarda demasiado y hace que la función serverless llegue al timeout
+// (504 Vercel Runtime Timeout, visto con el catálogo de Central Led). Se piden varias
+// páginas en paralelo por tanda para bajar el tiempo total de wall-clock.
+const PAGE_CONCURRENCY = 8
+
 async function fetchAllPages<T>(
   config: TenantConfig,
   path: string,
@@ -187,15 +193,28 @@ async function fetchAllPages<T>(
   extraParams: Record<string, string> = {},
 ): Promise<T[]> {
   const out: T[] = []
-  for (let start = 0; ; start += PAGE_SIZE) {
-    const page = (await alegraFetch(config, path, {
-      ...extraParams,
-      start: String(start),
-      limit: String(PAGE_SIZE),
-    })) as Record<string, unknown>[]
-    if (!Array.isArray(page) || page.length === 0) break
-    for (const row of page) out.push(map(row))
-    if (page.length < PAGE_SIZE) break
+  let start = 0
+  let done = false
+  while (!done) {
+    const starts = Array.from({ length: PAGE_CONCURRENCY }, (_, i) => start + i * PAGE_SIZE)
+    const pages = (await Promise.all(
+      starts.map((s) =>
+        alegraFetch(config, path, { ...extraParams, start: String(s), limit: String(PAGE_SIZE) }),
+      ),
+    )) as Record<string, unknown>[][]
+
+    for (const page of pages) {
+      if (!Array.isArray(page) || page.length === 0) {
+        done = true
+        break
+      }
+      for (const row of page) out.push(map(row))
+      if (page.length < PAGE_SIZE) {
+        done = true
+        break
+      }
+    }
+    start += PAGE_CONCURRENCY * PAGE_SIZE
   }
   return out
 }
