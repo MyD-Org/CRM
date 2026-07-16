@@ -37,6 +37,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
   const [sendError, setSendError] = useState("")
   // Presupuesto pendiente de confirmar cuando "Enviar al canal" pisaría un borrador en curso.
   const [pendingBudget, setPendingBudget] = useState<string | null>(null)
+  // Sugerencia pendiente de confirmar cuando el "Copiar" del copiloto pisaría un borrador en curso.
+  const [pendingSuggestion, setPendingSuggestion] = useState<string | null>(null)
+  // Texto original que se insertó desde el copiloto (ver plan copiar-a-draft). Se conserva para
+  // comparar al enviar y clasificar el envío como 'as-is' | 'edited'. Es un ref para no
+  // dispararle rerenders al operador mientras edita.
+  const draftFromCopilot = useRef<string | null>(null)
   const [archiving, setArchiving] = useState(false)
   const [assistOpen, setAssistOpen] = useState(false)
   // Ancho del panel del copiloto (px), arrastrable desde la barra divisoria. Se recuerda en
@@ -227,6 +233,9 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
   // Prefila el compose con el presupuesto serializado y lo enfoca. NO auto-envía.
   function applyBudgetToCompose(text: string) {
     setReply(text)
+    // Un presupuesto NO cuenta para la métrica del copiloto (as-is/edited): esa mide solo las
+    // respuestas de texto insertadas desde el "Copiar". Limpiamos por si venía activa.
+    draftFromCopilot.current = null
     // El textarea solo existe en modo humano + ventana abierta; el focus se aplica si está montado.
     requestAnimationFrame(() => replyRef.current?.focus())
   }
@@ -242,6 +251,22 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     applyBudgetToCompose(text)
   }
 
+  // Inserta una sugerencia del copiloto (botón "Copiar") en el compose. Guarda el texto original
+  // para clasificar el envío como 'as-is' o 'edited'. Misma UX que "Enviar al canal": si hay algo
+  // escrito, pedimos confirmación antes de pisarlo.
+  function applySuggestionToCompose(text: string) {
+    setReply(text)
+    draftFromCopilot.current = text
+    requestAnimationFrame(() => replyRef.current?.focus())
+  }
+  function handleUseSuggestion(text: string) {
+    if (reply.trim()) {
+      setPendingSuggestion(text)
+      return
+    }
+    applySuggestionToCompose(text)
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     if (!reply.trim() || sending || !convId) return
@@ -253,6 +278,19 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         body: JSON.stringify({ text: reply.trim() }),
       })
       if (res.ok) {
+        // Métrica del plan copiar-a-draft: si este mensaje venía del copiloto (botón "Copiar"),
+        // clasificamos el envío según haya sido editado o no. Fire-and-forget: no bloqueamos el
+        // envío por telemetría. Solo se envía si hubo insert previa; sin insert no hay evento
+        // (el envío 'manual' no aporta a la métrica).
+        const suggestion = draftFromCopilot.current
+        if (suggestion !== null) {
+          const outcome = reply.trim() === suggestion.trim() ? "as-is" : "edited"
+          void fetch(`/api/admin/inbox/copilot-draft-events`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ conversation_id: convId, outcome }),
+          })
+        }
+        draftFromCopilot.current = null
         setReply("")
         stickBottom.current = true
         const msgRes = await fetch(`/api/admin/inbox/contacts/${contact.end_user_id}/messages?limit=${PAGE_SIZE}`)
@@ -502,6 +540,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         lastInboundAt={contact.last_inbound_at}
         withinWindow={contact.within_window}
         onSendToChannel={handleSendToChannel}
+        onUseSuggestion={handleUseSuggestion}
       />
 
       <Dialog
@@ -517,6 +556,27 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
               onClick={() => {
                 if (pendingBudget !== null) applyBudgetToCompose(pendingBudget)
                 setPendingBudget(null)
+              }}
+            >
+              Reemplazar
+            </Button>
+          </>
+        }
+      />
+
+      <Dialog
+        open={pendingSuggestion !== null}
+        onOpenChange={(open) => { if (!open) setPendingSuggestion(null) }}
+        size="sm"
+        title="Reemplazar el mensaje"
+        description="Ya tenés un mensaje escrito en el compose. ¿Querés reemplazarlo por la sugerencia del asistente?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPendingSuggestion(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (pendingSuggestion !== null) applySuggestionToCompose(pendingSuggestion)
+                setPendingSuggestion(null)
               }}
             >
               Reemplazar

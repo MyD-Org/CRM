@@ -262,6 +262,25 @@ export const notificationLog = pgTable(
   ],
 )
 
+// Bitácora del copiloto: cada vez que el operador manda un mensaje que venía del "Copiar" del
+// copiloto (insert-en-draft), guardamos si lo mandó tal cual o lo editó. Es la métrica que
+// dispara el switch copilot → bot-first en ventas (criterio: ~80%+ as-is durante ~2 semanas).
+// Ver docs/superpowers/plans/2026-07-16-copiar-a-draft.md.
+export const copilotDraftEvents = pgTable(
+  "copilot_draft_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    conversationId: text("conversation_id").notNull(),
+    operatorId: uuid("operator_id").notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
+    // 'as-is': el operador mandó exactamente lo que el copiloto sugirió.
+    // 'edited': el operador tocó el texto antes de mandar.
+    outcome: text("outcome").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("cde_tenant_created").on(t.tenantId, t.createdAt)],
+)
+
 // Asignación conversación → operador, DUEÑA en el CRM (no en ai-api). Ver ADR 0006.
 // El bot de ai-api solo etiqueta el departamento y deriva a humano sin dueño; el CRM
 // decide y persiste acá qué operador atiende cada conversación, para que no se mezclen.

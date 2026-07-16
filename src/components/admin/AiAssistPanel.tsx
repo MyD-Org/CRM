@@ -19,6 +19,10 @@ interface Props {
   /** Acción "Enviar al canal" de las budget cards: recibe el texto serializado de la card y lo
    *  prefila en el compose de la conversación (no auto-envía). Lo forwardea a <ChatPanel>. */
   onSendToChannel?: (text: string) => void
+  /** Acción del botón "Copiar" de cada respuesta del copiloto: en vez de portapapeles, inserta
+   *  el texto (ya en formato WhatsApp) en el compose del operador. El label sigue siendo "Copiar"
+   *  para no reetiquetar la acción; solo cambia el destino del click. */
+  onUseSuggestion?: (text: string) => void
 }
 
 interface AssistInit {
@@ -30,7 +34,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel }: Props) {
+export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel, onUseSuggestion }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -120,6 +124,7 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
             showActivity
             enableCopy
             onSendToChannel={onSendToChannel}
+            onUseMessage={onUseSuggestion}
           />
         )}
       </div>
