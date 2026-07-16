@@ -278,8 +278,8 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
         </div>
       )}
 
-<div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <table className="w-full text-sm" style={{ background: "var(--card)" }}>
+<div className="rounded-[var(--radius)] overflow-x-auto" style={{ border: "1px solid var(--border)" }}>
+        <table className="w-full min-w-[720px] text-sm" style={{ background: "var(--card)" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
               {["Usuario", "Departamento", "Rol", "Estado", "Alta", ""].map((h, i) => (
