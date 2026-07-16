@@ -62,7 +62,7 @@ export default async function CatalogoPage() {
       <div className="mb-6">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Catálogo</h1>
         <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>
-          Listas de precios y condiciones de pago para el agente de ventas
+          Catálogo sincronizado desde Alegra para el agente de ventas
         </p>
       </div>
       <CatalogManager initialLists={initialLists} initialPaymentConditions={initialPaymentConditions} />

@@ -24,6 +24,11 @@ const PAYMENT_METHODS = [
   { value: "Tarjeta de débito", label: "Tarjeta de débito" },
 ]
 
+// Las listas de precios y las condiciones de pago ahora salen de Alegra (sync de catálogo +
+// endpoint /api/agent/payment-terms). Ocultamos la carga manual para evitar dos fuentes de
+// verdad, pero dejamos el código y los endpoints por si hay que reactivarla.
+const SHOW_MANUAL_CONFIG = false
+
 type PriceColumn = { key: string; label: string }
 
 type PriceList = {
@@ -224,7 +229,8 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
         <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar esta lista y todos sus productos?</p>
       </Dialog>
 
-      {/* Listas de precios */}
+      {/* Listas de precios (carga manual — oculta: ahora el catálogo viene de Alegra) */}
+      {SHOW_MANUAL_CONFIG && (
       <div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--card)" }}>
         {/* Header de sección */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)" }}>
@@ -324,8 +330,10 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           ] as TableColumn<PriceList>[]}
         />
       </div>
+      )}
 
-      {/* Condiciones de pago */}
+      {/* Condiciones de pago (carga manual — oculta: ahora salen de Alegra vía /terms) */}
+      {SHOW_MANUAL_CONFIG && (
       <div className="rounded-[var(--radius)] overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--card)" }}>
         {/* Header de sección */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)" }}>
@@ -380,6 +388,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           )}
         </div>
       </div>
+      )}
 
     </div>
   )
