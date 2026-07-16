@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
+import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2, ChevronDown } from "lucide-react"
 import { Button, Input, Field, Select, Badge, Alert, Avatar, Dialog, useToast } from "@myd-org/ui"
 
 interface AdminUser {
@@ -439,7 +440,8 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   )
 }
 
-// Selector multi-departamento: chips toggleables. value = keys seleccionadas (0..N).
+// Selector multi-departamento: dropdown con checkboxes (queda abierto al tildar).
+// El panel se renderiza por portal en <body> para que no lo recorte el overflow de la tabla.
 function DepartmentPicker({
   options,
   value,
@@ -449,33 +451,82 @@ function DepartmentPicker({
   value: string[]
   onChange: (v: string[]) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setPos({ left: r.left, top: r.bottom + 4, width: r.width })
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const close = () => setOpen(false)
+    document.addEventListener("mousedown", onDown)
+    window.addEventListener("scroll", close, true)
+    window.addEventListener("resize", close)
+    return () => {
+      document.removeEventListener("mousedown", onDown)
+      window.removeEventListener("scroll", close, true)
+      window.removeEventListener("resize", close)
+    }
+  }, [open])
+
   if (options.length === 0) {
     return <span className="text-xs" style={{ color: "var(--ink-faint)" }}>No hay departamentos configurados</span>
   }
+
   const toggle = (key: string) =>
     onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key])
+  const selectedLabels = options.filter((o) => value.includes(o.key)).map((o) => o.label)
+  const buttonLabel = selectedLabels.length ? selectedLabels.join(", ") : "Sin departamento"
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => {
-        const on = value.includes(o.key)
-        return (
-          <button
-            key={o.key}
-            type="button"
-            onClick={() => toggle(o.key)}
-            aria-pressed={on}
-            className="text-xs px-2 py-1 rounded-full border transition-colors"
-            style={{
-              borderColor: on ? "var(--blue)" : "var(--border)",
-              background: on ? "var(--blue-soft)" : "transparent",
-              color: on ? "var(--blue)" : "var(--ink-soft)",
-            }}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-48 flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-[var(--radius)] border text-left"
+        style={{ borderColor: "var(--border)", background: "var(--card)", color: selectedLabels.length ? "var(--ink)" : "var(--ink-faint)" }}
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <ChevronDown size={14} className="shrink-0" style={{ color: "var(--ink-soft)" }} />
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: "fixed", left: pos.left, top: pos.top, width: pos.width, zIndex: 50, border: "1px solid var(--border)", background: "var(--card)" }}
+          className="rounded-[var(--radius)] shadow-lg overflow-hidden py-1"
+        >
+          {options.map((o) => {
+            const on = value.includes(o.key)
+            return (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => toggle(o.key)}
+                className="w-full flex items-center gap-2 text-sm px-3 py-2 text-left transition-colors"
+                style={{ background: on ? "var(--blue-soft)" : "transparent", color: "var(--ink)" }}
+              >
+                <span
+                  className="flex items-center justify-center rounded shrink-0"
+                  style={{ width: 16, height: 16, border: `1.5px solid ${on ? "var(--blue)" : "var(--border)"}`, background: on ? "var(--blue)" : "transparent" }}
+                >
+                  {on && <Check size={11} strokeWidth={3} style={{ color: "#fff" }} />}
+                </span>
+                {o.label}
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
