@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     .select({
       id: adminUsers.id,
       name: adminUsers.name,
-      department: adminUsers.department,
+      departments: adminUsers.departments,
       availability: adminUsers.availability,
     })
     .from(adminUsers)
@@ -34,8 +34,12 @@ export async function GET(req: Request) {
 
   // ai-api decide a quién asignar; el CRM solo reporta la presencia. `available` = el
   // operador se marcó disponible en el inbox.
-  const operators = rows.map(({ availability, ...rest }) => ({
+  // `departments` es el array (multi-depto); `department` se mantiene = primer elemento
+  // por retrocompat con versiones de ai-api que aún leen el campo singular.
+  const operators = rows.map(({ availability, departments, ...rest }) => ({
     ...rest,
+    departments,
+    department: departments[0] ?? null,
     available: availability === "available",
   }))
 

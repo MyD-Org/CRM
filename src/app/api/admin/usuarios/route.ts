@@ -62,7 +62,7 @@ export async function GET() {
       email: adminUsers.email,
       name: adminUsers.name,
       role: adminUsers.role,
-      department: adminUsers.department,
+      departments: adminUsers.departments,
       createdAt: adminUsers.createdAt,
       hasPassword: adminUsers.passwordHash,
       inviteExpiresAt: adminPasswordTokens.expiresAt,
@@ -108,7 +108,9 @@ export async function POST(req: NextRequest) {
     email: body.email.toLowerCase(),
     name: body.name,
     role: body.role,
-    department: body.department?.trim() || null,
+    departments: Array.isArray(body.departments)
+      ? body.departments.map((d: unknown) => String(d).trim()).filter(Boolean)
+      : [],
   }).returning()
 
   const { token, tokenHash } = generateToken()

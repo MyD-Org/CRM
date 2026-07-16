@@ -9,16 +9,15 @@ interface AdminUser {
   email: string
   name: string
   role: string
-  department: string | null
+  departments: string[]
   hasPassword: boolean
   createdAt: Date | string
   inviteExpiresAt: Date | string | null
   inviteAcceptedAt: Date | string | null
 }
 
-// Opción neutra que permite "quitar" el departamento del usuario. El resto de las
-// opciones se cargan desde /api/admin/departments (tabla por tenant).
-const NO_DEPARTMENT_OPTION = { value: "", label: "Sin departamento" }
+// Las opciones de departamento se cargan desde /api/admin/departments (tabla por tenant).
+// Un operador puede tener 0..N departamentos (multi). 0 = "sin departamento".
 
 interface Props {
   initialUsers: AdminUser[]
@@ -29,14 +28,14 @@ interface Props {
 export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
   const [users, setUsers] = useState(initialUsers)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: "", email: "", role: "operator", department: "" })
+  const [form, setForm] = useState<{ name: string; email: string; role: string; departments: string[] }>({ name: "", email: "", role: "operator", departments: [] })
   const { toast } = useToast()
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
   // URLs de invitación conocidas en esta sesión (userId → url)
   const [pendingUrls, setPendingUrls] = useState<Record<string, string>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", role: "", department: "" })
+  const [editForm, setEditForm] = useState<{ name: string; role: string; departments: string[] }>({ name: "", role: "", departments: [] })
   const [editError, setEditError] = useState("")
   const [editSaving, setEditSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -53,12 +52,8 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       .catch(() => setDepartments([]))
   }, [])
 
-  const departmentOptions = [
-    NO_DEPARTMENT_OPTION,
-    ...departments.map((d) => ({ value: d.key, label: d.label })),
-  ]
-  const departmentLabel = (key: string | null) =>
-    key ? departments.find((d) => d.key === key)?.label ?? key : null
+  const departmentLabel = (key: string) =>
+    departments.find((d) => d.key === key)?.label ?? key
 
   async function openInviteModal(url: string, name: string) {
     setInviteModal({ url, name })
@@ -73,7 +68,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
   function startEdit(user: AdminUser) {
     setEditingId(user.id)
-    setEditForm({ name: user.name, role: user.role, department: user.department ?? "" })
+    setEditForm({ name: user.name, role: user.role, departments: user.departments ?? [] })
     setEditError("")
   }
 
@@ -93,7 +88,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       })
       const body = await res.json()
       if (res.ok) {
-        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role, department: body.department ?? null } : u))
+        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, name: body.name, role: body.role, departments: body.departments ?? [] } : u))
         setEditingId(null)
       } else {
         setEditError(body.error ?? "Error al guardar")
@@ -117,7 +112,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       if (res.ok) {
         if (body.inviteUrl) setPendingUrls((p) => ({ ...p, [body.id]: body.inviteUrl }))
         const createdName = form.name
-        setForm({ name: "", email: "", role: "operator", department: "" })
+        setForm({ name: "", email: "", role: "operator", departments: [] })
         setShowForm(false)
         const listRes = await fetch("/api/admin/usuarios")
         if (listRes.ok) setUsers(await listRes.json())
@@ -259,11 +254,11 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                   ]}
                 />
               </Field>
-              <Field label="Departamento">
-                <Select
-                  value={form.department}
-                  onValueChange={(v) => setForm((p) => ({ ...p, department: v }))}
-                  options={departmentOptions}
+              <Field label="Departamentos">
+                <DepartmentPicker
+                  options={departments}
+                  value={form.departments}
+                  onChange={(v) => setForm((p) => ({ ...p, departments: v }))}
                 />
               </Field>
             </div>
@@ -325,16 +320,25 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                   {/* Departamento */}
                   <td className="px-4 py-3">
                     {isEditing && isSuperadmin && !isSelf ? (
-                      <Select
-                        value={editForm.department}
-                        onValueChange={(v) => setEditForm((p) => ({ ...p, department: v }))}
-                        options={departmentOptions}
-                        className="w-44"
+                      <DepartmentPicker
+                        options={departments}
+                        value={editForm.departments}
+                        onChange={(v) => setEditForm((p) => ({ ...p, departments: v }))}
                       />
+                    ) : user.departments.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.departments.map((key) => (
+                          <span
+                            key={key}
+                            className="text-xs px-1.5 py-0.5 rounded"
+                            style={{ background: "var(--elevated)", color: "var(--ink)" }}
+                          >
+                            {departmentLabel(key)}
+                          </span>
+                        ))}
+                      </div>
                     ) : (
-                      <span className="text-sm" style={{ color: user.department ? "var(--ink)" : "var(--ink-faint)" }}>
-                        {departmentLabel(user.department) ?? "—"}
-                      </span>
+                      <span className="text-sm" style={{ color: "var(--ink-faint)" }}>—</span>
                     )}
                   </td>
 
@@ -431,6 +435,46 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// Selector multi-departamento: chips toggleables. value = keys seleccionadas (0..N).
+function DepartmentPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: string; label: string }[]
+  value: string[]
+  onChange: (v: string[]) => void
+}) {
+  if (options.length === 0) {
+    return <span className="text-xs" style={{ color: "var(--ink-faint)" }}>No hay departamentos configurados</span>
+  }
+  const toggle = (key: string) =>
+    onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key])
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const on = value.includes(o.key)
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => toggle(o.key)}
+            aria-pressed={on}
+            className="text-xs px-2 py-1 rounded-full border transition-colors"
+            style={{
+              borderColor: on ? "var(--blue)" : "var(--border)",
+              background: on ? "var(--blue-soft)" : "transparent",
+              color: on ? "var(--blue)" : "var(--ink-soft)",
+            }}
+          >
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

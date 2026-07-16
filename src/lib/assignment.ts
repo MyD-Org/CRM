@@ -11,7 +11,7 @@ import { listConversations, type InboxConversation } from "./inbox-api"
 
 export interface Operator {
   id: string
-  department: string | null
+  departments: string[]
 }
 
 export interface Assignment {
@@ -40,7 +40,7 @@ export function normalizeDepartment(d: string | null | undefined): string {
  */
 export async function availableOperators(tenantId: string, department?: string | null): Promise<Operator[]> {
   const rows = await getDb()
-    .select({ id: adminUsers.id, department: adminUsers.department })
+    .select({ id: adminUsers.id, departments: adminUsers.departments })
     .from(adminUsers)
     .where(and(
       eq(adminUsers.tenantId, tenantId),
@@ -49,7 +49,8 @@ export async function availableOperators(tenantId: string, department?: string |
     ))
   if (!department) return rows
   const target = normalizeDepartment(department)
-  return rows.filter((op) => normalizeDepartment(op.department) === target)
+  // Un operador matchea si CUALQUIERA de sus departamentos coincide con el del handoff.
+  return rows.filter((op) => op.departments.some((d) => normalizeDepartment(d) === target))
 }
 
 /** Todas las asignaciones persistidas del tenant (CRM es la fuente de verdad). */

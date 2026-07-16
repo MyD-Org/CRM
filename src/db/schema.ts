@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 const bytea = customType<{ data: Buffer }>({
   dataType() { return "bytea" },
@@ -53,8 +54,10 @@ export const adminUsers = pgTable(
     // 'operator': puede usar el inbox y responder mensajes
     // 'superadmin': todo lo anterior + gestión de usuarios
     role: text("role").notNull().default("operator"),
-    // ej. 'ventas', 'cuentas-corrientes', 'soporte' — para routing automático de conversaciones
-    department: text("department"),
+    // Departamentos del operador (multi): un operador puede atender varias áreas (ej.
+    // ['ventas', 'asesoramiento-tecnico']). Slugs, mismo formato que la tabla departments.
+    // Se usa para el routing automático: matchea si el depto del handoff está incluido.
+    departments: text("departments").array().notNull().default(sql`'{}'::text[]`),
     // Presencia para asignación de handoff: 'available' = el operador está atendiendo y
     // puede recibir conversaciones; 'away' = no se le asignan. Distinto de "cuenta activa"
     // (passwordHash): existir ≠ estar disponible ahora. Default 'away'. Ver ADR 0006.
@@ -70,8 +73,8 @@ export const adminUsers = pgTable(
 // Catálogo de departamentos por tenant — se usa como fuente única para:
 // (a) el select del formulario de usuarios en el backoffice, y
 // (b) el catálogo de derivación que ai-api inyecta en el agente vía /api/internal/departments.
-// El valor guardado en admin_users.department y en conversation_assignments.department
-// referencia `key` (slug estable). `label` es el nombre visible y se puede renombrar
+// Los valores guardados en admin_users.departments (array) y en conversation_assignments.department
+// referencian `key` (slug estable). `label` es el nombre visible y se puede renombrar
 // sin migrar datos. La lista es editable por tenant (no todos tienen "Cuentas Corrientes").
 export const departments = pgTable(
   "departments",

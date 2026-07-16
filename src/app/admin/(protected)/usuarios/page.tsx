@@ -19,7 +19,7 @@ export default async function UsuariosPage() {
       email: adminUsers.email,
       name: adminUsers.name,
       role: adminUsers.role,
-      department: adminUsers.department,
+      departments: adminUsers.departments,
       createdAt: adminUsers.createdAt,
       passwordHash: adminUsers.passwordHash,
       inviteExpiresAt: adminPasswordTokens.expiresAt,

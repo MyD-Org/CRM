@@ -37,8 +37,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       updates.role = body.role
     }
-    if (typeof body.department === "string") {
-      updates.department = body.department.trim() || null
+    if (Array.isArray(body.departments)) {
+      updates.departments = body.departments.map((d: unknown) => String(d).trim()).filter(Boolean)
     }
   }
 
@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await session.save()
   }
 
-  return NextResponse.json({ id: updated.id, name: updated.name, role: updated.role, department: updated.department })
+  return NextResponse.json({ id: updated.id, name: updated.name, role: updated.role, departments: updated.departments })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

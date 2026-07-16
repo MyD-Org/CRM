@@ -78,6 +78,13 @@
       "when": 1784067555170,
       "tag": "0010_white_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784211878342,
+      "tag": "0011_multi_departments",
+      "breakpoints": true
     }
   ]
 }
