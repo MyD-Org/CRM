@@ -61,6 +61,12 @@ export interface AlegraContact {
   paymentTermId: string | null
   status: string
 }
+export interface AlegraContactInput {
+  name: string
+  identification?: string // CUIT/DNI
+  email?: string
+  phone?: string
+}
 export interface AlegraPriceList {
   alegraId: string
   name: string
@@ -447,6 +453,34 @@ export async function getContact(config: TenantConfig, alegraId: string): Promis
   } catch {
     return null
   }
+}
+
+/**
+ * Crea un contacto en Alegra (cliente nuevo). Lo usa el agente cuando el cliente da su
+ * CUIT y no existe todavía, para poder cotizarle. `name` es lo único obligatorio.
+ */
+export async function createContact(config: TenantConfig, input: AlegraContactInput): Promise<AlegraContact> {
+  if (config.alegraMock) {
+    const created: AlegraContact = {
+      alegraId: String(Date.now()),
+      name: input.name,
+      identification: input.identification ?? null,
+      email: input.email ?? null,
+      phone: input.phone ?? null,
+      priceListId: null,
+      sellerId: null,
+      paymentTermId: null,
+      status: "active",
+    }
+    mockContacts.push(created)
+    return created
+  }
+  const body: Record<string, unknown> = { name: input.name }
+  if (input.identification) body.identification = input.identification
+  if (input.email) body.email = input.email
+  if (input.phone) body.phone = input.phone
+  const raw = (await alegraFetch(config, "/contacts", undefined, { method: "POST", body })) as Record<string, unknown>
+  return mapRawContact(raw)
 }
 
 /** Todos los contactos (para una futura sync). Pagina hasta agotar. */
