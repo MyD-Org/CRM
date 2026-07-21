@@ -57,6 +57,23 @@ export function NotificationsPrompt() {
 
   useEffect(() => {
     let cancelled = false
+
+    // Al abrir/mirar el backoffice, el operador "ya vio" las notis → limpiamos el badge del
+    // ícono y reseteamos el contador del service worker. clearAppBadge borra el numerito ya;
+    // el mensaje al SW pone su contador en 0 para que el próximo push arranque de cero.
+    function clearBadge() {
+      const nav = navigator as Navigator & { clearAppBadge?: () => Promise<void> }
+      nav.clearAppBadge?.().catch(() => {})
+      navigator.serviceWorker?.ready
+        .then((reg) => reg.active?.postMessage({ type: "badge-reset" }))
+        .catch(() => {})
+    }
+    clearBadge()
+    const onVisible = () => {
+      if (document.visibilityState === "visible") clearBadge()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+
     async function init() {
       const supported =
         typeof window !== "undefined" &&
@@ -90,6 +107,7 @@ export function NotificationsPrompt() {
     init()
     return () => {
       cancelled = true
+      document.removeEventListener("visibilitychange", onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
