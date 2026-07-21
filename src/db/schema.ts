@@ -306,3 +306,31 @@ export const conversationAssignments = pgTable(
     index("ca_tenant_operator").on(t.tenantId, t.operatorId),
   ],
 )
+
+// Suscripciones Web Push de los operadores (una por browser/dispositivo). El CRM es dueño de
+// las suscripciones porque los operadores son usuarios del CRM; ai-api solo dispara eventos.
+// El endpoint es globalmente único (lo emite el push service del navegador), así que sirve de
+// clave de deduplicación: un mismo browser re-suscribiéndose hace upsert de sus claves.
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    operatorId: uuid("operator_id")
+      .notNull()
+      .references(() => adminUsers.id, { onDelete: "cascade" }),
+    // Datos de la PushSubscription del navegador (endpoint + claves ECDH).
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("ps_endpoint").on(t.endpoint),
+    index("ps_tenant_operator").on(t.tenantId, t.operatorId),
+  ],
+)
