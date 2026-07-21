@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env.local src/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env.local src/db/seed.ts",
-    "alegra:smoke": "tsx --env-file-if-exists=.env.local scripts/alegra-smoke.ts"
+    "alegra:smoke": "tsx --env-file-if-exists=.env.local scripts/alegra-smoke.ts",
+    "push:test": "tsx --env-file-if-exists=.env.local scripts/send-test-push.ts"
   },
   "dependencies": {
     "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.11.tgz",
