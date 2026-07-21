@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { MessageSquare, Users, LogOut, Package, BarChart3 } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
 import { AvailabilityToggle } from "./AvailabilityToggle"
+import { NotificationsPrompt } from "./NotificationsPrompt"
 import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
 import type { InboxContact } from "@/lib/inbox-api"
 
@@ -120,6 +121,7 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
       </div>
       {children}
     </SideNav>
+    <NotificationsPrompt />
     {warning && (
       <PendingRepliesDialog
         open

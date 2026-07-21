@@ -7,6 +7,7 @@ import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { listConversations } from "@/lib/inbox-api"
 import { assignInCrm, availableOperators, getAssignments, loadFromAssignments, pickLeastLoaded } from "@/lib/assignment"
+import { sendPushToOperator } from "@/lib/push"
 
 // POST /api/admin/inbox/:id/assign
 //
@@ -62,5 +63,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   await assignInCrm(session.tenantId, id, targetOperatorId, body.department ?? convDepartment)
+
+  // Notifica al operador asignado (salvo que se haya autoasignado: ya lo sabe). Best-effort.
+  if (targetOperatorId !== session.userId) {
+    const contactName = conv?.contact || "un cliente"
+    await sendPushToOperator(session.tenantId, targetOperatorId, {
+      title: "Nueva conversación asignada",
+      body: `Se te asignó la conversación con ${contactName}.`,
+      url: `/admin/inbox/${id}`,
+      icon: `/logos/${tenant.id}-icon.svg`,
+      tag: `assign-${id}`,
+    }).catch(() => {})
+  }
+
   return NextResponse.json({ ok: true, assigned_operator_id: targetOperatorId })
 }
