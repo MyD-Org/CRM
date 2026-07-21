@@ -53,7 +53,6 @@ async function subscribe(vapidKey: string): Promise<boolean> {
 
 export function NotificationsPrompt() {
   const [mode, setMode] = useState<"hidden" | "prompt" | "blocked">("hidden")
-  const [busy, setBusy] = useState(false)
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
   useEffect(() => {
@@ -102,16 +101,18 @@ export function NotificationsPrompt() {
   }
 
   async function activate() {
-    if (!vapidKey) return dismiss()
-    setBusy(true)
+    if (!vapidKey) return setMode("hidden")
+    // iOS exige que requestPermission salga del gesto del usuario: la llamamos SINCRÓNICAMENTE
+    // (primera línea, sin await antes) y disparamos el prompt. Cerramos el modal enseguida y
+    // hacemos la suscripción en segundo plano: así el modal SIEMPRE se cierra al tocar, aunque
+    // la suscripción/permiso tarde o quede colgada (bug del modal que no cerraba en iOS PWA).
+    const permissionPromise = Notification.requestPermission()
+    setMode("hidden")
     try {
-      const permission = await Notification.requestPermission()
+      const permission = await permissionPromise
       if (permission === "granted") await subscribe(vapidKey)
     } catch {
-      // no-op
-    } finally {
-      setBusy(false)
-      setMode("hidden")
+      // best-effort: el push es opcional, un fallo no debe afectar la UI
     }
   }
 
@@ -159,15 +160,13 @@ export function NotificationsPrompt() {
             <button
               type="button"
               onClick={activate}
-              disabled={busy}
-              className="rounded-full bg-text px-4 py-1.5 text-sm font-semibold text-card transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="rounded-full bg-text px-4 py-1.5 text-sm font-semibold text-card transition-opacity hover:opacity-90"
             >
               Activar
             </button>
             <button
               type="button"
               onClick={dismiss}
-              disabled={busy}
               className="rounded-full px-3 py-1.5 text-sm font-medium text-subtle transition-colors hover:text-text"
             >
               Ahora no
