@@ -38,10 +38,11 @@ export default async function InboxPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+      <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
+          {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
+          <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
         {/* Kill switch global del bot: visible para todos los usuarios del backoffice (sin gate de rol). */}
         {!configError && <BotKillSwitch initialEnabled={botEnabled} />}
