@@ -19,19 +19,37 @@ function parseEmail(): string | null {
 }
 
 async function main() {
+  const listOnly = process.argv.includes("--list")
+  if (!process.env.DATABASE_URL) {
+    console.error("✗ Falta DATABASE_URL. Para prod: vercel env pull .env.local --environment=production")
+    process.exit(1)
+  }
+
+  const db = getDb()
+
+  // Modo diagnóstico: lista las suscripciones guardadas (email + endpoint), sin enviar nada.
+  if (listOnly) {
+    const all = await db
+      .select({ who: adminUsers.email, endpoint: pushSubscriptions.endpoint, created: pushSubscriptions.createdAt })
+      .from(pushSubscriptions)
+      .innerJoin(adminUsers, eq(pushSubscriptions.operatorId, adminUsers.id))
+    if (!all.length) {
+      console.log("⚠ No hay NINGUNA suscripción guardada en la DB.")
+    } else {
+      console.log(`${all.length} suscripción(es):`)
+      for (const s of all) console.log(`  • ${s.who} — ${s.endpoint.slice(0, 45)}… (${s.created?.toISOString?.() ?? s.created})`)
+    }
+    process.exit(0)
+  }
+
   const publicKey = process.env.VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
   if (!publicKey || !privateKey) {
     console.error("✗ Faltan VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY en el entorno.")
     process.exit(1)
   }
-  if (!process.env.DATABASE_URL) {
-    console.error("✗ Falta DATABASE_URL. Para prod: vercel env pull .env.local --environment=production")
-    process.exit(1)
-  }
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:soporte@myd-org.com", publicKey, privateKey)
 
-  const db = getDb()
   const email = parseEmail()
 
   const rows = email
