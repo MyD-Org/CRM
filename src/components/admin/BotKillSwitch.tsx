@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Power } from "lucide-react"
-import { Button, Dialog, useToast } from "@myd-org/ui"
+import { Bot, Power } from "lucide-react"
+import { Badge, Button, Dialog, useToast } from "@myd-org/ui"
 
 interface Props {
   initialEnabled: boolean
@@ -44,8 +44,17 @@ export function BotKillSwitch({ initialEnabled }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      {/* El estado del bot (activo/pausado) ya lo comunica el propio botón ("Pausar bot" /
-          "Reactivar bot"), así que no mostramos un badge aparte para ahorrar espacio en mobile. */}
+      {/* Estado del bot ("Bot activo/pausado"): oculto en mobile para ahorrar ancho —
+          el color del botón (rojo=activo/verde=pausado) ya comunica el estado. Solo desktop. */}
+      <span className="hidden md:flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-soft)" }}>
+        <Bot className="w-4 h-4" />
+        {enabled ? (
+          <Badge tone="success">Bot activo</Badge>
+        ) : (
+          <Badge tone="warning">Bot pausado</Badge>
+        )}
+      </span>
+
       <Button
         variant={enabled ? "danger" : "primary"}
         size="sm"

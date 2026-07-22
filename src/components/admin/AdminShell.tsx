@@ -114,16 +114,17 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
         </Link>
       )}
     >
-      {/* En el inbox la propia página monta el toggle "Disponible" en su encabezado (una sola
-          fila con el título y el kill switch). En el resto de las pantallas va acá, en su fila. */}
-      {pathname !== "/admin/inbox" && (
-        <div className="flex justify-end px-4 md:px-6 pt-4">
-          <AvailabilityToggle
-            initial={availability}
-            onBeforeAway={() => guardAgainstPendingReplies("away")}
-          />
-        </div>
-      )}
+      {/* Fila de "Disponible". En el inbox solo en DESKTOP (hidden md:flex): en mobile la monta
+          la propia página junto al título para ahorrar alto. En desktop se mantiene acá arriba,
+          alineada a la derecha, dejando libre la esquina superior izq (botón del sidebar). */}
+      <div
+        className={`${pathname === "/admin/inbox" ? "hidden md:flex" : "flex"} justify-end px-4 md:px-6 pt-4`}
+      >
+        <AvailabilityToggle
+          initial={availability}
+          onBeforeAway={() => guardAgainstPendingReplies("away")}
+        />
+      </div>
       <AdminHeaderProvider value={{ availability, onBeforeAway: () => guardAgainstPendingReplies("away") }}>
         {children}
       </AdminHeaderProvider>

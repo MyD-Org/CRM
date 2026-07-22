@@ -40,17 +40,20 @@ export default async function InboxPage() {
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-3 flex-wrap">
-        {/* En mobile, el botón de menú (hamburguesa) del SideNav va absolute en left-3 top-3.
-            Le dejamos lugar al título para que no quede tapado por el ícono. */}
-        <div className="pl-11 md:pl-0">
+        {/* En mobile corremos el título a la derecha (pl-10) para que no lo tape el botón ☰ del
+            sidebar, que va absolute en la esquina sup-izq. En desktop no hace falta (pl-0). */}
+        <div className="pl-10 md:pl-0">
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
           <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
-        {/* Presencia + kill switch en la misma fila que el título (evita una fila extra en mobile).
-            El toggle "Disponible" lo monta la página en el inbox; el AdminShell no lo repite acá. */}
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <InboxAvailabilityToggle />
+        {/* "Disponible" + estado del bot en la misma fila (sin flex-wrap: nunca se separan). */}
+        <div className="flex items-center gap-2 justify-end">
+          {/* "Disponible" solo en mobile (en desktop lo monta el AdminShell en su fila, para
+              dejar libre la esquina del botón de colapsar del sidebar). */}
+          <div className="md:hidden">
+            <InboxAvailabilityToggle />
+          </div>
           {/* Kill switch global del bot: visible para todos los usuarios del backoffice (sin gate de rol). */}
           {!configError && <BotKillSwitch initialEnabled={botEnabled} />}
         </div>
