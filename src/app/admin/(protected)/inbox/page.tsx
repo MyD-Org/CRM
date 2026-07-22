@@ -39,7 +39,7 @@ export default async function InboxPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-4 flex-wrap">
+      <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
