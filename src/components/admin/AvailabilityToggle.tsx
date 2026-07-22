@@ -48,15 +48,32 @@ export function AvailabilityToggle({ initial, onBeforeAway }: Props) {
       type="button"
       onClick={toggle}
       disabled={pending || checking}
-      aria-pressed={available}
+      role="switch"
+      aria-checked={available}
       title={available ? "Estás recibiendo conversaciones" : "No se te asignan conversaciones"}
-      className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-text transition-colors hover:bg-subtle/10 disabled:opacity-60"
+      className={`flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+        available ? "text-green" : "text-subtle hover:bg-subtle/10"
+      }`}
+      style={available ? { background: "var(--green-soft)" } : undefined}
     >
       <span
-        className={`h-2.5 w-2.5 rounded-full ${available ? "bg-green-500" : "bg-subtle"}`}
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ background: available ? "var(--green)" : "var(--subtle, #94a3b8)" }}
         aria-hidden
       />
-      {available ? "Disponible" : "Ausente"}
+      <span className="flex-1 text-left">{available ? "Disponible" : "Ausente"}</span>
+      {/* Riel del switch: verde/knob a la derecha cuando está disponible. */}
+      <span
+        className="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+        style={{ background: available ? "var(--green)" : "color-mix(in srgb, var(--subtle, #94a3b8) 40%, transparent)" }}
+        aria-hidden
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${
+            available ? "left-[18px]" : "left-0.5"
+          }`}
+        />
+      </span>
     </button>
   )
 }
