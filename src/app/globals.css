@@ -121,7 +121,10 @@ nav[aria-label="Navegación principal"] .bg-primary-soft {
    raíz del SideNav. Selector específico para no afectar a FileDropZone, que
    también usa bg-bg pero sin h-dvh/overflow-hidden. */
 .flex.h-dvh.overflow-hidden.bg-bg {
-  background-image: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(31, 140, 255, 0.18) 0%, transparent 70%);
+  /* Origen del glow por encima del borde superior (y más ancho/alto) para que el azul
+     "arranque de más arriba" y el degradé se apague de forma gradual, sin el borde marcado
+     de la elipse que se leía como una línea horizontal cerca del tope. */
+  background-image: radial-gradient(ellipse 110% 55% at 50% -12%, rgba(31, 140, 255, 0.18) 0%, transparent 78%);
 }
 
 /* Scrollbar */
