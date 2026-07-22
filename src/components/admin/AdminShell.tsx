@@ -8,7 +8,6 @@ import { MessageSquare, Users, LogOut, Package, BarChart3 } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
 import { AvailabilityToggle } from "./AvailabilityToggle"
 import { NotificationsPrompt } from "./NotificationsPrompt"
-import { AdminHeaderProvider } from "./admin-header-context"
 import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
 import type { InboxContact } from "@/lib/inbox-api"
 
@@ -113,21 +112,16 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
           {content}
         </Link>
       )}
-    >
-      {/* Fila de "Disponible". En el inbox solo en DESKTOP (hidden md:flex): en mobile la monta
-          la propia página junto al título para ahorrar alto. En desktop se mantiene acá arriba,
-          alineada a la derecha, dejando libre la esquina superior izq (botón del sidebar). */}
-      <div
-        className={`${pathname === "/admin/inbox" ? "hidden md:flex" : "flex"} justify-end px-4 md:px-6 pt-4`}
-      >
+      /* Presencia del operador en el pie del sidebar, pegada a su cuenta (patrón Slack/Intercom):
+         vive con el usuario, no en el header. Así el header queda para el estado de la operación (bot). */
+      footerSlot={
         <AvailabilityToggle
           initial={availability}
           onBeforeAway={() => guardAgainstPendingReplies("away")}
         />
-      </div>
-      <AdminHeaderProvider value={{ availability, onBeforeAway: () => guardAgainstPendingReplies("away") }}>
-        {children}
-      </AdminHeaderProvider>
+      }
+    >
+      {children}
     </SideNav>
     <NotificationsPrompt />
     {warning && (
