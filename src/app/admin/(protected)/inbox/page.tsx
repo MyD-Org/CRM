@@ -40,7 +40,9 @@ export default async function InboxPage() {
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-3 flex-wrap">
-        <div>
+        {/* En mobile, el botón de menú (hamburguesa) del SideNav va absolute en left-3 top-3.
+            Le dejamos lugar al título para que no quede tapado por el ícono. */}
+        <div className="pl-11 md:pl-0">
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
           <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
