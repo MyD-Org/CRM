@@ -40,12 +40,15 @@ export default async function InboxPage() {
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-3 flex-wrap">
-        <div>
+        {/* En mobile corremos el título a la derecha (pl-10) para que no lo tape el botón ☰ del
+            sidebar, que va absolute en la esquina sup-izq. En desktop no hace falta (pl-0). */}
+        <div className="pl-10 md:pl-0">
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
           <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        {/* "Disponible" + estado del bot en la misma fila (sin flex-wrap: nunca se separan). */}
+        <div className="flex items-center gap-2 justify-end">
           {/* "Disponible" solo en mobile (en desktop lo monta el AdminShell en su fila, para
               dejar libre la esquina del botón de colapsar del sidebar). */}
           <div className="md:hidden">

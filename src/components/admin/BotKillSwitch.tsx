@@ -44,7 +44,9 @@ export function BotKillSwitch({ initialEnabled }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-soft)" }}>
+      {/* Estado del bot ("Bot activo/pausado"): oculto en mobile para ahorrar ancho —
+          el color del botón (rojo=activo/verde=pausado) ya comunica el estado. Solo desktop. */}
+      <span className="hidden md:flex items-center gap-1.5 text-sm" style={{ color: "var(--ink-soft)" }}>
         <Bot className="w-4 h-4" />
         {enabled ? (
           <Badge tone="success">Bot activo</Badge>
