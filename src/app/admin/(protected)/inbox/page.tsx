@@ -9,6 +9,7 @@ import { assignPendingConversations } from "@/lib/assignment"
 import { listEnrichedContacts } from "@/lib/inbox-contacts"
 import { InboxList } from "@/components/admin/InboxList"
 import { BotKillSwitch } from "@/components/admin/BotKillSwitch"
+import { InboxAvailabilityToggle } from "@/components/admin/InboxAvailabilityToggle"
 
 export const dynamic = "force-dynamic"
 
@@ -44,8 +45,15 @@ export default async function InboxPage() {
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
           <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
-        {/* Kill switch global del bot: visible para todos los usuarios del backoffice (sin gate de rol). */}
-        {!configError && <BotKillSwitch initialEnabled={botEnabled} />}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* "Disponible" solo en mobile (en desktop lo monta el AdminShell en su fila, para
+              dejar libre la esquina del botón de colapsar del sidebar). */}
+          <div className="md:hidden">
+            <InboxAvailabilityToggle />
+          </div>
+          {/* Kill switch global del bot: visible para todos los usuarios del backoffice (sin gate de rol). */}
+          {!configError && <BotKillSwitch initialEnabled={botEnabled} />}
+        </div>
       </div>
 
       {configError ? (
