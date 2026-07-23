@@ -205,7 +205,8 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
       </Dialog>
 
       <div className="flex items-start justify-between mb-6">
-        <div>
+        {/* pl-10 md:pl-0: en mobile corre el título para que no lo tape el botón ☰ del sidebar. */}
+        <div className="pl-10 md:pl-0">
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Usuarios</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Operadores del backoffice</p>
         </div>
