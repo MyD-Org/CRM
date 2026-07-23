@@ -36,7 +36,8 @@ export default async function UsoPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="mb-6">
+      {/* pl-10 md:pl-0: en mobile corre el título para que no lo tape el botón ☰ del sidebar. */}
+      <div className="mb-6 pl-10 md:pl-0">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Uso del bot</h1>
         <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>
           Consumo de tokens y costo estimado del asistente de IA
