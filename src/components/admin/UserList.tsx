@@ -4,6 +4,18 @@ import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2, ChevronDown } from "lucide-react"
 import { Button, Input, Field, Select, Badge, Alert, Avatar, Dialog, useToast } from "@myd-org/ui"
+import { assignableRoles, canActOnRole } from "@/lib/roles"
+
+function roleLabel(role: string): string {
+  if (role === "superadmin") return "Superadmin"
+  if (role === "admin") return "Admin"
+  return "Operador"
+}
+function roleTone(role: string): "warning" | "info" | "neutral" {
+  if (role === "superadmin") return "warning"
+  if (role === "admin") return "info"
+  return "neutral"
+}
 
 interface AdminUser {
   id: string
@@ -131,7 +143,8 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
     }
   }
 
-  const isSuperadmin = currentRole === "superadmin"
+  // Roles que este usuario puede asignar al invitar/editar (un admin: solo operador).
+  const roleOptions = assignableRoles(currentRole).map((r) => ({ value: r, label: roleLabel(r) }))
 
   async function confirmDelete() {
     if (!deleteId) return
@@ -210,7 +223,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Usuarios</h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Operadores del backoffice</p>
         </div>
-        {isSuperadmin && (
+        {roleOptions.length > 0 && (
           <Button onClick={() => { setShowForm((p) => !p); setFormError("") }}>
             <UserPlus size={15} strokeWidth={1.6} />
             Invitar usuario
@@ -250,10 +263,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                 <Select
                   value={form.role}
                   onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}
-                  options={[
-                    { value: "operator", label: "Operador" },
-                    { value: "superadmin", label: "Superadmin" },
-                  ]}
+                  options={roleOptions}
                 />
               </Field>
               <Field label="Departamentos">
@@ -290,7 +300,10 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
             {users.map((user) => {
               const isEditing = editingId === user.id
               const isSelf = user.id === currentUserId
-              const canEdit = isSelf || isSuperadmin
+              // Puede gestionar (rol/depto/borrar) a este usuario según su rol; el auto-edit
+              // (solo el nombre propio) siempre está permitido.
+              const canManageTarget = !isSelf && canActOnRole(currentRole, user.role)
+              const canEdit = isSelf || canManageTarget
 
               return (
                 <tr key={user.id} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -321,7 +334,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
                   {/* Departamento */}
                   <td className="px-4 py-3">
-                    {isEditing && isSuperadmin && !isSelf ? (
+                    {isEditing && canManageTarget ? (
                       <DepartmentPicker
                         options={departments}
                         value={editForm.departments}
@@ -346,20 +359,17 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
                   {/* Rol */}
                   <td className="px-4 py-3">
-                    {isEditing && isSuperadmin && !isSelf ? (
+                    {isEditing && canManageTarget ? (
                       <Select
                         value={editForm.role}
                         onValueChange={(v) => setEditForm((p) => ({ ...p, role: v }))}
-                        options={[
-                          { value: "operator", label: "Operador" },
-                          { value: "superadmin", label: "Superadmin" },
-                        ]}
+                        options={roleOptions}
                         className="w-36"
                       />
                     ) : (
-                      <Badge tone={user.role === "superadmin" ? "warning" : "info"} className="flex items-center gap-1 w-fit">
+                      <Badge tone={roleTone(user.role)} className="flex items-center gap-1 w-fit">
                         <Shield size={10} />
-                        {user.role === "superadmin" ? "Superadmin" : "Operador"}
+                        {roleLabel(user.role)}
                       </Badge>
                     )}
                   </td>
