@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Un run por rama: si se pushea de nuevo, se cancela el anterior en vez de encolarlo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # packages:read → el .npmrc del repo baja @myd-org/ui desde GitHub Packages usando
+    # ${GITHUB_TOKEN}. Sin este permiso, npm ci falla con 401.
+    permissions:
+      contents: read
+      packages: read
+
+    # Los tests de integración corren contra un Postgres real. El global-setup crea la DB
+    # crm_test y le aplica las migraciones de drizzle solo; acá solo hace falta el servidor.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        # Sin healthcheck los tests pueden arrancar antes de que Postgres acepte conexiones.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # El helper db-url.ts exige host local y nombre con "test": es la red de seguridad para
+      # que estos tests (que truncan tablas) nunca puedan apuntar a una base real.
+      TEST_DATABASE_URL: postgres://postgres@localhost:5432/crm_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # El .npmrc del repo apunta @myd-org al registro de GitHub Packages y espera la variable
+      # GITHUB_TOKEN para autenticarse (en local la tenés exportada; acá la da Actions).
+      - name: Instalar dependencias
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `npm run lint` NO está acá a propósito: hoy hay 14 errores preexistentes de reglas de
+      # React Hooks (DashboardClient, AiChat, CatalogManager). Ponerlo como gate haría fallar
+      # todos los PRs desde el día uno por deuda vieja, y un CI siempre en rojo se ignora.
+      # Cuando esos errores se limpien, agregar acá:  - run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # test:all = unit + integration (los de rutas y permisos necesitan la DB de arriba).
+      - name: Tests
+        run: npm run test:all

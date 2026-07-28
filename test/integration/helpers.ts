@@ -30,7 +30,11 @@ export async function seedTenant(id = "test-tenant"): Promise<string> {
       name: "Tenant de Test",
       logoPath: "/logos/test.svg",
       resendFrom: "test@example.com",
+      // aiTenantId + aiApiUrl: las rutas que hablan con la ai-api cortan con 503 si falta
+      // alguno, así que el tenant de test se siembra "configurado". La URL no se usa de
+      // verdad: los tests que llegan hasta ahí mockean el cliente de inbox-api.
       aiTenantId: `ai-${id}`,
+      aiApiUrl: "http://ai-api.test",
     })
     .onConflictDoNothing()
   return id
@@ -38,7 +42,13 @@ export async function seedTenant(id = "test-tenant"): Promise<string> {
 
 export async function seedOperator(
   tenantId: string,
-  opts: { name?: string; email?: string; departments?: string[]; availability?: "available" | "away" } = {},
+  opts: {
+    name?: string
+    email?: string
+    departments?: string[]
+    availability?: "available" | "away"
+    role?: "operator" | "admin" | "superadmin"
+  } = {},
 ): Promise<string> {
   guard()
   const id = randomUUID()
@@ -49,6 +59,7 @@ export async function seedOperator(
       tenantId,
       email: opts.email ?? `op-${id}@example.com`,
       name: opts.name ?? "Operador",
+      role: opts.role ?? "operator",
       departments: opts.departments ?? [],
       availability: opts.availability ?? "away",
       passwordHash: "x", // cuenta "activa" (passwordHash != null)
