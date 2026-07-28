@@ -7,15 +7,16 @@ import { getDb } from "@/db"
 import { adminUsers, adminPasswordTokens, tenants } from "@/db/schema"
 import { generateToken } from "@/lib/admin-crypto"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
+import { canActOnRole, canManageUsers } from "@/lib/roles"
 
 // POST /api/admin/usuarios/:id/resend-invite
 // Genera un token nuevo (invalida el anterior) y reintenta el envío del email.
-// El inviteUrl (con el token crudo) se devuelve siempre para que el superadmin copie
-// el link a mano desde la UI mientras no haya servidor de mail configurado.
+// El inviteUrl (con el token crudo) se devuelve siempre para que quien gestiona usuarios
+// copie el link a mano desde la UI mientras no haya servidor de mail configurado.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
-  if (!session.userId || session.role !== "superadmin") {
-    return NextResponse.json({ error: "Se requiere rol superadmin" }, { status: 403 })
+  if (!session.userId || !canManageUsers(session.role)) {
+    return NextResponse.json({ error: "No tenés permisos de gestión de usuarios" }, { status: 403 })
   }
 
   const { id } = await params
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from(adminUsers)
     .where(and(eq(adminUsers.id, id), eq(adminUsers.tenantId, session.tenantId)))
   if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
+  // Un admin solo puede reenviar invitaciones de operadores (no de admins/superadmins).
+  if (!canActOnRole(session.role, user.role)) {
+    return NextResponse.json({ error: "No tenés permisos sobre este usuario" }, { status: 403 })
+  }
   if (user.passwordHash) return NextResponse.json({ error: "El usuario ya activó su cuenta" }, { status: 409 })
 
   // Invalida tokens anteriores y genera uno nuevo
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       subject: `Invitación al backoffice de ${tenant?.name ?? ""}`,
       html: `
         <p>Hola ${user.name},</p>
-        <p>Fuiste invitado como <strong>${user.role === "superadmin" ? "Superadmin" : "Operador"}</strong> del backoffice.</p>
+        <p>Fuiste invitado como <strong>${user.role === "superadmin" ? "Superadmin" : user.role === "admin" ? "Admin" : "Operador"}</strong> del backoffice.</p>
         <p><a href="${inviteUrl}">Aceptar invitación y crear contraseña</a></p>
         <p>El link vence en 7 días.</p>
       `,

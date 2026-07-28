@@ -10,11 +10,12 @@ import { AvailabilityToggle } from "./AvailabilityToggle"
 import { NotificationsPrompt } from "./NotificationsPrompt"
 import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
 import type { InboxContact } from "@/lib/inbox-api"
+import { roleRank, type AdminRole } from "@/lib/roles"
 
 interface AdminShellProps {
   name: string
   email: string
-  role: "operator" | "superadmin"
+  role: AdminRole
   logoSrc?: string
   tenantName?: string
   availability: "available" | "away"
@@ -23,12 +24,19 @@ interface AdminShellProps {
   children: React.ReactNode
 }
 
+function roleLabel(role: AdminRole): string {
+  if (role === "superadmin") return "Superadmin"
+  if (role === "admin") return "Admin"
+  return "Operador"
+}
+
 // `flag`: entradas gateadas por feature flag (evaluado server-side y pasado por prop).
+// `minRole`: nivel mínimo para ver la entrada (usa el ranking de roles).
 const NAV = [
   { href: "/admin/inbox", label: "Inbox", icon: <MessageSquare size={16} strokeWidth={1.6} /> },
-  { href: "/admin/uso", label: "Uso del bot", icon: <BarChart3 size={16} strokeWidth={1.6} />, superadminOnly: true, flag: "usagePanel" as const },
-  { href: "/admin/catalogo", label: "Catálogo", icon: <Package size={16} strokeWidth={1.6} />, superadminOnly: true },
-  { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, superadminOnly: true },
+  { href: "/admin/uso", label: "Uso del bot", icon: <BarChart3 size={16} strokeWidth={1.6} />, minRole: "superadmin" as const, flag: "usagePanel" as const },
+  { href: "/admin/catalogo", label: "Catálogo", icon: <Package size={16} strokeWidth={1.6} />, minRole: "superadmin" as const },
+  { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, minRole: "admin" as const },
 ]
 
 export function AdminShell({ name, email, role, logoSrc, tenantName, availability, currentUserId, usagePanelEnabled, children }: AdminShellProps) {
@@ -74,7 +82,7 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
   }
 
   const visibleNav = NAV.filter((item) => {
-    if (item.superadminOnly && role !== "superadmin") return false
+    if (item.minRole && roleRank(role) < roleRank(item.minRole)) return false
     if (item.flag === "usagePanel" && !usagePanelEnabled) return false
     return true
   })
@@ -103,7 +111,7 @@ export function AdminShell({ name, email, role, logoSrc, tenantName, availabilit
       }))}
       user={{
         name,
-        subtitle: `${email} · ${role === "superadmin" ? "Superadmin" : "Operador"}`,
+        subtitle: `${email} · ${roleLabel(role)}`,
         logoutIcon: <LogOut size={15} strokeWidth={1.6} />,
         onLogout: handleLogout,
       }}

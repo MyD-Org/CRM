@@ -5,9 +5,10 @@ import { notFound } from "next/navigation"
 import { getDb } from "@/db"
 import { tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
-import { getUsageSummary, type UsageSummary } from "@/lib/inbox-api"
+import { getUsageSummary, getLimits, type UsageSummary, type BotLimits } from "@/lib/inbox-api"
 import { botUsagePanelEnabled } from "@/lib/flags"
 import { UsagePanel } from "@/components/admin/UsagePanel"
+import { LimitsPanel } from "@/components/admin/LimitsPanel"
 
 export const dynamic = "force-dynamic"
 
@@ -22,13 +23,17 @@ export default async function UsoPage() {
   const [tenant] = await getDb().select().from(tenants).where(eq(tenants.id, session.tenantId))
 
   let summary: UsageSummary | null = null
+  let limits: BotLimits | null = null
   let configError = ""
 
   if (!tenant?.aiTenantId || !tenant?.aiApiUrl) {
     configError = "El inbox no está configurado. Completá AI_TENANT_ID y AI_API_URL en la config del tenant."
   } else {
     try {
-      summary = await getUsageSummary(tenant.aiApiUrl, tenant.aiTenantId, 30)
+      ;[summary, limits] = await Promise.all([
+        getUsageSummary(tenant.aiApiUrl, tenant.aiTenantId, 30),
+        getLimits(tenant.aiApiUrl, tenant.aiTenantId),
+      ])
     } catch {
       configError = "No se pudo conectar con la API. Verificá la configuración."
     }
@@ -49,7 +54,10 @@ export default async function UsoPage() {
           {configError}
         </div>
       ) : (
-        <UsagePanel initial={summary!} />
+        <>
+          <LimitsPanel initial={limits!} />
+          <UsagePanel initial={summary!} />
+        </>
       )}
     </div>
   )

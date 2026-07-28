@@ -5,13 +5,14 @@ import { notFound } from "next/navigation"
 import { getDb } from "@/db"
 import { adminUsers, adminPasswordTokens } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
+import { canManageUsers } from "@/lib/roles"
 import { UserList } from "@/components/admin/UserList"
 
 export const dynamic = "force-dynamic"
 
 export default async function UsuariosPage() {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
-  if (session.role !== "superadmin") notFound()
+  if (!canManageUsers(session.role)) notFound()
 
   const users = await getDb()
     .select({

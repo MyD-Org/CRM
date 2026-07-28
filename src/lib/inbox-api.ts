@@ -82,8 +82,9 @@ async function inboxFetch(
   aiTenantId: string,
   path: string,
   init: RequestInit = {},
+  role?: string,
 ): Promise<Response> {
-  const token = await mintInboxToken(aiTenantId)
+  const token = await mintInboxToken(aiTenantId, role)
   return fetch(`${aiApiUrl}${path}`, {
     ...init,
     headers: {
@@ -196,6 +197,37 @@ export async function getUsageSummary(
   days = 30,
 ): Promise<UsageSummary> {
   const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/usage?days=${days}`)
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+  return res.json()
+}
+
+// Topes de uso del bot (guardrails de gasto). Viven en la ai-api (tenants.settings.limits) y
+// los aplica checkRateLimit. Campos opcionales: si un tope no está, no hay límite para esa
+// dimensión. Solo superadmin puede escribirlos (la ai-api lo exige vía el rol del staff token).
+export interface BotLimits {
+  messages_per_day?: number
+  tokens_per_month?: number
+}
+
+export async function getLimits(aiApiUrl: string, aiTenantId: string): Promise<BotLimits> {
+  const res = await inboxFetch(aiApiUrl, aiTenantId, "/v1/inbox/limits")
+  if (!res.ok) throw new Error(`ai-api error ${res.status}`)
+  return res.json()
+}
+
+// `patch` por dimensión: número (setear), null (quitar ese tope), ausente (no tocar). Pasa el
+// rol al token para que la ai-api autorice la mutación (defensa en profundidad).
+export async function setLimits(
+  aiApiUrl: string,
+  aiTenantId: string,
+  patch: { messages_per_day?: number | null; tokens_per_month?: number | null },
+  role: string,
+): Promise<BotLimits> {
+  const res = await inboxFetch(
+    aiApiUrl, aiTenantId, "/v1/inbox/limits",
+    { method: "PATCH", body: JSON.stringify(patch) },
+    role,
+  )
   if (!res.ok) throw new Error(`ai-api error ${res.status}`)
   return res.json()
 }

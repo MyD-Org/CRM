@@ -5,7 +5,7 @@ export interface AdminSessionData {
   userId: string
   name: string
   email: string
-  role: "operator" | "superadmin"
+  role: "operator" | "admin" | "superadmin"
   tenantId: string
 }
 
