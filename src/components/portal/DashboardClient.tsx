@@ -120,10 +120,10 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
 
   // Sincroniza con los query params (?tab=&q=) cuando cambian — p.ej. al tocar
   // una notificación estando ya en el dashboard.
-  const prevNav = useRef(`${startTab}|${startQuery}`)
+  const [prevNav, setPrevNav] = useState(`${startTab}|${startQuery}`)
   const navKey = `${toTab(initialTab)}|${initialQuery ?? ""}`
-  if (prevNav.current !== navKey) {
-    prevNav.current = navKey
+  if (prevNav !== navKey) {
+    setPrevNav(navKey)
     const t = toTab(initialTab)
     const q = initialQuery ?? ""
     setActiveTab(t)
@@ -399,15 +399,15 @@ function FacturasTable({
   const [toDate, setToDate] = useState("")
   const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
 
-  const prevInitial = useRef(initialFilter)
-  if (prevInitial.current !== initialFilter) {
-    prevInitial.current = initialFilter
+  const [prevInitial, setPrevInitial] = useState(initialFilter)
+  if (prevInitial !== initialFilter) {
+    setPrevInitial(initialFilter)
     setFilterEstados(initialToSet(initialFilter))
   }
 
-  const prevSearch = useRef(initialSearch)
-  if (prevSearch.current !== initialSearch) {
-    prevSearch.current = initialSearch
+  const [prevSearch, setPrevSearch] = useState(initialSearch)
+  if (prevSearch !== initialSearch) {
+    setPrevSearch(initialSearch)
     setSearch(initialSearch)
     setSearchOpen(!!initialSearch)
   }
@@ -417,9 +417,9 @@ function FacturasTable({
 
   // Abre el detalle de la factura indicada por URL (?factura=ID) — usado al tocar
   // una notificación. Se reabre si cambia el id.
-  const prevOpen = useRef<string | undefined>(undefined)
-  if (openFacturaId && prevOpen.current !== openFacturaId) {
-    prevOpen.current = openFacturaId
+  const [prevOpen, setPrevOpen] = useState<string | undefined>(undefined)
+  if (openFacturaId && prevOpen !== openFacturaId) {
+    setPrevOpen(openFacturaId)
     const target = facturas.find((f) => f.id === openFacturaId)
     if (target) setModalFactura(target)
   }
@@ -625,9 +625,9 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
   const [search, setSearch] = useState(initialSearch)
   const [searchOpen, setSearchOpen] = useState(!!initialSearch)
 
-  const prevSearch = useRef(initialSearch)
-  if (prevSearch.current !== initialSearch) {
-    prevSearch.current = initialSearch
+  const [prevSearch, setPrevSearch] = useState(initialSearch)
+  if (prevSearch !== initialSearch) {
+    setPrevSearch(initialSearch)
     setSearch(initialSearch)
     setSearchOpen(!!initialSearch)
   }
@@ -830,9 +830,9 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
   const [search, setSearch] = useState(initialSearch)
   const [searchOpen, setSearchOpen] = useState(!!initialSearch)
 
-  const prevSearch = useRef(initialSearch)
-  if (prevSearch.current !== initialSearch) {
-    prevSearch.current = initialSearch
+  const [prevSearch, setPrevSearch] = useState(initialSearch)
+  if (prevSearch !== initialSearch) {
+    setPrevSearch(initialSearch)
     setSearch(initialSearch)
     setSearchOpen(!!initialSearch)
   }
@@ -1448,16 +1448,22 @@ function WhatsAppFacturasModal({
     el.setSelectionRange(el.value.length, el.value.length)
   }, [])
 
+  // Al cambiar el intent se regenera el mensaje, descartando ediciones previas.
+  const [prevIntent, setPrevIntent] = useState(intent)
+  if (prevIntent !== intent) {
+    setPrevIntent(intent)
+    setMessage(buildFacturasWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, facturas, fmt))
+  }
+
+  // Tras regenerar el mensaje, devuelve el foco al textarea con el cursor al final.
   useEffect(() => {
-    const newMsg = buildFacturasWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, facturas, fmt)
-    setMessage(newMsg)
     setTimeout(() => {
       const el = textareaRef.current
       if (!el) return
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     }, 0)
-  }, [intent, facturas, razonsocial, cuentaCorriente, tenantName])
+  }, [intent])
 
   const intents: { value: WhatsAppFacturaIntent; title: string; subtitle: string }[] = [
     { value: "pagar", title: "Quiero pagar", subtitle: "Coordinar el pago de estas facturas" },
@@ -2249,15 +2255,22 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente,
     el.setSelectionRange(el.value.length, el.value.length)
   }, [])
 
-  useEffect(() => {
+  // Al cambiar el intent se regenera el mensaje, descartando ediciones previas.
+  const [prevIntent, setPrevIntent] = useState(intent)
+  if (prevIntent !== intent) {
+    setPrevIntent(intent)
     setMessage(buildPresupuestosWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, presupuestos, fmt))
+  }
+
+  // Tras regenerar el mensaje, devuelve el foco al textarea con el cursor al final.
+  useEffect(() => {
     setTimeout(() => {
       const el = textareaRef.current
       if (!el) return
       el.focus()
       el.setSelectionRange(el.value.length, el.value.length)
     }, 0)
-  }, [intent, presupuestos, razonsocial, cuentaCorriente])
+  }, [intent])
 
   const intents: { value: WhatsAppPresupuestoIntent; title: string; subtitle: string }[] = [
     { value: "avanzar", title: "Quiero avanzar", subtitle: "Confirmar y avanzar con estos presupuestos" },

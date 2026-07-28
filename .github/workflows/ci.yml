@@ -56,10 +56,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # `npm run lint` NO está acá a propósito: hoy hay 14 errores preexistentes de reglas de
-      # React Hooks (DashboardClient, AiChat, CatalogManager). Ponerlo como gate haría fallar
-      # todos los PRs desde el día uno por deuda vieja, y un CI siempre en rojo se ignora.
-      # Cuando esos errores se limpien, agregar acá:  - run: npm run lint
+      # Gate de lint: falla solo con errores. Quedan warnings de no-unused-vars que no rompen
+      # el build; si en algún momento se limpian, se le puede agregar --max-warnings 0.
+      - name: Lint
+        run: npm run lint
+
       - name: Typecheck
         run: npx tsc --noEmit
 
