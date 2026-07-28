@@ -14,6 +14,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # packages:read → el .npmrc del repo baja @myd-org/ui desde GitHub Packages usando
+    # ${GITHUB_TOKEN}. Sin este permiso, npm ci falla con 401.
+    permissions:
+      contents: read
+      packages: read
+
     # Los tests de integración corren contra un Postgres real. El global-setup crea la DB
     # crm_test y le aplica las migraciones de drizzle solo; acá solo hace falta el servidor.
     services:
@@ -43,7 +49,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # El .npmrc del repo apunta @myd-org al registro de GitHub Packages y espera la variable
+      # GITHUB_TOKEN para autenticarse (en local la tenés exportada; acá la da Actions).
+      - name: Instalar dependencias
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # `npm run lint` NO está acá a propósito: hoy hay 14 errores preexistentes de reglas de
       # React Hooks (DashboardClient, AiChat, CatalogManager). Ponerlo como gate haría fallar
