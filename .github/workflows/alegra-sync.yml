@@ -1,0 +1,57 @@
+name: Sync catálogo Alegra
+
+# El endpoint /api/cron/alegra-sync existe pero no está en el "crons" de vercel.json:
+# el plan Hobby topea la cantidad de cron jobs y solo permite una corrida por día.
+# Se dispara desde acá, que además deja elegir la frecuencia. Ver AGENTS.md.
+
+on:
+  schedule:
+    # Una vez por día, 07:00 UTC = 04:00 en Argentina (UTC-3). Alcanza con esta frecuencia:
+    # la cache solo se usa para BUSCAR el producto; el precio y el stock que se le confirman
+    # al cliente se piden en vivo a Alegra (getItemsLive) antes de cotizar. Lo único que
+    # una sync diaria demora es que aparezcan productos NUEVOS o renombrados.
+    - cron: "0 7 * * *"
+  # Permite dispararlo a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+# Si una corrida se solapa con la anterior (la sync de un catálogo grande tarda ~1 min),
+# se espera en vez de pegarle dos veces a Alegra en paralelo.
+concurrency:
+  group: alegra-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar la sincronización
+        env:
+          BASE_URL: ${{ vars.CRM_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Faltan la variable CRM_BASE_URL o el secreto CRON_SECRET del repo." >&2
+            exit 1
+          fi
+
+          # --max-time 320 > maxDuration=300 de la ruta: si Vercel corta, queremos ver su
+          # error, no un timeout de curl. -sS calla la barra de progreso pero no los errores.
+          http_code=$(curl -sS -o response.json -w '%{http_code}' \
+            --max-time 320 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$BASE_URL/api/cron/alegra-sync")
+
+          echo "HTTP $http_code"
+          cat response.json
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::La sincronización falló con HTTP $http_code"
+            exit 1
+          fi
+
+          # La ruta responde 200 aunque un tenant falle (es best-effort por tenant):
+          # hay que mirar el ok de cada uno para enterarse.
+          if grep -q '"ok":false' response.json; then
+            echo "::error::Al menos un tenant falló. Ver el detalle de arriba."
+            exit 1
+          fi
