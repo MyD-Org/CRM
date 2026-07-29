@@ -1,4 +1,4 @@
-import { and, eq, or, ilike } from "drizzle-orm"
+import { and, eq, or, sql } from "drizzle-orm"
 import { getDb } from "@/db"
 import { catalogProducts } from "@/db/schema"
 import { authAgentTenantRequest } from "@/lib/agent-auth"
@@ -28,6 +28,21 @@ export async function GET(req: Request) {
 
     const db = getDb()
 
+    // Tokenizamos por espacios y hacemos AND entre tokens: "disco de lija" matchea
+    // "LIJA DISCO 140" aunque el orden difiera. Tokens de < 3 chars (ej. "de", "el") los
+    // descartamos: agregan ruido por ILIKE (matchean cualquier cosa que contenga esa
+    // subcadena). Si no queda ningún token útil, caemos a la frase original.
+    // Sobre name/description/code aplicamos unaccent() en ambos lados: "termica" matchea
+    // "Térmica" y "lija" matchea "lijá". ILIKE ya cubre el case.
+    const tokens = q.split(/\s+/).filter((t) => t.length >= 3)
+    const searchTerms = tokens.length > 0 ? tokens : [q]
+    const tokenMatch = (t: string) =>
+      or(
+        sql`unaccent(${catalogProducts.name}) ILIKE unaccent(${`%${t}%`})`,
+        sql`unaccent(${catalogProducts.description}) ILIKE unaccent(${`%${t}%`})`,
+        sql`unaccent(${catalogProducts.code}) ILIKE unaccent(${`%${t}%`})`,
+      )
+
     const rows = await db
       .select()
       .from(catalogProducts)
@@ -35,11 +50,7 @@ export async function GET(req: Request) {
         and(
           eq(catalogProducts.tenantId, tenant.id),
           eq(catalogProducts.status, "active"),
-          or(
-            ilike(catalogProducts.name, `%${q}%`),
-            ilike(catalogProducts.description, `%${q}%`),
-            ilike(catalogProducts.code, `%${q}%`),
-          ),
+          ...searchTerms.map(tokenMatch),
         ),
       )
       .limit(20)
