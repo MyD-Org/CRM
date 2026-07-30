@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User, AlertTriangle, RefreshCw } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
 import { AiAssistPanel } from "./AiAssistPanel"
+import { subscribeAssistOpen, getAssistOpen, setAssistOpen } from "@/lib/assist-open"
 
 const PAGE_SIZE = 30
 
@@ -44,7 +45,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
   // dispararle rerenders al operador mientras edita.
   const draftFromCopilot = useRef<string | null>(null)
   const [archiving, setArchiving] = useState(false)
-  const [assistOpen, setAssistOpen] = useState(false)
+  // Precarga del hilo del copiloto: se dispara al pasar el mouse (o tabular) por el botón.
+  const [assistPrefetch, setAssistPrefetch] = useState(false)
+
+  // Si el copiloto quedó abierto, sigue abierto en la próxima conversación (ver assist-open.ts).
+  const assistOpen = useSyncExternalStore(subscribeAssistOpen, getAssistOpen, () => false)
+  const toggleAssist = setAssistOpen
   // Ancho del panel del copiloto (px), arrastrable desde la barra divisoria. Se recuerda en
   // localStorage. Inicializador lazy (SSR-safe): el panel arranca cerrado, así que no hay mismatch.
   const [assistWidth, setAssistWidth] = useState<number>(() => {
@@ -379,7 +385,9 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           <Button
             variant={assistOpen ? "primary" : "secondary"}
             size="sm"
-            onClick={() => setAssistOpen((o) => !o)}
+            onClick={() => toggleAssist(!assistOpen)}
+            onMouseEnter={() => setAssistPrefetch(true)}
+            onFocus={() => setAssistPrefetch(true)}
             className="flex items-center gap-1.5 rounded-full"
           >
             <Sparkles size={11} strokeWidth={1.6} />
@@ -541,7 +549,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       {/* Copiloto de IA, en flujo al costado: la conversación se achica, no se tapa. */}
       <AiAssistPanel
         open={assistOpen}
-        onClose={() => setAssistOpen(false)}
+        prefetch={assistPrefetch}
+        onClose={() => toggleAssist(false)}
         endUserId={contact.end_user_id}
         contactName={contact.contact}
         width={assistWidth}
