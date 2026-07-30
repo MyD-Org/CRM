@@ -43,6 +43,10 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const startedFor = useRef<string | null>(null)
+  // El primer token viene en la misma respuesta que crea el hilo. Lo consumimos UNA vez por
+  // fetchToken (el widget lo pide al mount) para que ese pedido inicial no cueste un round-trip
+  // extra. Las siguientes veces —cuando el token expira y el widget pide uno nuevo— sí van a red.
+  const initialTokenRef = useRef<string | null>(null)
 
   // Busca-o-crea el hilo de asistencia y devuelve el payload. El widget usa fetchToken para
   // refrescar el token re-llamando a este endpoint (find-or-create → mismo conversationId).
@@ -65,7 +69,10 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
     setLoading(true)
     setError("")
     fetchAssist()
-      .then((data) => setInit({ conversationId: data.conversationId, agentId: data.agentId }))
+      .then((data) => {
+        initialTokenRef.current = data.token
+        setInit({ conversationId: data.conversationId, agentId: data.agentId })
+      })
       .catch((e: unknown) => {
         const code = e instanceof Error ? e.message : "assist_failed"
         setError(
@@ -85,7 +92,16 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
         baseUrl: "/ai-api",
         agentId: init.agentId,
         conversationId: init.conversationId,
-        fetchToken: async () => (await fetchAssist()).token,
+        fetchToken: async () => {
+          // Primera llamada del widget: usar el token que ya trajimos con el hilo. En las
+          // siguientes (renovación tras 401) sí volvemos a /assist.
+          const cached = initialTokenRef.current
+          if (cached) {
+            initialTokenRef.current = null
+            return cached
+          }
+          return (await fetchAssist()).token
+        },
       },
     [init, fetchAssist],
   )
