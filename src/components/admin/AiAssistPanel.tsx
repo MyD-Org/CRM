@@ -8,6 +8,10 @@ import "@myd-org/ai-widget/styles"
 
 interface Props {
   open: boolean
+  /** Arranca el hilo SIN abrir el panel (ej. al pasar el mouse por el botón). El pedido no usa
+   *  el modelo —solo busca-o-crea el hilo y devuelve el token—, así que adelantarlo no cuesta
+   *  nada y saca la espera del click. Ver el useEffect de abajo. */
+  prefetch?: boolean
   onClose: () => void
   endUserId: string
   contactName: string
@@ -34,7 +38,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel, onUseSuggestion }: Props) {
+export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel, onUseSuggestion }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -51,9 +55,11 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
     return res.json() as Promise<{ conversationId: string; token: string; agentId: string; baseUrl: string }>
   }, [endUserId])
 
-  // Al abrir (o cambiar de contacto) arranca el hilo una sola vez por contacto.
+  // Al abrir —o al precargar, o al cambiar de contacto— arranca el hilo una sola vez por
+  // contacto. Con `prefetch` esto corre con el panel cerrado: abajo devolvemos null igual, pero
+  // cuando el operador hace click el token ya está y el panel aparece sin espera.
   useEffect(() => {
-    if (!open || startedFor.current === endUserId) return
+    if ((!open && !prefetch) || startedFor.current === endUserId) return
     startedFor.current = endUserId
     setInit(null)
     setLoading(true)
@@ -69,7 +75,7 @@ export function AiAssistPanel({ open, onClose, endUserId, contactName, width = 3
         )
       })
       .finally(() => setLoading(false))
-  }, [open, endUserId, fetchAssist])
+  }, [open, prefetch, endUserId, fetchAssist])
 
   // Config estable por hilo: recrearla en cada render haría que el widget recree su cliente
   // y recargue el historial en pleno streaming (borra el mensaje optimista y las cards).
