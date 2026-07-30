@@ -13,15 +13,16 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId) redirect("/admin/login")
 
-  const tenant = session.tenantId ? await getTenantByIdFromDb(session.tenantId) : null
-
-  const [me] = await getDb()
-    .select({ availability: adminUsers.availability })
-    .from(adminUsers)
-    .where(eq(adminUsers.id, session.userId))
+  // Las tres son independientes: en serie sumaban 3 round-trips a cada navegación.
+  const [tenant, [me], usagePanelEnabled] = await Promise.all([
+    session.tenantId ? getTenantByIdFromDb(session.tenantId) : null,
+    getDb()
+      .select({ availability: adminUsers.availability })
+      .from(adminUsers)
+      .where(eq(adminUsers.id, session.userId)),
+    botUsagePanelEnabled(),
+  ])
   const availability = me?.availability === "available" ? "available" : "away"
-
-  const usagePanelEnabled = await botUsagePanelEnabled()
 
   return (
     <AdminShell

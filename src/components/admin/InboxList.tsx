@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
@@ -8,6 +8,10 @@ import { channelLabel, type InboxContact } from "@/lib/inbox-api"
 
 type Tab = "active" | "history"
 type Scope = "all" | "mine"
+
+// Cada cuánto el poll pide además reconciliar la cola (?reconcile=1). Ver el comentario en
+// src/app/api/admin/inbox/contacts/route.ts: leer es barato, reconciliar escribe en la DB.
+const RECONCILE_EVERY_MS = 60_000
 
 interface Props {
   initialContacts: InboxContact[]
@@ -21,6 +25,17 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
   const [tab, setTab] = useState<Tab>("active")
   const [scope, setScope] = useState<Scope>("all")
 
+  // null = todavía no reconciliamos desde el cliente. El reloj arranca en el primer poll
+  // porque el server ya reconcilió al rendear la página (no hace falta repetirlo enseguida).
+  const lastReconcileAt = useRef<number | null>(null)
+  // Pedido explícito de reconciliar en el próximo poll (ver el chequeo de handoffs nuevos).
+  const forceReconcile = useRef(false)
+  // Conversaciones derivadas y sin dueño para las que YA pedimos una reconciliación. Sirve
+  // para reaccionar rápido a un handoff nuevo (se reconcilia en el próximo poll, ~10s) sin
+  // volver al comportamiento viejo cuando la conversación queda pendiente porque no hay
+  // nadie disponible en ese depto: en ese caso esperamos al tick de 60s.
+  const reconcileTriedFor = useRef(new Set<string>())
+
   // El fetch depende solo de la solapa principal: "Activas" trae solo ventana abierta;
   // "Históricas" trae todos. "Todas / Mis conversaciones" es una sub-solapa que filtra
   // esa misma lista en el cliente, no dispara otro fetch.
@@ -28,15 +43,49 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
     const fetchScope = tab === "active" ? "active" : "all"
     let cancelled = false
     const load = async () => {
+      // Leer va cada 10s, pero RECONCILIAR (que escribe en la DB) solo cada 60s: repartir la
+      // cola en cada pasada era carga constante sobre Neon, multiplicada por pestaña abierta.
+      const now = Date.now()
+      if (lastReconcileAt.current === null) lastReconcileAt.current = now
+      const shouldReconcile =
+        forceReconcile.current || now - lastReconcileAt.current >= RECONCILE_EVERY_MS
+      if (shouldReconcile) {
+        lastReconcileAt.current = now
+        forceReconcile.current = false
+      }
+
       // `no-store`: sin esto el navegador cachea el GET (misma URL en cada poll) y la lista
       // se queda con datos viejos —p. ej. una conversación recién asignada sigue "Sin asignar"—
       // hasta un reload manual.
-      const res = await fetch(`/api/admin/inbox/contacts?scope=${fetchScope}`, { cache: "no-store" })
-      if (res.ok && !cancelled) setContacts(await res.json())
       // Estado del kill switch: si el bot está pausado, las conversaciones en modo bot NO las
       // atiende nadie, así que se muestran "Sin asignar" (no "Bot"). Se pollea para reflejar
-      // el toggle sin recargar.
-      const bs = await fetch("/api/admin/inbox/bot-status", { cache: "no-store" }).catch(() => null)
+      // el toggle sin recargar. Las dos llamadas son independientes: en paralelo.
+      const [res, bs] = await Promise.all([
+        fetch(
+          `/api/admin/inbox/contacts?scope=${fetchScope}${shouldReconcile ? "&reconcile=1" : ""}`,
+          { cache: "no-store" },
+        ).catch(() => null),
+        fetch("/api/admin/inbox/bot-status", { cache: "no-store" }).catch(() => null),
+      ])
+      if (res?.ok && !cancelled) {
+        const next: InboxContact[] = await res.json()
+        setContacts(next)
+
+        // ¿Apareció una conversación derivada sin operador que todavía no intentamos
+        // repartir? Adelantamos la reconciliación al próximo poll en vez de esperar los 60s.
+        const fresh = next.filter(
+          (c) =>
+            c.mode === "human" &&
+            c.status !== "closed" &&
+            !c.assigned_operator_id &&
+            c.current_conversation_id &&
+            !reconcileTriedFor.current.has(c.current_conversation_id),
+        )
+        if (fresh.length) {
+          for (const c of fresh) reconcileTriedFor.current.add(c.current_conversation_id!)
+          forceReconcile.current = true
+        }
+      }
       if (bs?.ok && !cancelled) setBotEnabled((await bs.json()).botEnabled)
     }
     load()

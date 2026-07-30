@@ -17,14 +17,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "inbox no configurado" }, { status: 503 })
   }
 
-  const scope = new URL(req.url).searchParams.get("scope") === "all" ? "all" : "active"
+  const params = new URL(req.url).searchParams
+  const scope = params.get("scope") === "all" ? "all" : "active"
   const tenantRef = { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId }
 
-  // Reconcilia la cola en cada poll: adopta asignaciones viejas y reparte pendientes al
-  // operador disponible menos cargado. Best-effort (no rompe el listado). Ver ADR 0006.
-  // Reutilizamos las conversaciones que trajo la reconciliación para no re-consultarlas.
-  const convs = await assignPendingConversations(tenantRef)
+  // Reconciliación de la cola (adoptar asignaciones viejas + repartir pendientes al operador
+  // disponible menos cargado, ADR 0006): solo cuando el cliente la pide con ?reconcile=1.
+  // El inbox se pollea cada 10s por pestaña abierta; correr las ESCRITURAS en cada pasada era
+  // carga constante sobre la DB sin nada nuevo que reconciliar el 99% de las veces. El cliente
+  // la pide cada 60s (y el render del server ya reconcilia al entrar al inbox).
+  // Best-effort: no rompe el listado. Reutilizamos lo que trajo para no re-consultarlo.
+  const reconcile = params.get("reconcile") === "1"
+  const { convs, assignments } = reconcile
+    ? await assignPendingConversations(tenantRef)
+    : { convs: undefined, assignments: undefined }
 
-  const enriched = await listEnrichedContacts(tenantRef, scope, convs)
+  const enriched = await listEnrichedContacts(tenantRef, scope, convs, assignments)
   return NextResponse.json(enriched)
 }
