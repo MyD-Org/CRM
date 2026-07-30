@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { eq, and } from "drizzle-orm"
+import { eq, and, count, inArray } from "drizzle-orm"
 import { notFound } from "next/navigation"
 import { getDb } from "@/db"
 import { priceLists, catalogItems, tenants } from "@/db/schema"
@@ -34,18 +34,23 @@ export default async function CatalogoPage() {
     .where(eq(priceLists.tenantId, session.tenantId))
     .orderBy(priceLists.createdAt)
 
-  const counts = await Promise.all(
-    lists.map(async (l) => {
-      const items = await db.select({ id: catalogItems.id }).from(catalogItems).where(eq(catalogItems.priceListId, l.id))
-      return { id: l.id, count: items.length }
-    }),
-  )
-  const countMap = Object.fromEntries(counts.map((c) => [c.id, c.count]))
-
-  const [tenant] = await db
-    .select({ paymentConditions: tenants.paymentConditions })
-    .from(tenants)
-    .where(eq(tenants.id, session.tenantId))
+  // Un COUNT agrupado en SQL, no una query por lista trayendo TODOS los ids para contarlos
+  // en JS (con miles de ítems eso traía miles de filas solo para mostrar un número).
+  const listIds = lists.map((l) => l.id)
+  const [counts, [tenant]] = await Promise.all([
+    listIds.length
+      ? db
+          .select({ priceListId: catalogItems.priceListId, count: count() })
+          .from(catalogItems)
+          .where(inArray(catalogItems.priceListId, listIds))
+          .groupBy(catalogItems.priceListId)
+      : Promise.resolve([]),
+    db
+      .select({ paymentConditions: tenants.paymentConditions })
+      .from(tenants)
+      .where(eq(tenants.id, session.tenantId)),
+  ])
+  const countMap = Object.fromEntries(counts.map((c) => [c.priceListId, c.count]))
 
   type PriceColumn = { key: string; label: string }
   const initialLists = lists.map((l) => ({
