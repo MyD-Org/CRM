@@ -193,6 +193,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         body: JSON.stringify({ operatorId: currentUserId }),
       })
     }
+    // Cambió el modo (y quizá el dueño): la copia cacheada de la lista quedó vieja.
+    router.refresh()
   }
 
   // Pasar la conversación a tu nombre aunque ya la tenga otro operador (o esté sin asignar en
@@ -211,6 +213,8 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     setAssignedOperatorId(currentUserId)
     setMode("human")
     setStatus("active")
+    // Cambió el dueño visible: la copia cacheada de la lista quedó vieja.
+    router.refresh()
     toast({ title: "Te asignaste la conversación", tone: "success" })
   }
 
@@ -224,6 +228,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         return
       }
       toast({ title: "Conversación finalizada", description: "Vuelve a modo bot y queda sin asignar.", tone: "success" })
+      // Invalida el Client Cache ANTES de volver: si no, la lista sale de la copia cacheada
+      // (staleTimes.dynamic en next.config.ts) y la conversación recién finalizada seguiría
+      // apareciendo hasta el próximo poll, como si la acción no se hubiera guardado.
+      router.refresh()
       router.push("/admin/inbox")
     } finally {
       setArchiving(false)
