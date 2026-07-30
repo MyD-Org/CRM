@@ -2,6 +2,7 @@ import { listContacts, listConversations, type InboxContact, type InboxConversat
 import { getAssignments, type Assignment } from "./assignment"
 import { operatorNamesByIds } from "./operator-names"
 
+
 // Lista de contactos del inbox ENRIQUECIDA con la fuente de verdad del CRM:
 // - assigned_operator_id / _name → de conversation_assignments (Neon), NO de ai-api.
 // - assigned_department → del handoff que etiqueta el bot en ai-api (listConversations).
@@ -36,21 +37,34 @@ export async function listEnrichedContacts(
   }))
 }
 
+// Datos que el caller puede haber empezado a pedir ANTES de tener el contacto: ninguno
+// depende de él. Se aceptan como promesas para que la página arranque todo junto y esto no
+// sea otra tanda en la cascada (ver la vista de conversación).
+export interface EnrichContactPrefetch {
+  conversations?: Promise<InboxConversation[]> | InboxConversation[]
+  assignments?: Promise<Assignment[]> | Assignment[]
+  operatorNames?: Promise<Map<string, string>> | Map<string, string>
+}
+
 // Enriquece UN contacto (vista de conversación) con la misma fuente de verdad del CRM.
 export async function enrichContact(
   tenant: { id: string; aiApiUrl: string; aiTenantId: string },
   contact: InboxContact,
+  prefetch: EnrichContactPrefetch = {},
 ): Promise<InboxContact> {
   const convId = contact.current_conversation_id
   if (!convId) return { ...contact, assigned_operator_id: null, assigned_operator_name: null, assigned_department: null }
 
   const [conversations, assignments] = await Promise.all([
-    listConversations(tenant.aiApiUrl, tenant.aiTenantId).catch(() => []),
-    getAssignments(tenant.id),
+    prefetch.conversations ?? listConversations(tenant.aiApiUrl, tenant.aiTenantId).catch(() => []),
+    prefetch.assignments ?? getAssignments(tenant.id),
   ])
   const operatorId = assignments.find((a) => a.conversationId === convId)?.operatorId ?? null
   const department = conversations.find((c) => c.id === convId)?.assigned_department ?? null
-  const nameById = await operatorNamesByIds([operatorId])
+  // Sin prefetch resolvemos solo el nombre que hace falta; con prefetch ya vienen todos.
+  const nameById = prefetch.operatorNames
+    ? await prefetch.operatorNames
+    : await operatorNamesByIds([operatorId])
 
   return {
     ...contact,
