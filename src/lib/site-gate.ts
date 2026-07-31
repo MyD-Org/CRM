@@ -31,9 +31,10 @@ export async function checkSiteGate(request: NextRequest): Promise<NextResponse 
     const form = await request.formData()
     const reqUser = String(form.get("user") ?? "")
     const reqPass = String(form.get("pass") ?? "")
+    const from = safeFromPath(form.get("from"))
 
     if (secureCompare(reqUser, user) && secureCompare(reqPass, pass)) {
-      const res = NextResponse.redirect(new URL("/", request.url), 303)
+      const res = NextResponse.redirect(new URL(from, request.url), 303)
       res.cookies.set(GATE_COOKIE, token, {
         httpOnly: true,
         secure: request.nextUrl.protocol === "https:",
@@ -44,19 +45,49 @@ export async function checkSiteGate(request: NextRequest): Promise<NextResponse 
       return res
     }
 
-    return new NextResponse(gateHtml({ error: true }), {
+    return new NextResponse(gateHtml({ error: true, pathname: from }), {
       status: 401,
       headers: { "Content-Type": "text/html; charset=utf-8" },
     })
   }
 
-  return new NextResponse(gateHtml({ error: false }), {
+  return new NextResponse(gateHtml({ error: false, pathname: request.nextUrl.pathname }), {
     status: 200,
     headers: { "Content-Type": "text/html; charset=utf-8" },
   })
 }
 
-function gateHtml({ error }: { error: boolean }) {
+// Evita open redirect: solo se acepta un path relativo propio ("/admin/x"), nunca
+// una URL absoluta ni "//host" (que el navegador trata como protocol-relative).
+function safeFromPath(value: FormDataEntryValue | null): string {
+  const str = String(value ?? "/")
+  if (!str.startsWith("/") || str.startsWith("//")) return "/"
+  return str
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
+function copyForPath(pathname: string): { title: string; lead: string } {
+  if (pathname.startsWith("/admin")) {
+    return {
+      title: "Estamos preparando el panel",
+      lead: "El panel de gestión todavía está en construcción.",
+    }
+  }
+  return {
+    title: "Estamos preparando el portal",
+    lead: "El portal de clientes todavía está en construcción.",
+  }
+}
+
+function gateHtml({ error, pathname }: { error: boolean; pathname: string }) {
+  const { title, lead } = copyForPath(pathname)
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -211,8 +242,8 @@ function gateHtml({ error }: { error: boolean }) {
   <div class="wrap">
     <div class="card">
       <div class="badge"><span class="dot"></span>Próximamente</div>
-      <h1>Estamos preparando el panel</h1>
-      <p class="lead">Esta herramienta interna todavía está en construcción.</p>
+      <h1>${title}</h1>
+      <p class="lead">${lead}</p>
     </div>
   </div>
 
@@ -222,6 +253,7 @@ function gateHtml({ error }: { error: boolean }) {
     <div class="gate-modal">
       <form method="POST" action="${GATE_PATH}">
         ${error ? '<div class="error">Usuario o contraseña incorrectos.</div>' : ""}
+        <input type="hidden" name="from" value="${escapeHtmlAttr(pathname)}" />
         <label for="user">Usuario</label>
         <input type="text" id="user" name="user" autocomplete="username" required />
         <label for="pass">Contraseña</label>

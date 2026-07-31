@@ -17,8 +17,9 @@ export async function proxy(req: NextRequest) {
   // Gate temporal mientras el CRM no esta listo para produccion. Solo tapa
   // paginas: /api/* ya tiene su propia auth (Bearer, iron-session, CRON_SECRET)
   // y la usan integraciones externas (bots de WhatsApp/IG, cron) que no van
-  // a mandar la cookie del gate.
-  if (!req.nextUrl.pathname.startsWith("/api/")) {
+  // a mandar la cookie del gate. /legal/* queda publica: Meta la exige accesible
+  // sin login para la revision de la app de WhatsApp/Instagram.
+  if (!req.nextUrl.pathname.startsWith("/api/") && !req.nextUrl.pathname.startsWith("/legal/")) {
     const gated = await checkSiteGate(req)
     if (gated) return gated
   }
