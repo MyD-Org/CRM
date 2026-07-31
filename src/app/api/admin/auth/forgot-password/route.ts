@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const resetUrl = `${baseUrl}/admin/reset-password/${token}`
 
   const resend = new Resend(process.env.RESEND_API_KEY)
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: tenant?.resendFrom ?? "noreply@example.com",
     to: user.email,
     subject: "Recuperar contraseña — Backoffice",
@@ -36,6 +36,12 @@ export async function POST(req: NextRequest) {
       <p>El link vence en 1 hora. Si no lo solicitaste, ignorá este email.</p>
     `,
   })
+  // Resend v6 no tira excepción en errores de API, devuelve { error }. Sin este chequeo el
+  // fallo queda invisible: la respuesta sigue siendo { ok: true } a propósito (no filtrar si
+  // el email existe), pero al menos loguea para que se pueda diagnosticar puertas adentro.
+  if (error) {
+    console.error("[forgot-password] Resend error:", `${error.name}: ${error.message}`)
+  }
 
   return NextResponse.json({ ok: true })
 }
