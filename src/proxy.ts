@@ -3,7 +3,10 @@ import { isKnownTenantId, resolveTenantIdFromHost } from "@/lib/tenants"
 import { checkSiteGate } from "@/lib/site-gate"
 
 export async function proxy(req: NextRequest) {
-  const override = process.env.TENANT_OVERRIDE
+  // `|| undefined`, no `??`: un TENANT_OVERRIDE="" (seteada pero vacía, como quedó en algún
+  // momento en prod) no debe pisar la resolución por host. ?? solo cae al fallback con
+  // null/undefined, así que un string vacío rompía TODAS las requests con 404.
+  const override = process.env.TENANT_OVERRIDE || undefined
   const tenantId = override ?? resolveTenantIdFromHost(req.headers.get("host") ?? "")
 
   // La config completa del tenant se carga desde la DB en getTenantConfig (server runtime).

@@ -49,11 +49,29 @@ export const tenants: Map<string, TenantConfig> = new Map(
   ),
 )
 
+// El tenant se resuelve por el PRIMER label del host (ver proxy.ts): "central-led.vercel.app"
+// → id "central-led". Un dominio propio como "crm.centralled.com.ar" no matchea ningún id así
+// (el label es "crm"), así que cada tenant puede declarar el/los host(s) completos donde vive
+// bajo su propio dominio — `{PREFIX}_DOMAINS`, coma-separado (ej. "crm.centralled.com.ar").
+// Se resuelve por host COMPLETO, no por label, para no pisar si dos tenants comparten dominio.
+const DOMAIN_TO_TENANT_ID: Map<string, string> = new Map(
+  TENANT_IDS.flatMap((id) => {
+    const prefix = id.toUpperCase().replace(/-/g, "_")
+    const domains = (process.env[`${prefix}_DOMAINS`] ?? "").split(",").map((d) => d.trim()).filter(Boolean)
+    return domains.map((domain) => [domain, id] as [string, string])
+  }),
+)
+
+/** Resuelve el id de tenant a partir del host del request (dominio propio o *.subdominio). */
+export function resolveTenantIdFromHost(host: string): string {
+  return DOMAIN_TO_TENANT_ID.get(host) ?? host.split(".")[0] ?? ""
+}
+
 export function getTenantById(id: string): TenantConfig | null {
   return tenants.get(id) ?? null
 }
 
-/** IDs de tenants activos — usado por el middleware (Edge, sin acceso a DB) */
+/** IDs de tenants activos — usado por el proxy (Edge, sin acceso a DB) */
 export function isKnownTenantId(id: string): boolean {
   return TENANT_IDS.includes(id)
 }
