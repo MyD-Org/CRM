@@ -29,6 +29,23 @@ interface Props {
   onUseSuggestion?: (text: string) => void
 }
 
+// Margen para reusar el token que vino con el hilo. Cubre el caso normal (hover → click en
+// segundos) sin arriesgar uno vencido si el operador abre el panel mucho después.
+const INITIAL_TOKEN_MAX_AGE_MS = 60_000
+
+// Token que vino junto con el hilo en /assist, esperando a que el widget lo pida por primera
+// vez. Va acá afuera y NO en un useRef a propósito: el widget lo recibe dentro de su config,
+// que se arma en render, y leer un ref por esa vía es exactamente lo que corta el lint del
+// repo (react-hooks/refs). Se consume una sola vez —se borra al leerlo— y solo si sigue fresco.
+const initialTokens = new Map<string, { token: string; at: number }>()
+
+function takeInitialToken(conversationId: string): string | null {
+  const cached = initialTokens.get(conversationId)
+  if (!cached) return null
+  initialTokens.delete(conversationId)
+  return Date.now() - cached.at < INITIAL_TOKEN_MAX_AGE_MS ? cached.token : null
+}
+
 interface AssistInit {
   conversationId: string
   agentId: string
@@ -65,7 +82,12 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
     setLoading(true)
     setError("")
     fetchAssist()
-      .then((data) => setInit({ conversationId: data.conversationId, agentId: data.agentId }))
+      .then((data) => {
+        // El primer token viene en la misma respuesta que crea el hilo: lo dejamos listo para
+        // que el pedido inicial del widget no cueste un round-trip extra a /assist.
+        initialTokens.set(data.conversationId, { token: data.token, at: Date.now() })
+        setInit({ conversationId: data.conversationId, agentId: data.agentId })
+      })
       .catch((e: unknown) => {
         const code = e instanceof Error ? e.message : "assist_failed"
         setError(
@@ -85,7 +107,10 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
         baseUrl: "/ai-api",
         agentId: init.agentId,
         conversationId: init.conversationId,
-        fetchToken: async () => (await fetchAssist()).token,
+        // Primera llamada del widget: usar el token que ya vino con el hilo, si sigue fresco.
+        // En las siguientes (renovación tras 401) sí volvemos a /assist.
+        fetchToken: async () =>
+          takeInitialToken(init.conversationId) ?? (await fetchAssist()).token,
       },
     [init, fetchAssist],
   )
