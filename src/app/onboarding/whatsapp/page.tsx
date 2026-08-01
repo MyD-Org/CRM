@@ -126,9 +126,10 @@ export default async function WhatsAppOnboardingPage({
         El número quedó conectado y la app de WhatsApp Business del celular sigue funcionando igual.
       </p>
       <dl className="mt-6 space-y-2 text-sm">
+        {/* El WABA id no se muestra a proposito: no le dice nada a quien hace el
+            onboarding y desarma el layout en mobile. Queda en los logs de ai-api. */}
         <Row label="Negocio" value={result.verifiedName ?? result.tenantName} />
         <Row label="Número" value={result.displayPhoneNumber} />
-        <Row label="Cuenta de WhatsApp" value={result.wabaId} />
         <Row label="Recepción de mensajes" value={result.subscribedApps ? "activada" : "⚠️ falló — avisá al equipo"} />
       </dl>
       <p className="mt-6 text-slate-600">
