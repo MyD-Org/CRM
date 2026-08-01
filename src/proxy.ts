@@ -20,11 +20,14 @@ export async function proxy(req: NextRequest) {
   // a mandar la cookie del gate. /legal/* queda publica: Meta la exige accesible
   // sin login para la revision de la app de WhatsApp/Instagram. /admin/* sale a
   // produccion: ya tiene su propio login real (iron-session), el gate ahi era
-  // una capa extra redundante.
+  // una capa extra redundante. /onboarding/* es el destino del redirect de Meta
+  // al conectar WhatsApp: lo abre el dueño del numero, que no tiene sesion del
+  // CRM; se protege solo con el `state` secreto del link (ver la page).
   if (
     !req.nextUrl.pathname.startsWith("/api/") &&
     !req.nextUrl.pathname.startsWith("/legal/") &&
-    !req.nextUrl.pathname.startsWith("/admin")
+    !req.nextUrl.pathname.startsWith("/admin") &&
+    !req.nextUrl.pathname.startsWith("/onboarding/")
   ) {
     const gated = await checkSiteGate(req)
     if (gated) return gated
