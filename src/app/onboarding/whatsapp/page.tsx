@@ -22,6 +22,10 @@ interface OnboardingResult {
   phoneNumberId?: string
   displayPhoneNumber?: string | null
   verifiedName?: string | null
+  // true = Coexistence confirmada por Meta; false = el número quedó solo en la API;
+  // null = Meta no informó el campo (no afirmamos ni una cosa ni la otra).
+  isOnBizApp?: boolean | null
+  platformType?: string | null
   channelAccountId?: string
   subscribedApps?: boolean
   error?: string
@@ -122,9 +126,28 @@ export default async function WhatsAppOnboardingPage({
   return (
     <Shell>
       <h1 className="text-2xl font-bold text-green-700">WhatsApp conectado</h1>
+      {/* Solo afirmamos lo de la app del celu si Meta lo confirmó (is_on_biz_app).
+          Es lo que más le importa a quien hace el onboarding: darlo por sentado sería
+          decirle que no perdió nada sin haberlo verificado. */}
       <p className="mt-3 text-slate-600">
-        El número quedó conectado y la app de WhatsApp Business del celular sigue funcionando igual.
+        {result.isOnBizApp === true
+          ? "El número quedó conectado y la app de WhatsApp Business del celular sigue funcionando igual."
+          : result.isOnBizApp === false
+            ? "El número quedó conectado a la API."
+            : "El número quedó conectado."}
       </p>
+      {result.isOnBizApp === false ? (
+        <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          Meta informa que este número <strong>no</strong> quedó en modo coexistencia: la app de WhatsApp
+          Business del celular puede dejar de funcionar. Avisá al equipo antes de seguir usándola.
+        </p>
+      ) : null}
+      {result.isOnBizApp === null || result.isOnBizApp === undefined ? (
+        <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+          No pudimos confirmar con Meta si la app de WhatsApp Business del celular sigue activa.
+          Verificá en el celular que puedas seguir usándola normalmente.
+        </p>
+      ) : null}
       <dl className="mt-6 space-y-2 text-sm">
         {/* El WABA id no se muestra a proposito: no le dice nada a quien hace el
             onboarding y desarma el layout en mobile. Queda en los logs de ai-api. */}
