@@ -22,6 +22,14 @@ export async function checkSiteGate(request: NextRequest): Promise<NextResponse 
   // Sin credenciales configuradas, no se bloquea el acceso.
   if (!user || !pass) return null
 
+  // GET directo a /__gate (tipeado a mano, no vía el form): no es una pagina real,
+  // asi que redirige a "/" en vez de caer en el 404 de Next (con cookie valida) o
+  // mostrar el candado en una URL que no tiene sentido navegar (sin cookie, "/" la
+  // vuelve a mostrar igual).
+  if (request.method === "GET" && request.nextUrl.pathname === GATE_PATH) {
+    return NextResponse.redirect(new URL("/", request.url))
+  }
+
   const token = gateToken(user, pass)
   const cookie = request.cookies.get(GATE_COOKIE)?.value
 

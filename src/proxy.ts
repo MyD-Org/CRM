@@ -18,8 +18,14 @@ export async function proxy(req: NextRequest) {
   // paginas: /api/* ya tiene su propia auth (Bearer, iron-session, CRON_SECRET)
   // y la usan integraciones externas (bots de WhatsApp/IG, cron) que no van
   // a mandar la cookie del gate. /legal/* queda publica: Meta la exige accesible
-  // sin login para la revision de la app de WhatsApp/Instagram.
-  if (!req.nextUrl.pathname.startsWith("/api/") && !req.nextUrl.pathname.startsWith("/legal/")) {
+  // sin login para la revision de la app de WhatsApp/Instagram. /admin/* sale a
+  // produccion: ya tiene su propio login real (iron-session), el gate ahi era
+  // una capa extra redundante.
+  if (
+    !req.nextUrl.pathname.startsWith("/api/") &&
+    !req.nextUrl.pathname.startsWith("/legal/") &&
+    !req.nextUrl.pathname.startsWith("/admin")
+  ) {
     const gated = await checkSiteGate(req)
     if (gated) return gated
   }
