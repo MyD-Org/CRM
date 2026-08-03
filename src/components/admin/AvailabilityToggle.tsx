@@ -1,34 +1,39 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useTransition } from "react"
 
-type Availability = "available" | "away"
+export type Availability = "available" | "away"
 
 interface Props {
-  initial: Availability
+  value: Availability
+  // Se llama con el estado siguiente ANTES de hacer el fetch. Devuelve false si el cambio
+  // fue rechazado (p. ej. el operador tiene conversaciones pendientes y cancela); en ese caso
+  // el padre revierte el optimista y no se llama al backend.
+  onChange: (next: Availability) => void
   // Chequeo previo a pasar a "away" (ej. conversaciones asignadas sin responder). Si
   // resuelve false, se aborta el cambio.
   onBeforeAway?: () => Promise<boolean>
+  // Modo compacto para el sidebar en rail: solo un dot circular clickeable, sin texto ni switch.
+  compact?: boolean
 }
 
 // Toggle de presencia del operador (Disponible/Ausente). Mientras está "Disponible" puede
 // recibir handoffs; "Ausente" lo saca del pool de asignación. Ver ADR 0006.
-export function AvailabilityToggle({ initial, onBeforeAway }: Props) {
-  const [availability, setAvailability] = useState<Availability>(initial)
-  const [checking, setChecking] = useState(false)
+//
+// Controlado: el state vive en el padre (AdminShell) para que la versión expanded y la
+// compact del rail mantengan un único origen de verdad y se mantengan sincronizadas al
+// cambiar el modo del sidebar.
+export function AvailabilityToggle({ value, onChange, onBeforeAway, compact = false }: Props) {
   const [pending, startTransition] = useTransition()
-  const available = availability === "available"
+  const available = value === "available"
 
   async function toggle() {
     const next: Availability = available ? "away" : "available"
     if (next === "away" && onBeforeAway) {
-      setChecking(true)
       const ok = await onBeforeAway()
-      setChecking(false)
       if (!ok) return
     }
-    const prev = availability
-    setAvailability(next) // optimista
+    onChange(next) // optimista
     startTransition(async () => {
       try {
         const res = await fetch("/api/admin/me/availability", {
@@ -36,18 +41,40 @@ export function AvailabilityToggle({ initial, onBeforeAway }: Props) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ availability: next }),
         })
-        if (!res.ok) setAvailability(prev)
+        if (!res.ok) onChange(value)
       } catch {
-        setAvailability(prev)
+        onChange(value)
       }
     })
+  }
+
+  if (compact) {
+    // Versión rail: solo un botón circular con el dot de color; hover muestra el estado.
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={pending}
+        role="switch"
+        aria-checked={available}
+        aria-label={available ? "Disponible" : "Ausente"}
+        title={available ? "Disponible — recibiendo conversaciones" : "Ausente — no se te asignan conversaciones"}
+        className="flex items-center justify-center h-8 w-8 rounded-full transition-colors disabled:opacity-60 hover:bg-elevated"
+      >
+        <span
+          className="h-3 w-3 rounded-full border border-white/40 shadow"
+          style={{ background: available ? "var(--green)" : "var(--subtle, #94a3b8)" }}
+          aria-hidden
+        />
+      </button>
+    )
   }
 
   return (
     <button
       type="button"
       onClick={toggle}
-      disabled={pending || checking}
+      disabled={pending}
       role="switch"
       aria-checked={available}
       title={available ? "Estás recibiendo conversaciones" : "No se te asignan conversaciones"}

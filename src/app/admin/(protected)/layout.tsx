@@ -30,6 +30,10 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       email={session.email}
       role={session.role}
       logoSrc={tenant?.logoPath}
+      // Mismo icono cuadrado que sirve de favicon del tenant (convención en root layout.tsx):
+      // /public/logos/<tenant>-icon.svg. Se usa en el rail del sidebar (56px) donde el logo
+      // horizontal no entra.
+      iconSrc={tenant?.id ? `/logos/${tenant.id}-icon.svg` : undefined}
       tenantName={tenant?.name}
       availability={availability}
       currentUserId={session.userId}
