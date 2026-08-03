@@ -21,9 +21,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const result = await sendReply(tenant.aiApiUrl, tenant.aiTenantId, id, body.text.trim())
-  if (!result.ok) {
+  if (result.ok) return NextResponse.json({ id: result.id, ok: true })
+
+  // Falla determinista: la ai-api NO persistió el mensaje (window_closed / no_recipient /
+  // channel_not_configured). Devolvemos 409 sin id para que el cliente sepa que no hay
+  // burbuja server-side y muestre el toast correspondiente.
+  if (!("id" in result)) {
     const status = result.error === "window_closed" ? 409 : 502
     return NextResponse.json({ error: result.error }, { status })
   }
-  return NextResponse.json({ ok: true })
+
+  // Envío falló pero el mensaje SÍ quedó persistido con delivery_status='failed'.
+  // Devolvemos 200 con el id real para que el CRM reemplace el temp y muestre la burbuja
+  // como "no entregado" (flujo de retry/dismiss que ya existe).
+  return NextResponse.json({ id: result.id, ok: false, delivery_status: "failed", error: result.error })
 }

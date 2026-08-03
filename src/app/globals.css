@@ -142,3 +142,15 @@ nav[aria-label="Navegación principal"] .bg-primary-soft {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-faint);
 }
+
+/* iOS Safari auto-zoomea al enfocar un input cuya font-size sea <16px, incluso con
+   userScalable=false. Fuerza mínimo 16px en mobile a TODOS los inputs para evitar ese salto
+   de zoom al tap. En desktop dejamos que el design system defina el tamaño (usa clases
+   Tailwind text-sm etc.). */
+@media (max-width: 639px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
