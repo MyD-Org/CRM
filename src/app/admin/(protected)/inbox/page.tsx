@@ -41,10 +41,10 @@ export default async function InboxPage() {
   return (
     <div className="p-4 md:p-6">
       <div className="mb-4 md:mb-6 flex items-center md:items-start justify-between gap-3 flex-wrap">
-        {/* En mobile corremos el título a la derecha (pl-10) para que no lo tape el botón ☰ del
-            sidebar, que va absolute en la esquina sup-izq. En desktop no hace falta (pl-0). */}
-        <div className="pl-10 md:pl-0">
-          <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Inbox</h1>
+        {/* Título flush-left: el FAB de nav va a bottom-right en mobile-mode='bottom-sheet',
+            así que ya no hay que reservar padding izquierdo para la hamburguesa. */}
+        <div>
+          <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Mensajes</h1>
           {/* El subtítulo es contexto redundante y ocupa alto valioso en mobile: solo en desktop. */}
           <p className="hidden md:block text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>Conversaciones de los canales de mensajería</p>
         </div>
