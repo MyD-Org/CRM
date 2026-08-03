@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User, AlertTriangle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User, AlertTriangle, RefreshCw, X } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
@@ -329,7 +329,10 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     })
     if (res.ok) {
       // Entregado: sacamos la marca de "no entregado" de esa burbuja.
-      setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, delivery_status: null } : m))
+      setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, delivery_status: null, delivery_dismissed_at: null } : m))
+      // El flag del inbox depende del backend, refrescamos la ruta para que la lista se
+      // reevalue con has_failed_outbound=false. router.refresh() invalida el Client Cache.
+      router.refresh()
       toast({ title: "Mensaje reenviado", description: "El cliente ya lo recibió.", tone: "success" })
       return true
     }
@@ -341,6 +344,24 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         : "Intentá de nuevo en unos segundos.",
       tone: "danger",
     })
+    return false
+  }
+
+  // Descarta una burbuja fallida: el operador la da por perdida (p. ej. el cliente ya escribió
+  // otra cosa y este mensaje quedó obsoleto). Se marca localmente con delivery_dismissed_at y
+  // el badge "Falló envío" del inbox desaparece en el próximo poll (o al refrescar la ruta).
+  async function handleDismiss(message: ContactMessage): Promise<boolean> {
+    const res = await fetch(`/api/admin/inbox/${message.conversation_id}/messages/${message.id}/dismiss`, {
+      method: "POST",
+    })
+    if (res.ok) {
+      const now = new Date().toISOString()
+      setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, delivery_dismissed_at: now } : m))
+      router.refresh()
+      toast({ title: "Mensaje cancelado", description: "Ya no se va a reintentar.", tone: "success" })
+      return true
+    }
+    toast({ title: "No se pudo cancelar", description: "Intentá de nuevo en unos segundos.", tone: "danger" })
     return false
   }
 
@@ -462,7 +483,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           return (
             <div key={msg.id} className="flex flex-col gap-3">
               {newSession && <SessionDivider date={msg.created_at} />}
-              <MessageBubble message={msg} onRetry={handleRetry} />
+              <MessageBubble message={msg} onRetry={handleRetry} onDismiss={handleDismiss} />
             </div>
           )
         })}
@@ -609,7 +630,7 @@ function SessionDivider({ date }: { date: string }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-      <span className="text-[10px] px-2 whitespace-nowrap" style={{ color: "var(--ink-faint)" }}>
+      <span className="text-[10px] px-2 whitespace-nowrap" suppressHydrationWarning style={{ color: "var(--ink-faint)" }}>
         Sesión · {formatDate(date)}
       </span>
       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
@@ -617,16 +638,24 @@ function SessionDivider({ date }: { date: string }) {
   )
 }
 
-function MessageBubble({ message, onRetry }: { message: ContactMessage; onRetry: (m: ContactMessage) => Promise<boolean> }) {
+function MessageBubble({ message, onRetry, onDismiss }: { message: ContactMessage; onRetry: (m: ContactMessage) => Promise<boolean>; onDismiss: (m: ContactMessage) => Promise<boolean> }) {
   const isOutbound = message.role === "assistant"
   const isHuman = message.source === "human"
   const isBot = message.source === "bot"
-  const failed = message.delivery_status === "failed"
+  // "failed" con dismissed = el operador ya lo dio por perdido; no ofrecemos reintento.
+  const dismissed = message.delivery_status === "failed" && !!message.delivery_dismissed_at
+  const failed = message.delivery_status === "failed" && !dismissed
   const [retrying, setRetrying] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
 
   async function retry() {
     setRetrying(true)
     try { await onRetry(message) } finally { setRetrying(false) }
+  }
+
+  async function dismiss() {
+    setDismissing(true)
+    try { await onDismiss(message) } finally { setDismissing(false) }
   }
 
   return (
@@ -640,31 +669,52 @@ function MessageBubble({ message, onRetry }: { message: ContactMessage; onRetry:
         <div
           className="px-3 py-2 rounded-[var(--radius)] text-sm"
           style={{
-            background: isOutbound ? (isHuman ? "var(--green)" : "var(--blue)") : "var(--card)",
-            color: isOutbound ? "#fff" : "var(--ink)",
-            border: failed ? "1px solid var(--color-danger)" : isOutbound ? "none" : "1px solid var(--border)",
-            opacity: failed ? 0.85 : 1,
+            background: dismissed
+              ? "var(--card)"
+              : isOutbound ? (isHuman ? "var(--green)" : "var(--blue)") : "var(--card)",
+            color: dismissed ? "var(--ink-soft)" : isOutbound ? "#fff" : "var(--ink)",
+            border: failed
+              ? "1px solid var(--color-danger)"
+              : dismissed
+                ? "1px dashed var(--border)"
+                : isOutbound ? "none" : "1px solid var(--border)",
+            opacity: failed ? 0.85 : dismissed ? 0.7 : 1,
+            textDecoration: dismissed ? "line-through" : "none",
           }}
         >
           {message.text}
         </div>
         {failed ? (
-          <div className="flex items-center gap-2 mt-1 justify-end">
+          <div className="flex items-center gap-2 mt-1 justify-end flex-wrap">
             <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-danger)" }}>
               <AlertTriangle size={11} /> No entregado al cliente
             </span>
             <button
               onClick={retry}
-              disabled={retrying}
+              disabled={retrying || dismissing}
               className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
               style={{ color: "var(--blue)", background: "var(--blue-soft)" }}
             >
               <RefreshCw size={10} className={retrying ? "animate-spin" : ""} />
               {retrying ? "Reenviando..." : "Reintentar"}
             </button>
+            <button
+              onClick={dismiss}
+              disabled={retrying || dismissing}
+              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
+              style={{ color: "var(--ink-soft)", background: "var(--border)" }}
+              title="Descartar este mensaje sin reintentar"
+            >
+              <X size={10} />
+              {dismissing ? "Cancelando..." : "Cancelar"}
+            </button>
           </div>
-        ) : (
+        ) : dismissed ? (
           <p className="text-[10px] mt-1" style={{ color: "var(--ink-faint)", textAlign: isOutbound ? "right" : "left" }}>
+            No entregado · cancelado
+          </p>
+        ) : (
+          <p className="text-[10px] mt-1" suppressHydrationWarning style={{ color: "var(--ink-faint)", textAlign: isOutbound ? "right" : "left" }}>
             {formatTime(message.created_at)}
           </p>
         )}
@@ -673,10 +723,14 @@ function MessageBubble({ message, onRetry }: { message: ContactMessage; onRetry:
   )
 }
 
+// TZ y hour12 pineados: sin esto el server (UTC en Vercel) y el cliente (-03) rendean
+// horarios distintos, y el marcador "a. m./p. m." trae U+202F que ICU-node y el browser
+// muestran distinto. Cada mismatch por burbuja hace fallback a client-only render y rompe
+// la soft-navigation del App Router al entrar/salir de una conversación.
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Argentina/Buenos_Aires" })
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Argentina/Buenos_Aires" })
 }
