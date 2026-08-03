@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { MessageSquare, Clock, Bot, User, MessageCircleWarning } from "lucide-react"
+import { MessageSquare, Clock, Bot, User, MessageCircleWarning, AlertTriangle } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
 import { channelLabel, type InboxContact } from "@/lib/inbox-api"
 
@@ -24,6 +24,12 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
   const [botEnabled, setBotEnabled] = useState(initialBotEnabled)
   const [tab, setTab] = useState<Tab>("active")
   const [scope, setScope] = useState<Scope>("all")
+  // Los valores dependientes de "ahora" (color de urgencia, "hace 5m") se rendean solo
+  // despues del mount para evitar mismatch server/cliente: el SSR corre en Vercel (UTC) y
+  // el navegador en -03, ademas de que Date.now() difiere entre ambos. Un mismatch acá
+  // rompe la soft-navigation del App Router (los clicks a Link no cambian la URL).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   // null = todavía no reconciliamos desde el cliente. El reloj arranca en el primer poll
   // porque el server ya reconcilió al rendear la página (no hace falta repetirlo enseguida).
@@ -162,7 +168,7 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
               style={{
                 background: c.awaiting_reply ? "var(--amber-soft)" : "var(--card)",
                 border: `1px solid ${c.awaiting_reply ? "var(--amber)" : "var(--border)"}`,
-                borderLeft: `3px solid ${c.awaiting_reply ? "var(--amber)" : urgencyColor(c.last_inbound_at)}`,
+                borderLeft: `3px solid ${c.awaiting_reply ? "var(--amber)" : mounted ? urgencyColor(c.last_inbound_at) : "transparent"}`,
               }}
             >
               <div className="relative shrink-0">
@@ -189,6 +195,12 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
                       Sin respuesta
                     </Badge>
                   )}
+                  {c.has_failed_outbound && (
+                    <Badge tone="danger" className="flex items-center gap-1 shrink-0">
+                      <AlertTriangle size={9} />
+                      Falló envío
+                    </Badge>
+                  )}
                 </div>
                 {/* Mensaje (trunca) y hora en la misma línea, pero la hora es shrink-0 para que
                     no se la coma el truncate cuando el mensaje es largo. */}
@@ -198,7 +210,7 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
                       ? c.last_message
                       : `${channelLabel(c.channel)}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
                   </span>
-                  <span className="shrink-0">· {c.last_inbound_at ? formatTime(c.last_inbound_at) : "—"}</span>
+                  <span className="shrink-0" suppressHydrationWarning>· {c.last_inbound_at && mounted ? formatTime(c.last_inbound_at) : "—"}</span>
                 </div>
               </div>
 
@@ -275,6 +287,8 @@ function urgencyColor(lastInboundAt: string | null): string {
   return "transparent"
 }
 
+// TZ pineada por consistencia con ContactThreadView y para evitar el mismatch UTC/-03 en prod
+// cuando un mensaje entra a la hora limite del cambio de dia (server y cliente rendearian dias distintos).
 function formatTime(iso: string) {
   const d = new Date(iso)
   const now = new Date()
@@ -284,5 +298,5 @@ function formatTime(iso: string) {
   if (diffM < 1) return "ahora"
   if (diffM < 60) return `hace ${diffM}m`
   if (diffH < 24) return `hace ${diffH}h`
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", timeZone: "America/Argentina/Buenos_Aires" })
 }

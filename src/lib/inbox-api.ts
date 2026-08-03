@@ -62,6 +62,10 @@ export interface InboxContact {
   awaiting_reply: boolean
   last_message: string
   last_message_at: string | null
+  // true si en la conversación actual hay un mensaje saliente fallido no descartado y de <24h.
+  // Se usa en el inbox del CRM para avisar sin tener que abrir el chat. Se limpia cuando el
+  // operador reintenta con éxito, descarta el mensaje, o pasa la ventana de 24h.
+  has_failed_outbound?: boolean
 }
 
 // Mensaje dentro del thread mergeado del contacto: trae conversation_id para los divisores.
@@ -69,6 +73,8 @@ export interface ContactMessage extends InboxMessage {
   conversation_id: string
   // 'failed' = el envío al canal (WhatsApp/IG) falló → el cliente no lo recibió. null = OK.
   delivery_status?: string | null
+  // Cuándo el operador descartó el mensaje fallido. Non-null → burbuja cancelada (sin retry).
+  delivery_dismissed_at?: string | null
 }
 
 export interface ContactMessagesPage {
@@ -262,6 +268,24 @@ export async function retryMessage(
   if (res.ok) return { ok: true }
   const body = await res.json().catch(() => ({}))
   return { ok: false, error: body.error ?? "send_failed" }
+}
+
+// Descarta una burbuja fallida (el operador decide no reintentarla). El mensaje sigue en el
+// historial marcado como cancelado; deja de contar para has_failed_outbound del inbox.
+export async function dismissMessage(
+  aiApiUrl: string,
+  aiTenantId: string,
+  conversationId: string,
+  messageId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await inboxFetch(
+    aiApiUrl, aiTenantId,
+    `/v1/inbox/conversations/${conversationId}/messages/${messageId}/dismiss`,
+    { method: "POST" },
+  )
+  if (res.ok) return { ok: true }
+  const body = await res.json().catch(() => ({}))
+  return { ok: false, error: body.error ?? "dismiss_failed" }
 }
 
 // Nota: la asignación de operador YA NO se guarda en ai-api. El CRM es la fuente de verdad
