@@ -341,20 +341,39 @@ export async function startAssist(
   }
 }
 
+// ai-api /reply ahora persiste SIEMPRE el mensaje. Si el envío al canal falla, guarda con
+// delivery_status='failed' y responde 200 con { id, delivery_status, error }. Solo devuelve
+// 4xx para casos deterministas donde el mensaje NO se persistió (window_closed / etc.): en
+// esos no hay id que retornar.
+export type SendReplyResult =
+  | { ok: true; id: string }
+  | { ok: false; id: string; deliveryStatus: "failed"; error: string }
+  | { ok: false; error: string }
+
 export async function sendReply(
   aiApiUrl: string,
   aiTenantId: string,
   conversationId: string,
   text: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<SendReplyResult> {
   const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/conversations/${conversationId}/reply`, {
     method: "POST",
     body: JSON.stringify({ text }),
   })
   if (res.status === 409) {
-    const body = await res.json()
-    return { ok: false, error: body.error }
+    const body = await res.json().catch(() => ({}))
+    return { ok: false, error: body.error ?? "conflict" }
   }
   if (!res.ok) return { ok: false, error: "send_failed" }
-  return { ok: true }
+  const body = await res.json().catch(() => ({} as {
+    id?: string
+    ok?: boolean
+    delivery_status?: string
+    error?: string
+  }))
+  if (!body.id) return { ok: false, error: "send_failed" }
+  if (body.delivery_status === "failed") {
+    return { ok: false, id: body.id, deliveryStatus: "failed", error: body.error ?? "send_failed" }
+  }
+  return { ok: true, id: body.id }
 }
