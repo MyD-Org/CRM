@@ -440,16 +440,20 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
 
           {/* Copiloto de IA del operador (ADR 0007): disponible siempre, incluso con la ventana
               cerrada (sirve para preparar un presupuesto antes de que el cliente reescriba). */}
+          {/* En mobile mostramos solo el ícono para no reventar el header (que ya tiene back,
+              nombre, teléfono y "Finalizar"). En sm+ se ve el label completo. */}
           <Button
             variant={assistOpen ? "primary" : "secondary"}
             size="sm"
             onClick={() => toggleAssist(!assistOpen)}
             onMouseEnter={() => setAssistPrefetch(true)}
             onFocus={() => setAssistPrefetch(true)}
+            title="Asistente IA"
+            aria-label="Asistente IA"
             className="flex items-center gap-1.5 rounded-full"
           >
             <Sparkles size={11} strokeWidth={1.6} />
-            Asistente IA
+            <span className="hidden sm:inline">Asistente IA</span>
           </Button>
 
           {!contact.within_window && <Badge tone="warning">Ventana cerrada</Badge>}
@@ -465,10 +469,15 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                   size="sm"
                   onClick={toggleMode}
                   disabled={!convId}
+                  title={botEnabled ? "Bot activo · Asignarme" : "Sin asignar · Asignarme"}
+                  aria-label={botEnabled ? "Asignarme (bot activo)" : "Asignarme (sin asignar)"}
                   className="flex items-center gap-1.5 rounded-full"
                 >
                   {botEnabled ? <Bot size={11} /> : <User size={11} />}
-                  {botEnabled ? "Bot activo · Asignarme" : "Sin asignar · Asignarme"}
+                  <span className="hidden sm:inline">
+                    {botEnabled ? "Bot activo · Asignarme" : "Sin asignar · Asignarme"}
+                  </span>
+                  <span className="sm:hidden">Asignarme</span>
                 </Button>
               )}
 
@@ -481,10 +490,11 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                   onClick={handleAssignToMe}
                   disabled={!convId}
                   title="Pasar esta conversación a tu nombre"
+                  aria-label="Asignarme"
                   className="flex items-center gap-1.5 rounded-full"
                 >
                   <UserPlus size={11} strokeWidth={1.6} />
-                  Asignarme
+                  <span className="hidden sm:inline">Asignarme</span>
                 </Button>
               )}
 
@@ -495,10 +505,12 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                 size="sm"
                 onClick={handleArchive}
                 disabled={archiving || !convId}
+                title="Finalizar conversación"
+                aria-label="Finalizar conversación"
                 className="flex items-center gap-1.5 rounded-full"
               >
                 <CheckCheck size={11} strokeWidth={1.6} />
-                Finalizar
+                <span className="hidden sm:inline">Finalizar</span>
               </Button>
               )}
             </>
