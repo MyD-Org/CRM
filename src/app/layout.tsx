@@ -5,9 +5,16 @@ import "./globals.css"
 
 // Sin esto, los navegadores mobile renderizan a ~980px y achican todo (hay que hacer
 // pinch-zoom). Con device-width el layout responsive del CRM funciona en el celular.
+// maximumScale=1 + userScalable=false: bloquea el pinch-zoom y el auto-zoom de iOS al enfocar
+// un input. El CRM es de uso profesional y el diseño ya está pensado para las densidades típicas;
+// evitamos que un zoom accidental descoloque el layout durante una conversación en vivo.
+// iOS Safari respeta esto en la mayoría de casos pero mantiene el override de accesibilidad
+// (usuario puede forzar zoom desde Ajustes si lo necesita).
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: "#ffffff",
 }
 

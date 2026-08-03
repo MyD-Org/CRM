@@ -13,11 +13,11 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(31,140,255,0.18) 0%, transparent 70%)",
       }}
     >
-      <header className="w-full flex items-center px-8 py-4" style={{ background: "transparent" }}>
+      <header className="w-full flex items-center px-4 sm:px-8 py-4" style={{ background: "transparent" }}>
         <Logo size="md" showSubtitle src={tenant.logoPath} name={tenant.name} subtitle={tenant.subtitle} />
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-4 py-12">
+      <main className="flex-1 flex items-center justify-center px-4 py-6 sm:py-12">
         {children}
       </main>
     </div>

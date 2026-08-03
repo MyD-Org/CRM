@@ -139,6 +139,10 @@ export function AdminShell({ name, email, role, logoSrc, iconSrc, tenantName, av
       // angosta con solo los íconos (patrón VS Code / Notion). Da más pantalla al inbox sin
       // perder navegación.
       collapsedMode="rail"
+      // Arranca colapsado (rail) por default en desktop/tablet. El operador decide cuándo
+      // expandir; no persistimos preferencia entre sesiones para mantener el estado predecible
+      // (siempre igual al entrar). En mobile no aplica: el bottom sheet ya arranca cerrado.
+      defaultCollapsed={true}
       // Mobile (<sm) usa bottom sheet en vez del drawer clásico: patrón "app nativa" con FAB
       // abajo-derecha para abrir, drag hacia abajo para cerrar, backdrop tap también cierra.
       // Más pulgar-friendly que la hamburguesa arriba-izquierda.
