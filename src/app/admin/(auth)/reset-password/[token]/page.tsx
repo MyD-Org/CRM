@@ -71,7 +71,7 @@ export default function ResetPasswordPage() {
 
   if (tokenState.status === "loading") {
     return (
-      <div className="w-full p-8" style={cardStyle}>
+      <div className="w-full p-6 sm:p-8" style={cardStyle}>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Verificando el link…</p>
       </div>
     )
@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
           ? "Esta invitación ya fue utilizada. Si ya creaste tu contraseña, iniciá sesión normalmente."
           : "El link no es válido. Verificá que lo hayas copiado completo o pedí uno nuevo a un administrador."
     return (
-      <div className="w-full p-8" style={cardStyle}>
+      <div className="w-full p-6 sm:p-8" style={cardStyle}>
         <div className="flex flex-col gap-1.5 mb-6">
           <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>
             {tokenState.status === "used" ? "Invitación ya utilizada" : "Link no disponible"}
@@ -100,7 +100,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="w-full p-8" style={cardStyle}>
+    <div className="w-full p-6 sm:p-8" style={cardStyle}>
       <div className="flex flex-col gap-1.5 mb-6">
         <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Creá tu contraseña</h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>

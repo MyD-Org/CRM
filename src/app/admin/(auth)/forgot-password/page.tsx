@@ -23,7 +23,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div
-      className="w-full p-8"
+      className="w-full p-6 sm:p-8"
       style={{
         maxWidth: 408,
         background: "var(--card)",

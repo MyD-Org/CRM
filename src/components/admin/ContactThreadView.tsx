@@ -281,23 +281,37 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
   }
 
   // Envío optimista: la burbuja aparece EN EL INSTANTE con estilo "pending" y el textarea se
-  // limpia; el POST corre en background. Si sale OK, cambiamos el id temp por el real y sacamos
-  // el pending. Si falla, marcamos la burbuja local_failed (retry hace POST nuevo, no llama al
-  // endpoint /retry porque el mensaje nunca llegó a la DB de ai-api). Sin lockear el botón:
-  // cada Enter genera su propio temp id, imposible de duplicar (el textarea se limpia al toque).
+  // limpia; el POST corre en background. Sale con id real siempre (ai-api persiste el mensaje
+  // aunque el envío al canal falle, con delivery_status='failed'): reemplazamos el temp id por
+  // el real y, si falló el envío, la burbuja pasa al flujo server-side "no entregado" con los
+  // botones Reintentar (/retry) y Cancelar (/dismiss). Sin lockear el botón: cada Enter genera
+  // su propio temp id, imposible de duplicar (el textarea se limpia al toque).
+  //
+  // Los 4xx con `error` (window_closed / no_recipient / channel_not_configured) son
+  // deterministas y NO persistieron el mensaje: no hay id → sacamos la burbuja temp y avisamos.
   async function postReply(text: string, tempId: string, suggestion: string | null): Promise<void> {
     try {
       const res = await fetch(`/api/admin/inbox/${convId}/reply`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ text }),
       })
-      if (res.ok) {
-        const body = await res.json().catch(() => ({} as { id?: string }))
-        const realId = body.id
+      const body = await res.json().catch(() => ({} as {
+        id?: string
+        ok?: boolean
+        delivery_status?: string
+        error?: string
+      }))
+
+      if (res.ok && body.id) {
+        const failed = body.delivery_status === "failed"
         setMessages((prev) => prev.map((m) => {
           if (m.id !== tempId) return m
-          return { ...m, id: realId ?? tempId, pending: false, local_failed: false }
+          return { ...m, id: body.id!, pending: false, delivery_status: failed ? "failed" : null }
         }))
+        if (failed) {
+          toast({ title: "No se entregó al cliente", description: "Podés reintentar desde la burbuja.", tone: "danger" })
+          return
+        }
         // Telemetría del copiloto: si el mensaje venía del "Copiar", medimos as-is/edited.
         if (suggestion !== null) {
           const outcome = text === suggestion.trim() ? "as-is" : "edited"
@@ -308,16 +322,21 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         }
         return
       }
-      const body = await res.json().catch(() => ({} as { error?: string }))
-      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, pending: false, local_failed: true } : m))
+
+      // Sin id → el mensaje NO se persistió. Sacamos la burbuja temp y toast con la razón.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
       if (body.error === "window_closed") {
         toast({ title: "Ventana cerrada", description: "La ventana de 24h de WhatsApp está cerrada. El cliente debe escribirte primero.", tone: "danger" })
       } else {
-        toast({ title: "No se pudo enviar", description: "Podés reintentar desde la burbuja o volver a escribirlo.", tone: "danger" })
+        toast({ title: "No se pudo enviar", description: "Volvé a escribirlo e intentá de nuevo.", tone: "danger" })
       }
     } catch {
-      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, pending: false, local_failed: true } : m))
-      toast({ title: "Sin conexión", description: "No se pudo enviar el mensaje. Reintentá desde la burbuja.", tone: "danger" })
+      // Error de red del navegador: no sabemos si ai-api llegó a persistir. Sacamos la burbuja
+      // temp (no tenemos id real para reintentar server-side) y avisamos. Si el mensaje SÍ se
+      // persistió del otro lado, el próximo poll lo trae con delivery_status='failed' y el
+      // operador ve la burbuja con Reintentar/Cancelar normalmente.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId))
+      toast({ title: "Sin conexión", description: "No se pudo confirmar el envío. Volvé a escribirlo.", tone: "danger" })
     }
   }
 
