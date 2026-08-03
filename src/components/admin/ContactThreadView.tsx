@@ -364,21 +364,6 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     void postReply(text, tempId, suggestion)
   }
 
-  // Reintenta un envío que falló ANTES de llegar a la DB (local_failed=true). No podemos usar
-  // el endpoint /retry (no hay id server); hacemos un POST nuevo con el mismo texto y el mismo
-  // temp id, así la burbuja no se duplica: si sale OK, el temp id se reemplaza por el real.
-  async function handleResendLocal(message: ContactMessage): Promise<void> {
-    if (!message.local_failed) return
-    setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, pending: true, local_failed: false } : m))
-    await postReply(message.text, message.id, null)
-  }
-
-  // Descarta una burbuja local_failed (nunca llegó al server, así que no hay que llamar al endpoint
-  // dismiss: solo la sacamos del estado local).
-  function handleDiscardLocal(message: ContactMessage): void {
-    setMessages((prev) => prev.filter((m) => m.id !== message.id))
-  }
-
   async function handleRetry(message: ContactMessage): Promise<boolean> {
     const res = await fetch(`/api/admin/inbox/${message.conversation_id}/messages/${message.id}/retry`, {
       method: "POST",
@@ -551,7 +536,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           return (
             <div key={msg.client_key ?? msg.id} className="flex flex-col gap-3">
               {newSession && <SessionDivider date={msg.created_at} />}
-              <MessageBubble message={msg} onRetry={handleRetry} onDismiss={handleDismiss} onResendLocal={handleResendLocal} onDiscardLocal={handleDiscardLocal} />
+              <MessageBubble message={msg} onRetry={handleRetry} onDismiss={handleDismiss} />
             </div>
           )
         })}
@@ -706,28 +691,23 @@ function SessionDivider({ date }: { date: string }) {
   )
 }
 
-function MessageBubble({ message, onRetry, onDismiss, onResendLocal, onDiscardLocal }: {
+function MessageBubble({ message, onRetry, onDismiss }: {
   message: ContactMessage
   onRetry: (m: ContactMessage) => Promise<boolean>
   onDismiss: (m: ContactMessage) => Promise<boolean>
-  onResendLocal: (m: ContactMessage) => Promise<void>
-  onDiscardLocal: (m: ContactMessage) => void
 }) {
   const isOutbound = message.role === "assistant"
   const isHuman = message.source === "human"
   const isBot = message.source === "bot"
   // Estados excluyentes (en orden de prioridad):
   //   pending = envío optimista todavía en vuelo (sin respuesta del POST)
-  //   localFailed = envío optimista que rebotó ANTES de llegar a la DB de ai-api
   //   dismissed = falla server-side descartada por el operador
   //   failed = falla server-side pendiente de resolver
   const pending = !!message.pending
-  const localFailed = !!message.local_failed
-  const dismissed = message.delivery_status === "failed" && !!message.delivery_dismissed_at && !pending && !localFailed
-  const failed = message.delivery_status === "failed" && !dismissed && !pending && !localFailed
+  const dismissed = message.delivery_status === "failed" && !!message.delivery_dismissed_at && !pending
+  const failed = message.delivery_status === "failed" && !dismissed && !pending
   const [retrying, setRetrying] = useState(false)
   const [dismissing, setDismissing] = useState(false)
-  const [resending, setResending] = useState(false)
 
   async function retry() {
     setRetrying(true)
@@ -737,11 +717,6 @@ function MessageBubble({ message, onRetry, onDismiss, onResendLocal, onDiscardLo
   async function dismiss() {
     setDismissing(true)
     try { await onDismiss(message) } finally { setDismissing(false) }
-  }
-
-  async function resendLocal() {
-    setResending(true)
-    try { await onResendLocal(message) } finally { setResending(false) }
   }
 
   return (
@@ -759,49 +734,24 @@ function MessageBubble({ message, onRetry, onDismiss, onResendLocal, onDiscardLo
               ? "var(--card)"
               : isOutbound ? (isHuman ? "var(--green)" : "var(--blue)") : "var(--card)",
             color: dismissed ? "var(--ink-soft)" : isOutbound ? "#fff" : "var(--ink)",
-            border: (failed || localFailed)
+            border: failed
               ? "1px solid var(--color-danger)"
               : dismissed
                 ? "1px dashed var(--border)"
                 : isOutbound ? "none" : "1px solid var(--border)",
-            opacity: pending ? 0.65 : (failed || localFailed) ? 0.85 : dismissed ? 0.7 : 1,
+            opacity: pending ? 0.65 : failed ? 0.85 : dismissed ? 0.7 : 1,
             textDecoration: dismissed ? "line-through" : "none",
           }}
         >
           {message.text}
         </div>
-        {(pending || (!failed && !localFailed && !dismissed)) ? (
+        {(pending || (!failed && !dismissed)) ? (
           // Un solo <p> para "Enviando..." y para la hora: solo cambia el contenido. Evita
           // que React desmonte el nodo al pasar de pending a sent (fuente del salto visual).
           <p className="text-[10px] mt-1 flex items-center gap-1" suppressHydrationWarning style={{ color: "var(--ink-faint)", justifyContent: isOutbound ? "flex-end" : "flex-start" }}>
             {pending && <Clock size={10} className="animate-pulse" />}
             {pending ? "Enviando..." : formatTime(message.created_at)}
           </p>
-        ) : localFailed ? (
-          <div className="flex items-center gap-2 mt-1 justify-end flex-wrap">
-            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-danger)" }}>
-              <AlertTriangle size={11} /> No se envió
-            </span>
-            <button
-              onClick={resendLocal}
-              disabled={resending}
-              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
-              style={{ color: "var(--blue)", background: "var(--blue-soft)" }}
-            >
-              <RefreshCw size={10} className={resending ? "animate-spin" : ""} />
-              {resending ? "Reintentando..." : "Reintentar"}
-            </button>
-            <button
-              onClick={() => onDiscardLocal(message)}
-              disabled={resending}
-              className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
-              style={{ color: "var(--ink-soft)", background: "var(--border)" }}
-              title="Descartar este mensaje"
-            >
-              <X size={10} />
-              Descartar
-            </button>
-          </div>
         ) : failed ? (
           <div className="flex items-center gap-2 mt-1 justify-end flex-wrap">
             <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--color-danger)" }}>

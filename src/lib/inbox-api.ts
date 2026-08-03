@@ -75,11 +75,10 @@ export interface ContactMessage extends InboxMessage {
   delivery_status?: string | null
   // Cuándo el operador descartó el mensaje fallido. Non-null → burbuja cancelada (sin retry).
   delivery_dismissed_at?: string | null
-  // Flags SOLO cliente (nunca vienen del server): burbuja optimista todavía enviándose (pending)
-  // o cuya POST /reply falló antes de tener id real en la DB (local_failed). En este último caso
-  // el "Reintentar" no puede pegarle al endpoint /retry (no hay msg id server) — hace un POST nuevo.
+  // Flag SOLO cliente (nunca viene del server): burbuja optimista todavía enviándose. Al
+  // llegar la respuesta del POST, se limpia; si el envío al canal falló, la burbuja pasa al
+  // flujo server-side "no entregado" (delivery_status='failed') con id real ya persistido.
   pending?: boolean
-  local_failed?: boolean
   // Key estable para React: se setea en el temp id al crear la burbuja optimista y se preserva
   // cuando el id pasa de temp a real. Sin esto, cambiar id → cambia key → React desmonta y remonta
   // el nodo → se ve un flicker/scroll en el momento del "enviando → enviado".
