@@ -12,6 +12,7 @@ import {
   customType,
 } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
+import type { WeeklySchedule, ScheduleException } from "@/lib/schedule"
 
 const bytea = customType<{ data: Buffer }>({
   dataType() { return "bytea" },
@@ -35,8 +36,14 @@ export const tenants = pgTable("tenants", {
   aiAgentId: text("ai_agent_id").notNull().default(""),
   // UUID del tenant en la ai-api (para auth de inbox/staff)
   aiTenantId: text("ai_tenant_id").notNull().default(""),
-  // Horario de atención para el mensaje de handoff automático. Ej: "Lunes a Viernes 9-18hs"
-  businessHours: text("business_hours"),
+  // Horario de atención canónico: franjas por día en formato { monday: [{open,close}, ...],
+  // ..., sunday: [] }. Un día sin franjas = cerrado. Lo consulta el ai-api
+  // (GET /api/internal/business-hours) para saber si está abierto y a qué hora. Ver src/lib/schedule.ts.
+  schedule: jsonb("schedule").$type<WeeklySchedule>().notNull().default(sql`'{}'::jsonb`),
+  // Excepciones al horario semanal: feriados/vacaciones (cerrado) u horario especial en una
+  // fecha puntual. El ai-api las recibe renderizadas como texto en el campo `notes` de la
+  // respuesta del endpoint interno (ver exceptionsToNotes en src/lib/schedule.ts).
+  scheduleExceptions: jsonb("schedule_exceptions").$type<ScheduleException[]>().notNull().default(sql`'[]'::jsonb`),
   // Condiciones de pago mostradas por el agente. Ej: [{ method: "Transferencia", discount: "5%" }]
   paymentConditions: jsonb("payment_conditions").notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
