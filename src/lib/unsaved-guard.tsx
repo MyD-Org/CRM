@@ -62,8 +62,8 @@ export function UnsavedGuardProvider({ children }: { children: ReactNode }) {
           // Cerrar por ESC / click fuera = quedarse (default seguro, no descarta cambios).
           if (!open) closeDialog(false)
         }}
-        title="¿Salir sin guardar?"
-        description="Tenés cambios que no se guardaron todavía. Si salís se pierden."
+        title="Tenés cambios sin guardar"
+        description="Si salís los vas a perder."
         headerBorder={false}
         footer={
           <div className="flex gap-2 justify-end">
@@ -75,11 +75,7 @@ export function UnsavedGuardProvider({ children }: { children: ReactNode }) {
             </Button>
           </div>
         }
-      >
-        <p className="text-sm" style={{ color: "var(--ink)" }}>
-          Podés volver, guardar y después salir.
-        </p>
-      </Dialog>
+      />
     </UnsavedGuardContext.Provider>
   )
 }
