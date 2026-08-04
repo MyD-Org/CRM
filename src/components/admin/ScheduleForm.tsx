@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { CalendarX2, Plus, Trash2, X } from "lucide-react"
+import { useUnsavedGuard } from "@/lib/unsaved-guard"
 import {
   Button,
   Card,
@@ -158,6 +160,7 @@ function RangeEditor({
 
 export function ScheduleForm({ initialSchedule }: Props) {
   const { toast } = useToast()
+  const router = useRouter()
   // Generador de ids estables para keys de React. useState con initializer lazy = se crea
   // una sola vez en el primer render y la closure persiste. Es el patrón recomendado en
   // React 19 (useRef prende el linter cuando se lo lee durante el render).
@@ -170,6 +173,20 @@ export function ScheduleForm({ initialSchedule }: Props) {
     exceptionsToDrafts(initialSchedule.exceptions, nextId),
   )
   const [saving, setSaving] = useState(false)
+
+  // Snapshot serializado del último estado guardado (arranca con lo que vino del server).
+  // Se compara contra el estado actual para saber si hay cambios sin guardar; el hook del
+  // guard usa ese `dirty` para prender el beforeunload y el prompt del sidebar.
+  const initialSnapshot = useMemo(
+    () => JSON.stringify({ schedule: initialSchedule.schedule, exceptions: initialSchedule.exceptions }),
+    [initialSchedule],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(initialSnapshot)
+  const currentSnapshot = useMemo(
+    () => JSON.stringify({ schedule: blocksToSchedule(blocks), exceptions: draftsToExceptions(exceptions) }),
+    [blocks, exceptions],
+  )
+  useUnsavedGuard(currentSnapshot !== savedSnapshot)
 
   // ---- Bloques ----
   const mutateBlocks = (fn: (draft: BlockDraft[]) => void) =>
@@ -250,6 +267,13 @@ export function ScheduleForm({ initialSchedule }: Props) {
         const err = await res.json().catch(() => ({ error: "error desconocido" }))
         throw new Error(err.error ?? `Error ${res.status}`)
       }
+      // Actualizamos el snapshot base para que el guard de "cambios sin guardar" vuelva
+      // a comparar contra lo que acabamos de persistir (dirty = false).
+      setSavedSnapshot(currentSnapshot)
+      // Invalida el Client Cache de Next (staleTimes: {dynamic: 30} en next.config.ts).
+      // Sin esto, salir y volver a /admin/configuracion dentro de 30s te muestra los props
+      // viejos (sin la excepción recién guardada) porque Next sirve el árbol RSC cacheado.
+      router.refresh()
       toast({ title: "Horarios guardados", tone: "success" })
     } catch (err) {
       toast({

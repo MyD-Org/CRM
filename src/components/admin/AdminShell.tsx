@@ -11,6 +11,7 @@ import { NotificationsPrompt } from "./NotificationsPrompt"
 import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialog"
 import type { InboxContact } from "@/lib/inbox-api"
 import { roleRank, type AdminRole } from "@/lib/roles"
+import { UnsavedGuardProvider, useUnsavedGuardCtx } from "@/lib/unsaved-guard"
 
 interface AdminShellProps {
   name: string
@@ -42,9 +43,21 @@ const NAV = [
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, minRole: "admin" as const },
 ]
 
-export function AdminShell({ name, email, role, logoSrc, iconSrc, tenantName, availability: initialAvailability, currentUserId, usagePanelEnabled, children }: AdminShellProps) {
+export function AdminShell(props: AdminShellProps) {
+  // El Provider tiene que envolver TODO lo que renderea `AdminShellInner` (sidebar +
+  // children) para que cualquier form montado abajo pueda registrarse en el guard, y para
+  // que el interceptor del sidebar pueda leer el estado de dirty desde el mismo contexto.
+  return (
+    <UnsavedGuardProvider>
+      <AdminShellInner {...props} />
+    </UnsavedGuardProvider>
+  )
+}
+
+function AdminShellInner({ name, email, role, logoSrc, iconSrc, tenantName, availability: initialAvailability, currentUserId, usagePanelEnabled, children }: AdminShellProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const guard = useUnsavedGuardCtx()
 
   const [warning, setWarning] = useState<{ action: "away" | "logout"; contacts: PendingContact[] } | null>(null)
   const resolveWarning = useRef<((proceed: boolean) => void) | null>(null)
@@ -82,10 +95,27 @@ export function AdminShell({ name, email, role, logoSrc, iconSrc, tenantName, av
   }
 
   async function handleLogout() {
+    // Dos guards antes de cerrar sesión: primero "hay cambios sin guardar en algún form
+    // (horarios, usuarios…)" y después "tenés conversaciones pendientes de respuesta".
+    // Orden: primero el más barato / más visible (unsaved), después el que hace fetch.
+    if (guard && !(await guard.confirmLeave())) return
     const ok = await guardAgainstPendingReplies("logout")
     if (!ok) return
     await fetch("/api/admin/auth/logout", { method: "POST" })
     router.push("/admin/login")
+  }
+
+  // Intercepta clicks de items del sidebar. Si algún form está sucio, prevenimos la
+  // navegación del <Link> y disparamos el Dialog del guard; si el usuario elige "salir",
+  // navegamos programáticamente. Si no hay nada sucio, dejamos que el Link haga lo suyo
+  // (soft-nav de Next, más rápido que router.push).
+  function guardNavClick(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (!guard?.isDirty()) return
+    if (pathname === href) return
+    e.preventDefault()
+    guard.confirmLeave().then((leave) => {
+      if (leave) router.push(href)
+    })
   }
 
   const visibleNav = NAV.filter((item) => {
@@ -163,7 +193,7 @@ export function AdminShell({ name, email, role, logoSrc, iconSrc, tenantName, av
         onLogout: handleLogout,
       }}
       renderLink={(href, content) => (
-        <Link href={href} className="block">
+        <Link href={href} className="block" onClick={(e) => guardNavClick(e, href)}>
           {content}
         </Link>
       )}
