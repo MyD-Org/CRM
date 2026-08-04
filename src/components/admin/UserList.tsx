@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { UserPlus, Mail, Shield, Clock, Pencil, Check, X, Link, RefreshCw, Trash2, ChevronDown } from "lucide-react"
 import { Button, Input, Field, Select, Badge, Alert, Avatar, Dialog, useToast } from "@myd-org/ui"
 import { assignableRoles, canActOnRole } from "@/lib/roles"
+import { useUnsavedGuard } from "@/lib/unsaved-guard"
 
 function roleLabel(role: string): string {
   if (role === "superadmin") return "Superadmin"
@@ -67,6 +68,24 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
 
   const departmentLabel = (key: string) =>
     departments.find((d) => d.key === key)?.label ?? key
+
+  // "Cambios sin guardar" abarca los dos flujos de esta pantalla:
+  // (a) formulario de invitación abierto con algo tipeado en nombre/email;
+  // (b) fila en modo edición con nombre/rol/departamentos distintos al usuario original.
+  // La comparación de departamentos es por conjunto (orden ignorable).
+  const editingUser = editingId ? users.find((u) => u.id === editingId) ?? null : null
+  const createDirty = showForm && (form.name.trim().length > 0 || form.email.trim().length > 0)
+  const editDirty = useMemo(() => {
+    if (!editingUser) return false
+    if (editForm.name !== editingUser.name) return true
+    if (editForm.role !== editingUser.role) return true
+    const origDepts = editingUser.departments ?? []
+    if (editForm.departments.length !== origDepts.length) return true
+    const orig = new Set(origDepts)
+    for (const d of editForm.departments) if (!orig.has(d)) return true
+    return false
+  }, [editForm, editingUser])
+  useUnsavedGuard(createDirty || editDirty)
 
   async function openInviteModal(url: string, name: string) {
     setInviteModal({ url, name })
