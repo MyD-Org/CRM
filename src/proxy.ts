@@ -39,5 +39,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|logos/).*)"],
+  // Excluir manifest.webmanifest y sw.js: son assets del PWA y el proxy los estaba tapando
+  // con el HTML del gate ("Próximamente"), rompiendo la instalación en mobile — al navegador
+  // le llegaba HTML en vez del JSON/JS y no podía leer el manifest ni registrar el SW.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|logos/|manifest.webmanifest|sw.js).*)"],
 }
