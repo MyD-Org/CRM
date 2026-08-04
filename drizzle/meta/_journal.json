@@ -99,6 +99,41 @@
       "when": 1784657322093,
       "tag": "0013_thankful_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785810000000,
+      "tag": "0014_open_weekdays",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785820000000,
+      "tag": "0015_rename_business_hours_to_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785830000000,
+      "tag": "0016_schedule_jsonb",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785840000000,
+      "tag": "0017_schedule_exceptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785850000000,
+      "tag": "0018_drop_notes",
+      "breakpoints": true
     }
   ]
 }
