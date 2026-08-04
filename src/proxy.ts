@@ -3,11 +3,21 @@ import { isKnownTenantId, resolveTenantIdFromHost } from "@/lib/tenants"
 import { checkSiteGate } from "@/lib/site-gate"
 
 export async function proxy(req: NextRequest) {
+  const host = req.headers.get("host") ?? ""
+
+  // El subdominio `crm.*` es solo backoffice — no tiene portal público. Mandamos la raíz
+  // directo a /admin para que el operador (o la PWA instalada, cuyo start_url es "/") no
+  // aterrice en el gate "Próximamente". 307 = temporary (evita cachear la regla en el
+  // navegador si en el futuro `/` sirve para otra cosa).
+  if (req.nextUrl.pathname === "/" && host.startsWith("crm.")) {
+    return NextResponse.redirect(new URL("/admin", req.url), 307)
+  }
+
   // `|| undefined`, no `??`: un TENANT_OVERRIDE="" (seteada pero vacía, como quedó en algún
   // momento en prod) no debe pisar la resolución por host. ?? solo cae al fallback con
   // null/undefined, así que un string vacío rompía TODAS las requests con 404.
   const override = process.env.TENANT_OVERRIDE || undefined
-  const tenantId = override ?? resolveTenantIdFromHost(req.headers.get("host") ?? "")
+  const tenantId = override ?? resolveTenantIdFromHost(host)
 
   // La config completa del tenant se carga desde la DB en getTenantConfig (server runtime).
   if (!isKnownTenantId(tenantId)) {
