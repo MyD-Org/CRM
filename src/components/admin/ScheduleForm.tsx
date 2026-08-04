@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { CalendarX2, Plus, Trash2, X } from "lucide-react"
 import {
   Button,
@@ -158,6 +159,7 @@ function RangeEditor({
 
 export function ScheduleForm({ initialSchedule }: Props) {
   const { toast } = useToast()
+  const router = useRouter()
   // Generador de ids estables para keys de React. useState con initializer lazy = se crea
   // una sola vez en el primer render y la closure persiste. Es el patrón recomendado en
   // React 19 (useRef prende el linter cuando se lo lee durante el render).
@@ -250,6 +252,10 @@ export function ScheduleForm({ initialSchedule }: Props) {
         const err = await res.json().catch(() => ({ error: "error desconocido" }))
         throw new Error(err.error ?? `Error ${res.status}`)
       }
+      // Invalida el Client Cache de Next (staleTimes: {dynamic: 30} en next.config.ts).
+      // Sin esto, salir y volver a /admin/configuracion dentro de 30s te muestra los props
+      // viejos (sin la excepción recién guardada) porque Next sirve el árbol RSC cacheado.
+      router.refresh()
       toast({ title: "Horarios guardados", tone: "success" })
     } catch (err) {
       toast({
