@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { CalendarX2, Plus, Trash2, X } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { CalendarX2, Pencil, Plus, Trash2, X } from "lucide-react"
+import { useUnsavedGuard } from "@/lib/unsaved-guard"
 import {
   Button,
   Card,
@@ -158,6 +160,7 @@ function RangeEditor({
 
 export function ScheduleForm({ initialSchedule }: Props) {
   const { toast } = useToast()
+  const router = useRouter()
   // Generador de ids estables para keys de React. useState con initializer lazy = se crea
   // una sola vez en el primer render y la closure persiste. Es el patrón recomendado en
   // React 19 (useRef prende el linter cuando se lo lee durante el render).
@@ -170,6 +173,24 @@ export function ScheduleForm({ initialSchedule }: Props) {
     exceptionsToDrafts(initialSchedule.exceptions, nextId),
   )
   const [saving, setSaving] = useState(false)
+  // La pantalla arranca en modo lectura (solo muestra lo configurado). El lápiz la pasa a
+  // edición, igual que la fila de Usuarios. Cancelar o guardar vuelve a lectura.
+  const [editing, setEditing] = useState(false)
+
+  // Snapshot serializado del último estado guardado (arranca con lo que vino del server).
+  // Se compara contra el estado actual para saber si hay cambios sin guardar; el hook del
+  // guard usa ese `dirty` para prender el beforeunload y el prompt del sidebar.
+  const initialSnapshot = useMemo(
+    () => JSON.stringify({ schedule: initialSchedule.schedule, exceptions: initialSchedule.exceptions }),
+    [initialSchedule],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(initialSnapshot)
+  const currentSnapshot = useMemo(
+    () => JSON.stringify({ schedule: blocksToSchedule(blocks), exceptions: draftsToExceptions(exceptions) }),
+    [blocks, exceptions],
+  )
+  // El guard de "cambios sin guardar" solo tiene sentido mientras se edita.
+  useUnsavedGuard(editing && currentSnapshot !== savedSnapshot)
 
   // ---- Bloques ----
   const mutateBlocks = (fn: (draft: BlockDraft[]) => void) =>
@@ -235,6 +256,19 @@ export function ScheduleForm({ initialSchedule }: Props) {
       ex[i].ranges[r][field] = value
     })
 
+  // Descarta los cambios en curso: reconstruye bloques/excepciones desde el último snapshot
+  // guardado y vuelve a modo lectura. No toca la DB.
+  const handleCancel = () => {
+    const saved = JSON.parse(savedSnapshot) as {
+      schedule: WeeklySchedule
+      exceptions: ScheduleException[]
+    }
+    const fromDb = blocksFromSchedule(saved.schedule, nextId)
+    setBlocks(fromDb.length > 0 ? fromDb : defaultBlocks(nextId))
+    setExceptions(exceptionsToDrafts(saved.exceptions, nextId))
+    setEditing(false)
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -250,6 +284,14 @@ export function ScheduleForm({ initialSchedule }: Props) {
         const err = await res.json().catch(() => ({ error: "error desconocido" }))
         throw new Error(err.error ?? `Error ${res.status}`)
       }
+      // Actualizamos el snapshot base para que el guard de "cambios sin guardar" vuelva
+      // a comparar contra lo que acabamos de persistir (dirty = false).
+      setSavedSnapshot(currentSnapshot)
+      setEditing(false)
+      // Invalida el Client Cache de Next (staleTimes: {dynamic: 30} en next.config.ts).
+      // Sin esto, salir y volver a /admin/configuracion dentro de 30s te muestra los props
+      // viejos (sin la excepción recién guardada) porque Next sirve el árbol RSC cacheado.
+      router.refresh()
       toast({ title: "Horarios guardados", tone: "success" })
     } catch (err) {
       toast({
@@ -262,8 +304,28 @@ export function ScheduleForm({ initialSchedule }: Props) {
     }
   }
 
+  if (!editing) {
+    return (
+      <ScheduleReadView
+        blocks={blocks}
+        exceptions={exceptions}
+        closedDays={closedDays}
+        onEdit={() => setEditing(true)}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col gap-5 w-full">
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={handleCancel} disabled={saving}>
+          Cancelar
+        </Button>
+        <Button size="sm" onClick={handleSave} loading={saving} disabled={saving}>
+          {saving ? "Guardando…" : "Guardar"}
+        </Button>
+      </div>
+
       {/* ===== Horario semanal ===== */}
       <Card title="Horario de atención" description="Agrupá los días que comparten el mismo horario. Un día sin franjas queda cerrado.">
         <div className="flex flex-col gap-3">
@@ -421,11 +483,132 @@ export function ScheduleForm({ initialSchedule }: Props) {
         </div>
       </Card>
 
-      <div>
-        <Button onClick={handleSave} loading={saving} disabled={saving}>
-          {saving ? "Guardando…" : "Guardar"}
+    </div>
+  )
+}
+
+function formatExceptionDate(iso: string): string {
+  const [y, m, d] = iso.split("-")
+  return `${d}/${m}/${y}`
+}
+
+// Vista de solo lectura: muestra el horario configurado sin poder modificarlo. El lápiz
+// (onEdit) pasa al formulario de edición. Los datos vienen del mismo estado que el editor,
+// que en modo lectura siempre coincide con lo último guardado.
+function ScheduleReadView({
+  blocks,
+  exceptions,
+  closedDays,
+  onEdit,
+}: {
+  blocks: BlockDraft[]
+  exceptions: ExceptionDraft[]
+  closedDays: WeekdayKey[]
+  onEdit: () => void
+}) {
+  const openBlocks = blocks.filter((b) => b.days.length > 0)
+
+  return (
+    <div className="flex flex-col gap-5 w-full">
+      <div className="flex justify-end">
+        <Button variant="secondary" size="sm" onClick={onEdit}>
+          <Pencil size={14} strokeWidth={1.6} /> Editar
         </Button>
       </div>
+
+      {/* ===== Horario semanal ===== */}
+      <Card title="Horario de atención" description="Así atiende el local cada semana.">
+        <div className="flex flex-col gap-3">
+          {openBlocks.length === 0 ? (
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+              El local figura cerrado toda la semana.
+            </p>
+          ) : (
+            openBlocks.map((block) => (
+              <div
+                key={block.id}
+                className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                style={{ borderColor: "var(--border)", background: "var(--surface-soft, var(--surface))" }}
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {WEEKDAY_KEYS.filter((d) => block.days.includes(d)).map((day) => (
+                    <Chip key={day} variant="toggle" selected>
+                      {WEEKDAY_LABELS[day].short}
+                    </Chip>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-2 gap-y-1 text-sm font-medium" style={{ color: "var(--ink)" }}>
+                  {block.ranges.map((r, i) => (
+                    <span key={i}>
+                      {r.open} a {r.close}
+                      {i < block.ranges.length - 1 ? " ·" : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+
+          {closedDays.length > 0 && openBlocks.length > 0 && (
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+              Cerrado:{" "}
+              <strong style={{ color: "var(--ink)" }}>
+                {closedDays.map((d) => WEEKDAY_LABELS[d].long).join(", ")}
+              </strong>
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {/* ===== Excepciones ===== */}
+      <Card title="Excepciones" description="Feriados, vacaciones o un horario especial en una fecha puntual.">
+        {exceptions.length === 0 ? (
+          <EmptyState
+            icon={<CalendarX2 size={22} />}
+            title="Sin excepciones"
+            description="El local usa el horario semanal todos los días."
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {exceptions.map((ex) => (
+              <div
+                key={ex.id}
+                className="rounded-lg border p-4"
+                style={{ borderColor: "var(--border)", background: "var(--surface-soft, var(--surface))" }}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded"
+                    style={{ background: "var(--elevated)", color: "var(--ink)" }}
+                  >
+                    {ex.type === "closed" ? "Cerrado" : "Horario especial"}
+                  </span>
+                  <span className="text-sm font-medium" style={{ color: "var(--ink)" }}>
+                    {ex.type === "closed" && ex.to
+                      ? `${formatExceptionDate(ex.date)} al ${formatExceptionDate(ex.to)}`
+                      : formatExceptionDate(ex.date)}
+                  </span>
+                  {ex.reason && (
+                    <span className="text-sm" style={{ color: "var(--ink-soft)" }}>
+                      · {ex.reason}
+                    </span>
+                  )}
+                </div>
+                {ex.type === "special" && (
+                  <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-sm" style={{ color: "var(--ink)" }}>
+                    {ex.ranges.map((r, i) => (
+                      <span key={i}>
+                        {r.open} a {r.close}
+                        {i < ex.ranges.length - 1 ? " ·" : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

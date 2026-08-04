@@ -153,4 +153,18 @@ nav[aria-label="Navegación principal"] .bg-primary-soft {
   select {
     font-size: 16px !important;
   }
+
+  /* Bug de hidratación del SideNav de @myd-org/ui en mobileMode="bottom-sheet":
+     el estado interno `isMobileViewport` arranca en false y recién pasa a true dentro
+     de un useEffect al montar. Durante el SSR + primer render del cliente NO se aplica
+     el `transform: translateY(100%)` inline, así que el sheet queda visible pegado al
+     fondo del viewport. Cuando el effect corre, aplica el transform CON `transition:
+     transform 200ms` → el browser anima el cambio y el usuario ve el menú "abriéndose
+     y cerrándose solo". Con este selector el translate está desde el primer paint;
+     cuando el JS toma el control con el mismo valor, no dispara animación porque el
+     transform no cambia. Selector escopado al aside del bottom-sheet (rounded-t-2xl
+     solo lo usa esa variante). */
+  aside.fixed.bottom-0.rounded-t-2xl {
+    transform: translateY(100%);
+  }
 }
