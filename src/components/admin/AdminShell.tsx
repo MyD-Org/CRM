@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { MessageSquare, Users, LogOut, Settings, BarChart3 } from "lucide-react"
+import { MessageSquare, Users, LogOut, Settings, BarChart3, FileText } from "lucide-react"
 import { SideNav, ToastProvider } from "@myd-org/ui"
 import { AvailabilityToggle, type Availability } from "./AvailabilityToggle"
 import { NotificationsPrompt } from "./NotificationsPrompt"
@@ -41,6 +41,7 @@ const NAV = [
   { href: "/admin/uso", label: "Uso del bot", icon: <BarChart3 size={16} strokeWidth={1.6} />, minRole: "superadmin" as const, flag: "usagePanel" as const },
   { href: "/admin/configuracion", label: "Configuración", icon: <Settings size={16} strokeWidth={1.6} />, minRole: "admin" as const },
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, minRole: "admin" as const },
+  { href: "/admin/plantillas", label: "Plantillas", icon: <FileText size={16} strokeWidth={1.6} />, minRole: "superadmin" as const },
 ]
 
 export function AdminShell(props: AdminShellProps) {
