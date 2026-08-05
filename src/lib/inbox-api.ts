@@ -376,3 +376,39 @@ export async function sendReply(
   }
   return { ok: true, id: body.id }
 }
+
+// ── Plantillas de WhatsApp (Meta Message Templates) ──────────────────────────
+// La fila que devuelve ai-api (espejo local de la plantilla en Meta). Claves en camelCase
+// porque drizzle serializa por el nombre de propiedad del schema, no por la columna SQL.
+export interface WhatsappTemplate {
+  id: string
+  name: string
+  category: string
+  language: string
+  status: string // PENDING | APPROVED | REJECTED | ...
+  components: unknown
+  rejectionReason: string | null
+  metaTemplateId: string | null
+  updatedAt: string
+  createdAt: string
+}
+
+// Devuelven el Response crudo para que el proxy reenvíe status + body tal cual (así el
+// admin puede mostrar el detalle de un rechazo de Meta, 422 meta_rejected).
+export async function listTemplatesRaw(
+  aiApiUrl: string,
+  aiTenantId: string,
+  role: string,
+  reconcile: boolean,
+): Promise<Response> {
+  return inboxFetch(aiApiUrl, aiTenantId, `/v1/staff/templates${reconcile ? "?reconcile=1" : ""}`, {}, role)
+}
+
+export async function createTemplateRaw(
+  aiApiUrl: string,
+  aiTenantId: string,
+  role: string,
+  body: unknown,
+): Promise<Response> {
+  return inboxFetch(aiApiUrl, aiTenantId, "/v1/staff/templates", { method: "POST", body: JSON.stringify(body) }, role)
+}
