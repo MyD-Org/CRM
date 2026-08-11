@@ -48,13 +48,27 @@ Elegir **"Clone development instance"**: copia la configuración ya probada
 
 ## 2. Registros DNS
 
+> ### ⚠️ El dominio primario del CRM es `crm.centralled.com.ar`
+>
+> **No `centralled.com.ar`.** Ese ya lo tomó la instancia del Shop, que creó
+> `clerk.centralled.com.ar`, `accounts.centralled.com.ar`, `clkmail.…` y los dos
+> `_domainkey`. Cargar los del CRM sobre el mismo dominio **pisaría esos
+> registros y rompería el login de la tienda**.
+>
+> Con `crm.centralled.com.ar` como dominio primario, Clerk pide
+> `clerk.crm.centralled.com.ar`, `accounts.crm.centralled.com.ar`, etc. — no
+> colisionan con los del Shop y las dos instancias conviven en la misma zona.
+>
+> Al crear la instancia de producción, Clerk pregunta el dominio: escribir
+> **`crm.centralled.com.ar`**.
+
 Clerk pide 5 CNAME. Se cargan en **DonWeb** (`micuenta.donweb.com` → el dominio
 → Nameservers y Zona DNS), **no en Vercel**: el dominio tiene nameservers de
 terceros (`ns1/ns2.donweb.com`).
 
 Dos detalles que hicieron perder tiempo la vez anterior:
 
-- DonWeb pide el **nombre completo** (`clerk.centralled.com.ar`), no solo el
+- DonWeb pide el **nombre completo** (`clerk.crm.centralled.com.ar`), no solo el
   subdominio.
 - El TTL más bajo que ofrece es **900**.
 
@@ -66,7 +80,7 @@ Verificar antes de apretar "Verify configuration" en Clerk:
 
 ```bash
 for h in clerk accounts clkmail clk._domainkey clk2._domainkey; do
-  echo "$h → $(dig +short CNAME "$h.centralled.com.ar" @ns1.donweb.com)"
+  echo "$h → $(dig +short CNAME "$h.crm.centralled.com.ar" @ns1.donweb.com)"
 done
 ```
 
@@ -84,17 +98,17 @@ Antes de escalar a soporte, descartar:
 dig +short CAA centralled.com.ar @ns1.donweb.com
 
 # 2) ¿Resuelve públicamente?
-dig +short CNAME clerk.centralled.com.ar @8.8.8.8
-dig +short CNAME clerk.centralled.com.ar @1.1.1.1
+dig +short CNAME clerk.crm.centralled.com.ar @8.8.8.8
+dig +short CNAME clerk.crm.centralled.com.ar @1.1.1.1
 ```
 
 Para probar el TLS salteando la caché negativa del resolver local —que da falsos
 "could not resolve host":
 
 ```bash
-ip=$(dig +short clerk.centralled.com.ar @8.8.8.8 | grep -E '^[0-9]' | head -1)
-curl -sS -o /dev/null -w "%{http_code}\n" --resolve "clerk.centralled.com.ar:443:$ip" \
-  https://clerk.centralled.com.ar/v1/health
+ip=$(dig +short clerk.crm.centralled.com.ar @8.8.8.8 | grep -E '^[0-9]' | head -1)
+curl -sS -o /dev/null -w "%{http_code}\n" --resolve "clerk.crm.centralled.com.ar:443:$ip" \
+  https://clerk.crm.centralled.com.ar/v1/health
 ```
 
 ## 3. Google OAuth propio
@@ -107,7 +121,10 @@ En producción Clerk **no presta** sus credenciales compartidas.
    - Dominio autorizado: `centralled.com.ar`
 2. **Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación web**.
    - URI de redireccionamiento: la que muestra la pantalla de Clerk, con el
-     formato `https://clerk.centralled.com.ar/v1/oauth_callback`
+     formato `https://clerk.crm.centralled.com.ar/v1/oauth_callback`
+   - Es un **cliente OAuth distinto** del que usa el Shop: otra instancia de
+     Clerk, otra URI de redirección. Puede vivir en el mismo proyecto de Google
+     Cloud y reusar la misma pantalla de consentimiento.
 3. Pegar Client ID y Client Secret en Clerk → SSO connections → Google.
 
 > **Clerk no tiene botón de guardar** en esa pantalla: guarda al salir del campo.
