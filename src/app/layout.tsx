@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next"
+import { ClerkProvider } from "@clerk/nextjs"
+import { esAR } from "@/lib/clerk-localizacion"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { InstallAppButton } from "@/components/InstallAppButton"
 import "./globals.css"
@@ -54,8 +56,19 @@ export default async function RootLayout({
   return (
     <html lang="es" className="h-full">
       <body className="min-h-full">
-        {children}
-        <InstallAppButton appName={tenantName} />
+        {/*
+          ClerkProvider DENTRO de <body>: envolver <html> fuerza render dinámico
+          de todo el árbol en Next 16.
+
+          El CRM tiene su PROPIA aplicación de Clerk, independiente de la del
+          Shop. No es satellite: esa configuración requiere plan pago en
+          producción. La contra asumida es que la misma persona es un usuario
+          distinto en cada sistema y entra por separado en cada uno.
+        */}
+        <ClerkProvider localization={esAR}>
+          {children}
+          <InstallAppButton appName={tenantName} />
+        </ClerkProvider>
       </body>
     </html>
   )

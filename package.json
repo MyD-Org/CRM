@@ -18,6 +18,8 @@
     "alegra:smoke": "tsx --env-file-if-exists=.env.local scripts/alegra-smoke.ts"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.14.2",
+    "@clerk/nextjs": "^7.7.1",
     "@myd-org/ai-widget": "file:vendor/myd-org-ai-widget-0.1.12.tgz",
     "@myd-org/ui": "^0.9.1",
     "@sentry/nextjs": "^10.65.0",

@@ -1,31 +1,41 @@
-import { cookies } from "next/headers"
-import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
-import { sessionOptions } from "@/lib/session"
+import { identidadPortal, urlLogin } from "@/lib/portal-auth"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { getCliente, getFacturas, getPagos, getPresupuestos } from "@/lib/erp"
 import { DashboardClient } from "@/components/portal/DashboardClient"
 import { AiChat } from "@/components/portal/AiChat"
 import { aiChatEnabled, shopEnabled } from "@/lib/flags"
-import type { SessionData } from "@/types"
 
 export default async function DashboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string; q?: string; factura?: string }>
 }) {
-  const [tenant, cookieStore, sp] = await Promise.all([getTenantConfig(), cookies(), searchParams])
-  const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
+  const [tenant, identidad, sp] = await Promise.all([
+    getTenantConfig(),
+    identidadPortal(),
+    searchParams,
+  ])
 
-  if (!session.isLoggedIn || !session.codigocliente) {
-    redirect("/portal")
+  // Sin sesion: al login del dominio primario (el Shop). Este dominio es
+  // satellite y no autentica por su cuenta.
+  if (!identidad.clerkUserId && !identidad.codigocliente) {
+    redirect(urlLogin())
   }
 
+  // Logueado pero sin cuenta de cliente vinculada: no hay estado de cuenta que
+  // mostrar. Se lo manda a vincular al Shop, que es donde vive el OTP.
+  if (!identidad.codigocliente) {
+    redirect("/portal/sin-cuenta")
+  }
+
+  const codigocliente = identidad.codigocliente
+
   const [cliente, facturas, pagos, presupuestos] = await Promise.all([
-    getCliente(tenant, session.codigocliente),
-    getFacturas(tenant, session.codigocliente),
-    getPagos(tenant, session.codigocliente),
-    getPresupuestos(tenant, session.codigocliente),
+    getCliente(tenant, codigocliente),
+    getFacturas(tenant, codigocliente),
+    getPagos(tenant, codigocliente),
+    getPresupuestos(tenant, codigocliente),
   ])
 
   const [aiEnabled, shopActive] = await Promise.all([aiChatEnabled(), shopEnabled()])
@@ -37,7 +47,7 @@ export default async function DashboardPage({
       facturas={facturas}
       pagos={pagos}
       presupuestos={presupuestos}
-      razonsocial={session.razonsocial ?? cliente.razonsocial}
+      razonsocial={identidad.razonsocial ?? cliente.razonsocial}
       tenantName={tenant.name}
       whatsappNumber={tenant.whatsappNumber}
       logoSrc={tenant.logoPath}
