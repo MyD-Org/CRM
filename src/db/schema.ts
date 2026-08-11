@@ -341,3 +341,53 @@ export const pushSubscriptions = pgTable(
     index("ps_tenant_operator").on(t.tenantId, t.operatorId),
   ],
 )
+
+/**
+ * Vinculación entre una cuenta de acceso (Clerk) y un cliente del ERP.
+ *
+ * El CRM tiene su PROPIA aplicación de Clerk, separada de la del Shop: se
+ * descartó la instancia única con satellite domains porque en producción
+ * requiere plan pago. Consecuencia directa: los `clerkUserId` de los dos
+ * sistemas NO se corresponden, y cada uno necesita su propia tabla de vínculos.
+ * No es duplicación evitable — es el precio de esa decisión.
+ *
+ * Cómo se prueba la identidad: el email con el que la persona entró ya viene
+ * verificado por Clerk. Si ese mismo email figura en el contacto del ERP, la
+ * cadena está cerrada (Clerk prueba que controla la casilla; el ERP dice de
+ * quién es esa casilla). No hace falta OTP para el caso normal.
+ *
+ * Multi-tenant, como todo el CRM: el mismo email puede ser cliente de dos
+ * tenants distintos y son vínculos distintos.
+ */
+export const portalClientLinks = pgTable(
+  "portal_client_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    clerkUserId: text("clerk_user_id").notNull(),
+    /** `codigocliente` en el ERP — el id del contacto en Alegra. */
+    codigocliente: text("codigocliente").notNull(),
+    razonsocial: text("razonsocial"),
+    cuit: text("cuit"),
+    /**
+     * 'activa' | 'revocada' | 'sin_coincidencia'. `sin_coincidencia` no es un
+     * vínculo: es la marca de "ya buscamos este email en el ERP y no había
+     * nada", para no repetir esa consulta en cada visita.
+     */
+    estado: text("estado").notNull().default("activa"),
+    /** 'email_verificado' | 'operador'. */
+    metodo: text("metodo").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Un vínculo ACTIVO por usuario y tenant. Índice parcial: un unique común
+    // impediría re-vincular después de una revocación.
+    uniqueIndex("pcl_user_activa")
+      .on(t.tenantId, t.clerkUserId)
+      .where(sql`${t.estado} = 'activa'`),
+    index("pcl_cliente").on(t.tenantId, t.codigocliente),
+  ],
+)
