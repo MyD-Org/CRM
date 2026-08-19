@@ -43,9 +43,12 @@ export async function proxy(req: NextRequest) {
     if (gated) return gated
   }
 
-  const res = NextResponse.next()
-  res.headers.set("x-tenant-id", tenantId)
-  return res
+  // No confiar en un header x-tenant-id provisto por el cliente: sobreescribirlo
+  // y adjuntarlo a la REQUEST que seguirá hacia los server components. Esto asegura
+  // que `headers()` en server runtime reciba el valor correcto.
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set("x-tenant-id", tenantId)
+  return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {
