@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env.local src/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env.local src/db/seed.ts",
+    "db:seed-tenant": "tsx --env-file-if-exists=.env.local src/db/seed-tenant.ts",
     "alegra:smoke": "tsx --env-file-if-exists=.env.local scripts/alegra-smoke.ts"
   },
   "dependencies": {
