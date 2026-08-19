@@ -67,6 +67,23 @@ export function resolveTenantIdFromHost(host: string): string {
   return DOMAIN_TO_TENANT_ID.get(host) ?? host.split(".")[0] ?? ""
 }
 
+/**
+ * `TENANT_OVERRIDE`, o `undefined` en producción.
+ *
+ * En Preview (`*.vercel.app`) el primer label del host no matchea ningún tenant, así
+ * que sin el override todo responde 404 — ahí sigue aplicando. En producción se ignora
+ * a nivel de código: si alguien la vuelve a setear en el entorno Production de Vercel,
+ * no reabre el agujero de aislamiento entre tenants.
+ *
+ * `|| undefined`, no `??`: un `TENANT_OVERRIDE=""` (seteada pero vacía, como quedó una
+ * vez en prod) no debe pisar la resolución por host — `??` solo cae al fallback con
+ * null/undefined y un string vacío rompía TODAS las requests con 404.
+ */
+export function tenantOverride(): string | undefined {
+  if (process.env.VERCEL_ENV === "production") return undefined
+  return process.env.TENANT_OVERRIDE || undefined
+}
+
 export function getTenantById(id: string): TenantConfig | null {
   return tenants.get(id) ?? null
 }
