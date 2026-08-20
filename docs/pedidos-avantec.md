@@ -1,286 +1,227 @@
-# Pedidos Avantec — la parte que le toca al CRM
+# Pedidos Avantec — parseo por IA sin tocar el CRM
 
 > Documento complementario a *"Propuesta: Automatización del flujo de pedidos — Avantec"*
-> (que vive en el repo del sistema de inventario). Aquel describe el flujo completo;
-> **este describe qué construye este repo (el CRM) y cómo se conecta con el inventario**.
+> (repo del sistema de inventario).
 >
-> Estado: propuesta de trabajo. Nada de esto está implementado todavía.
+> **Decisión tomada: el módulo de pedidos se construye entero en el inventario.
+> Este repo no cambia.** El agente arma la comanda con una tool nueva que apunta
+> al inventario, y consume los endpoints `/api/agent/*` que el CRM ya expone.
+>
+> Este doc vive acá porque documenta **qué le da hoy el CRM al agente**. El contrato
+> definitivo entre proyectos va a `MyD-Org/platform` (`contracts/`), como manda `AGENTS.md`.
 
-## 1. Corrección de prioridades respecto de la propuesta original
+---
 
-La propuesta original manda el **parser IA de mensajes** a la Fase 3 ("Inteligencia"),
-con esfuerzo *Alto*. Del lado del CRM esa estimación está desactualizada: la
-infraestructura cara del parser **ya existe y está en producción**.
+## 1. Reparto de responsabilidades
 
-| Lo que el parser necesita | Estado hoy en el CRM |
+| Proyecto | Qué hace |
 |---|---|
-| Recibir mensajes de WhatsApp | ✅ `ai-api` + inbox (`src/lib/inbox-api.ts`) |
-| Un agente con tools que consulten datos reales | ✅ `/api/agent/*` con `crm_token` HMAC (`agent-auth.ts`) |
-| Que el bot pueda **pasar la charla a un humano** | ✅ modo `bot`/`human` + handoff ruteado por departamento (ADR 0006) |
-| Cola de operadores y asignación | ✅ `departments`, `conversation_assignments`, `lib/assignment.ts` |
-| Que el operador vea el hilo completo y responda | ✅ inbox por contacto (`ContactThreadView.tsx`) |
-| Copiloto que ayuda al operador con IA | ✅ `AiAssistPanel.tsx` (ADR 0007) |
-| Ventana de 24hs, plantillas de Meta, reintentos de envío | ✅ `TemplateManager.tsx`, `retryMessage`/`dismissMessage` |
-| Guardrails de gasto del bot | ✅ `getLimits`/`setLimits`, panel de uso |
+| **Inventario** | Módulo de pedidos, Kanban, **alta manual de comandas**, BOM, stock, facturación vía Alegra. Expone `POST /api/pedidos`, `GET /api/pedidos/{id}` y `GET /api/specs` |
+| **ai-api** | La tool `crear_pedido`, el prompt de slot filling, la credencial contra el inventario |
+| **CRM (este repo)** | **Nada nuevo.** Aporta lo que ya está: canal de WhatsApp, identificación del cliente, catálogo, handoff a humano |
 
-Lo que falta es **el dominio "pedido"**, no la plomería: un conjunto de tools nuevas
-para el agente y una entidad de pedido con la que conversar. Por eso la propuesta
-que sigue **mueve el parser a la Fase 1**, junto con el módulo de pedidos y el BOM.
-
-Un segundo cambio: el parser **no** es la única puerta de entrada. La comanda tiene
-que poder cargarse **a mano** (teléfono, presencial, pedido de stock, cliente que
-manda un PDF), y esa carga manual es la que define la entidad. El parser es un
-*productor* más de esa misma entidad, no un camino paralelo.
+El pedido —incluido el que carga administración por teléfono o por stock— vive en un
+solo lugar: el inventario. No hay una segunda pantalla de alta de pedidos en el CRM.
 
 ---
 
-## 2. Principio de diseño: una sola entidad, tres orígenes
+## 2. Lo que el CRM ya le da al agente (no hay que construirlo)
 
-```
-WhatsApp  →  agente IA (slot filling)  ─┐
-Email     →  agente IA (slot filling)  ─┤
-Teléfono / presencial / stock → carga manual en el admin ─┤
-                                        │
-                                        ▼
-                            BORRADOR DE PEDIDO (CRM)
-                                        │
-                              confirmado por humano
-                              o por el cliente
-                                        ▼
-                        POST /pedidos → Sistema de Inventario
-                                        │
-                              webhook de cambios de status
-                                        ▼
-                        notificación al cliente (WhatsApp)
-```
+Todo esto está en producción. El bot de WhatsApp lo puede usar **hoy**, sin cambios.
 
-**El borrador vive en el CRM. El pedido firme vive en el inventario.** Esa separación
-es la que hace que el parser pueda equivocarse sin ensuciar el stock: mientras el
-pedido está en borrador nadie reservó materia prima.
+| Endpoint | Para qué en el flujo de pedidos |
+|---|---|
+| `GET /api/agent/contacts?q=` | Identificar al cliente en Alegra por nombre/CUIT |
+| `GET /api/agent/catalog` | Validar que el producto exista antes de armar la comanda |
+| `GET /api/agent/prices` | Precios por lista |
+| `GET /api/agent/payment-conditions`, `/payment-terms` | Condiciones de pago |
+| `GET /api/agent/sales-config` | Listas de precio, vendedores, impuestos |
+| `GET /api/agent/invoices`, `/payments`, `/account-balance` | Cuenta corriente del cliente |
 
-### Por qué un borrador y no crear el pedido directo
+**Auth**: los endpoints de datos del tenant (`contacts`, `catalog`, `prices`,
+`payment-*`, `sales-config`) aceptan `INTERNAL_SECRET` como Bearer, justamente para el
+flujo de canales donde **no hay un cliente logueado** — que es el caso de WhatsApp.
+Ver `src/lib/agent-auth.ts` (`authAgentTenantRequest`).
 
-- Un parser que crea pedidos firmes obliga a que el inventario sepa de "pedidos
-  dudosos", "pedidos a medio completar" y "pedidos que el cliente abandonó". Eso es
-  dominio de conversación, no de producción.
-- El borrador puede quedarse días incompleto esperando que el cliente conteste
-  "¿grampa larga o corta?". Un pedido firme, no.
-- Cuando el bot no entiende, el operador **hereda el borrador con lo que se pudo
-  sacar** y completa lo que falta. Sin borrador, el handoff empieza de cero.
+Los de cuenta corriente (`invoices`, `payments`, `account-balance`) exigen `crm_token`
+de un cliente logueado: son del widget del portal, no del bot de WhatsApp.
+
+### Handoff a humano: ya existe
+
+No requiere código nuevo en ningún lado. La mecánica (modo `bot`/`human`, ruteo por
+departamento, inbox del operador, copiloto, auto-cierre a las 24hs) está implementada
+y en uso. **Se activa desde el prompt del agente**, no programando.
+
+Lo único a definir son los disparadores. Propuesta de arranque:
+
+1. El cliente pide hablar con una persona.
+2. Dos vueltas seguidas sin poder completar el mismo dato.
+3. Producto que no está en el catálogo → probable custom, sin BOM.
+4. Cualquier mención de precio, descuento, plazo de pago o reclamo.
+5. Cliente que no se puede identificar tras preguntar dos veces.
+6. Audio, foto o PDF (por ahora el bot no los procesa).
+7. Enojo o urgencia en el tono.
 
 ---
 
-## 3. El borrador de pedido
+## 3. Lo que tiene que exponer el inventario
 
-Los campos salen de la comanda de papel actual (sección 2 de la propuesta original).
+### `GET /api/specs` — vocabulario de opciones válidas
 
-```ts
-// esbozo — el schema definitivo va en src/db/schema.ts
-order_drafts {
-  id, tenant_id,
-  origin: 'whatsapp' | 'email' | 'phone' | 'in_person' | 'manual',
-  // Trazabilidad al hilo que lo originó (null en carga manual).
-  end_user_id, conversation_id,
-  // Contacto de Alegra si se pudo identificar; si no, los datos crudos.
-  contact_id, contact_name, contact_phone,
-  delivery_date_estimate, priority, notes,
-  status: 'collecting' | 'needs_human' | 'ready' | 'submitted' | 'cancelled',
-  confidence,            // qué tan seguro está el parser de lo que armó
-  submitted_order_id,    // id que devolvió el inventario
-  created_at, updated_at
-}
+**Es el endpoint más importante de los tres.** Sin él el modelo inventa valores
+("óptica media", "led cálido", "grampa mediana") y el BOM no resuelve. Con él, la tool
+valida contra la lista y el agente sabe exactamente qué preguntar.
 
-order_draft_items {
-  id, draft_id,
-  product, quantity,
-  clamp: 'larga' | 'corta',        // grampa
-  led_color, optic, body_color,
-  other,                            // la columna libre de la comanda
-  // Por campo: 'parsed' | 'asked' | 'assumed' | 'manual' — para pintar en la UI
-  // qué dijo el cliente, qué preguntó el bot y qué asumió.
-  field_sources
+```json
+{
+  "clamp":      { "label": "Grampa",      "options": ["larga", "corta"] },
+  "led_color":  { "label": "Color de LED", "options": ["blanco", "calido", "neutro", "rgb"] },
+  "optic":      { "label": "Óptica",       "options": ["15", "30", "60"] },
+  "body_color": { "label": "Color del equipo", "options": ["negro", "blanco", "gris"] },
+  "other":      { "label": "Otros", "free_text": true }
 }
 ```
 
-`field_sources` no es adorno: es lo que le permite al operador confiar o desconfiar
-de la tarjeta de un vistazo. Un ítem con todo `parsed` se revisa distinto que uno
-con tres campos `assumed`.
+El inventario es el **dueño** de este vocabulario: agregar una óptica nueva se hace ahí
+y el bot se entera solo. Los valores de acá tienen que ser exactamente los mismos
+strings que usa el BOM.
+
+### `POST /api/pedidos` — crear la comanda
+
+Auth: API key server-to-server (mismo patrón que `INTERNAL_SECRET`).
+
+```json
+{
+  "external_id": "wa_5493511234567_1755712800",
+  "origin": "whatsapp",
+  "customer": {
+    "external_id": "alegra:1234",
+    "name": "Iluminación del Centro SRL",
+    "phone": "+5493511234567"
+  },
+  "items": [{
+    "product": "PROY-30W",
+    "product_external_id": "alegra:5678",
+    "quantity": 20,
+    "specs": {
+      "clamp": "larga", "led_color": "blanco",
+      "optic": "30", "body_color": "negro", "other": ""
+    }
+  }],
+  "delivery_date_estimate": "2026-09-05",
+  "priority": "normal",
+  "notes": "Retira el jueves por la tarde",
+  "source_conversation": "https://<crm>/admin/inbox/c/<end_user_id>"
+}
+```
+
+Respuesta:
+```json
+{ "order_id": "...", "order_number": 142, "status": "recibido",
+  "eta": "2026-09-05", "missing_materials": [] }
+```
+
+**`external_id` es clave de idempotencia y no es opcional.** El agente puede reintentar
+una tool call —timeout, reintento del modelo, cliente que manda "sí" dos veces— y sin
+esto aparecen dos comandas en el taller. El inventario debe devolver **el mismo pedido**
+ante un `external_id` repetido, no crear uno nuevo ni tirar error.
+
+`source_conversation` es el link al hilo en el inbox del CRM: cuando el del taller mira
+una comanda rara, puede ir a leer qué dijo el cliente textualmente. Sale casi gratis y
+vale mucho el día que el parser se equivoca.
+
+### `GET /api/pedidos/{id}` y `GET /api/pedidos?customer_external_id=`
+
+Para que el bot conteste *"¿cómo viene mi pedido?"*. Devuelve status y ETA.
 
 ---
 
-## 4. El agente de pedidos (slot filling)
+## 4. La tool del agente (ai-api)
 
-Un agente nuevo en `ai-api` (o un modo del agente actual) con estas tools contra este
-repo, en la misma línea que `/api/agent/quotes`:
+Se registra en `ai-api` junto a las que ya existen. Esbozo:
 
-| Tool | Para qué |
-|---|---|
-| `search_contacts` | ✅ ya existe (`/api/agent/contacts`) — identificar al cliente por teléfono/CUIT |
-| `get_catalog` | ✅ ya existe (`/api/agent/catalog`) — validar que el producto exista |
-| `create_order_draft` | 🆕 abre el borrador con lo que se entendió del primer mensaje |
-| `update_order_draft` | 🆕 completa campos a medida que el cliente contesta |
-| `get_order_draft` | 🆕 releer el estado (el hilo puede retomarse días después) |
-| `submit_order_draft` | 🆕 lo marca `ready` — dispara el envío al inventario |
-| `request_human` | 🆕 handoff explícito con motivo y resumen |
-| `get_order_status` | 🆕 "¿cómo viene mi pedido?" — lee del inventario |
+```json
+{
+  "name": "crear_pedido",
+  "description": "Crea un pedido de fabricación en el sistema de inventario. Usar SOLO cuando todos los datos obligatorios de todos los ítems están completos y el cliente confirmó el resumen.",
+  "input_schema": {
+    "type": "object",
+    "required": ["customer", "items"],
+    "properties": {
+      "customer": {
+        "type": "object",
+        "required": ["name", "phone"],
+        "properties": {
+          "external_id": { "type": "string", "description": "id de Alegra si se pudo identificar con la tool de contactos" },
+          "name":  { "type": "string" },
+          "phone": { "type": "string" }
+        }
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["product", "quantity", "specs"],
+          "properties": {
+            "product":  { "type": "string" },
+            "quantity": { "type": "integer", "minimum": 1 },
+            "specs": {
+              "type": "object",
+              "description": "Valores tomados de GET /api/specs. No inventar opciones."
+            }
+          }
+        }
+      },
+      "delivery_date_estimate": { "type": "string" },
+      "notes": { "type": "string" }
+    }
+  }
+}
+```
 
-El comportamiento pedido —**"que la IA se encargue de consultar todo lo que hace
-falta"**— es exactamente slot filling: el agente sabe qué campos necesita un ítem,
-mira cuáles faltan y pregunta **solo esos**, agrupados, en lenguaje del cliente:
+Más `consultar_pedido` (por número o por cliente) y `consultar_specs` (o el prompt
+inyecta las opciones ya resueltas, que gasta menos tokens si cambian poco).
+
+### Comportamiento esperado: slot filling
+
+El pedido *"que la IA se encargue de consultar todo lo que hace falta"* es esto: el
+agente sabe qué campos necesita un ítem, mira cuáles faltan y pregunta **solo esos**.
 
 > Cliente: *"necesito 20 equipos negros con led blanco"*
 > Bot: *"Perfecto, 20 unidades en negro con LED blanco. Me faltan dos datos:
 > ¿grampa larga o corta? ¿y qué óptica, 15°, 30° o 60°?"*
 
-Reglas que hacen que esto no sea insoportable:
+Reglas para que no sea insoportable:
 
-- **Preguntar de a poco**: máximo 2 datos por mensaje. WhatsApp no es un formulario.
-- **Usar el historial del cliente**: si siempre pide grampa larga, se propone
-  ("¿te mando grampa larga como la última vez?") en vez de preguntar en frío. Se
-  marca `assumed`, no `parsed`.
-- **No inventar precios**. El bot arma la comanda; **no cotiza**. Precio y descuento
-  quedan del lado humano hasta que haya una política escrita.
-- **Confirmar antes de cerrar**: resumen del pedido completo y un "¿lo confirmo?".
-
----
-
-## 5. Handoff a humano
-
-El pedido explícito era: **"que pueda pasar a un humano si no entiende o por motivos
-que después definimos"**. La mecánica ya existe (`setMode(conversation, 'human')` +
-ruteo a departamento); lo que hay que definir son los disparadores. Propuesta de
-arranque, todos configurables por tenant:
-
-**Automáticos**
-1. El cliente lo pide ("quiero hablar con alguien").
-2. Dos vueltas seguidas sin poder completar el mismo campo.
-3. Producto que no está en el catálogo → probable custom, sin BOM.
-4. Cualquier mención de precio, descuento, plazo de pago o reclamo.
-5. Cliente no identificado tras pedir el dato dos veces.
-6. Confianza baja del parser sobre el mensaje completo.
-7. Enojo o urgencia detectada en el tono.
-8. El cliente manda audio, foto o PDF (por ahora; el bot no los procesa).
-
-**Manuales**
-9. Cualquier operador puede tomar la conversación desde el inbox en cualquier momento
-   (ya funciona así hoy).
-
-Cuando se dispara, tres cosas pasan juntas:
-- La conversación pasa a `human` y se rutea al departamento **Pedidos**.
-- El borrador queda en `needs_human` y **se muestra al lado del hilo**, con los campos
-  faltantes resaltados y el motivo del handoff arriba.
-- El bot avisa al cliente que sigue una persona (sin dejarlo colgado en silencio).
-
-El operador completa el borrador desde el panel, lo confirma, y **el mismo botón que
-usa el bot** lo manda al inventario. Un solo camino de salida.
-
-> Nota: el auto-cierre de conversaciones a las 24hs (`/api/cron/auto-return-bot`)
-> **no debe cerrar borradores**. Un pedido a medio armar sobrevive al cierre de la
-> conversación y se retoma cuando el cliente vuelve a escribir.
+- **Máximo 2 datos por mensaje.** WhatsApp no es un formulario.
+- **Usar el historial**: si el cliente siempre pide grampa larga, proponer
+  (*"¿te mando grampa larga como la última vez?"*) en vez de preguntar en frío.
+- **No cotizar.** El bot arma la comanda; precio y descuento son handoff a humano
+  hasta que exista una política escrita.
+- **Confirmar antes de crear**: resumen completo y un "¿lo confirmo?" antes de llamar
+  a `crear_pedido`. La tool se ejecuta una sola vez, al final.
 
 ---
 
-## 6. Carga manual de la comanda
+## 5. Fuera de alcance por ahora
 
-Pantalla nueva en el admin (`/admin/pedidos`), pensada para el que hoy escribe la
-comanda de papel:
-
-- Alta de pedido eligiendo cliente (autocomplete contra Alegra) o cliente nuevo suelto.
-- Ítems con los mismos campos de la comanda: producto, grampa, LED, óptica, color,
-  cantidad, otros. Selects poblados desde el catálogo, no texto libre.
-- Origen del pedido (teléfono / presencial / stock / otro) — se guarda, sirve después
-  para saber por dónde entran los pedidos de verdad.
-- Duplicar un pedido anterior del mismo cliente (los repetidos son la mayoría).
-- Confirmar → mismo `POST /pedidos` al inventario que usa el bot.
-
-Es la pantalla que hay que construir **primero**, antes que el parser: define la
-entidad, el contrato, y ya reemplaza el papel aunque el bot no exista todavía.
+**Avisarle al cliente por WhatsApp cuando cambia el status del pedido.** Requiere salir
+por la API de Meta, que la tienen el CRM y ai-api — no el inventario. Cuando se aborde,
+la opción sana es que el inventario dispare un webhook y que el aviso salga por donde ya
+salen los mensajes. Que el inventario mande WhatsApp por su cuenta sería un tercer lugar
+con credenciales de Meta y con la lógica de la ventana de 24hs duplicada.
 
 ---
 
-## 7. Contrato con el sistema de inventario
+## 6. A definir con el equipo
 
-Va documentado en `MyD-Org/platform` (`contracts/crm-inventario-pedidos.md`) como
-manda `AGENTS.md`. Esbozo para discutir:
-
-**CRM → Inventario · `POST /api/pedidos`** (auth: HMAC, mismo patrón que `agent-token.ts`)
-```json
-{
-  "external_id": "draft_01H...",
-  "origin": "whatsapp",
-  "customer": { "external_id": "alegra:1234", "name": "...", "phone": "..." },
-  "items": [{
-    "product": "PROY-30W", "quantity": 20,
-    "specs": { "clamp": "larga", "led_color": "blanco", "optic": "30", "body_color": "negro", "other": "" }
-  }],
-  "delivery_date_estimate": "2026-09-05",
-  "priority": "normal",
-  "notes": "..."
-}
-```
-Respuesta: `{ order_id, order_number, eta, status, missing_materials?: [...] }`
-
-`external_id` es la clave de idempotencia — un reintento no puede duplicar un pedido.
-
-**Inventario → CRM · `POST /api/inventory/webhooks/order-status`**
-```json
-{ "order_id": "...", "external_id": "...", "status": "en_taller",
-  "invoice": { "number": "...", "pdf_url": "..." }, "occurred_at": "..." }
-```
-El CRM decide qué status notifica al cliente y con qué texto. **El inventario no
-decide comunicación**: fuera de la ventana de 24hs hay que usar plantilla aprobada de
-Meta, y eso solo lo sabe el CRM.
-
-**CRM → Inventario · consultas**: `GET /api/pedidos?customer_external_id=` y
-`GET /api/pedidos/{id}` — para el "¿cómo viene mi pedido?" del bot y para la ficha
-del cliente.
-
-Dos definiciones que hay que cerrar antes de escribir código:
-
-- **Vocabulario de specs compartido.** `"larga"`/`"corta"`, los colores de LED y las
-  ópticas tienen que ser los mismos strings en los dos sistemas, o el BOM no resuelve.
-  Propuesta: el inventario expone `GET /api/specs` y el CRM lo cachea; así el catálogo
-  de opciones tiene un solo dueño.
-- **Quién identifica al cliente.** Propuesta: Alegra es la fuente de verdad
-  (`alegra:<id>`), el CRM lo resuelve y el inventario lo guarda como id externo.
-
----
-
-## 8. Fases revisadas (lado CRM)
-
-### Fase 1 — la comanda existe en el sistema
-1. Entidad borrador de pedido + pantalla `/admin/pedidos` (carga manual).
-2. Contrato acordado y `POST /pedidos` contra el inventario.
-3. Vocabulario de specs sincronizado.
-
-**Resultado**: el papel desaparece aunque el bot todavía no exista.
-
-### Fase 2 — el bot arma la comanda
-4. Tools de borrador para el agente + prompt de slot filling.
-5. Disparadores de handoff + panel del borrador al lado del hilo.
-6. Métricas: % de pedidos que el bot cierra solo, motivo de cada handoff.
-
-**Resultado**: los pedidos de WhatsApp entran solos; los raros caen en manos de una
-persona con el trabajo ya medio hecho.
-
-### Fase 3 — el círculo se cierra
-7. Webhook de status + notificaciones al cliente (plantillas Meta para fuera de ventana).
-8. Pedidos del cliente visibles en el portal y en la ficha del inbox.
-9. Email como segundo canal de parseo.
-
----
-
-## 9. Para definir con el equipo
-
-Además de lo que ya lista la propuesta original:
-
-- **¿Quién confirma un pedido armado por el bot?** ¿Siempre pasa por una persona
-  antes de reservar MP, o hay clientes/productos de confianza que van derecho?
-  (Recomendación: **siempre revisión humana al principio**, y se afloja con datos.)
-- **¿El bot cotiza?** Hoy la propuesta dice que no. Si mañana sí, hace falta una
-  política de precios y descuentos escrita, porque el bot la va a aplicar literal.
-- **¿Qué hace el bot fuera del horario laboral?** ¿Sigue armando pedidos de noche y
-  encola el handoff para la mañana? (`lib/schedule.ts` ya modela horario comercial.)
-- **Audios y fotos**: llegan seguido por WhatsApp. ¿Fase 2 o handoff directo?
-- **Cliente nuevo que nunca compró**: ¿el bot le arma el pedido igual o lo pasa
-  directo a comercial para el alta?
+- **¿Quién confirma un pedido armado por el bot?** ¿Entra directo al Kanban o cae en una
+  bandeja de revisión? Recomendación: **revisión humana al principio**, y se afloja con datos.
+- **¿El Kanban del inventario va a tener un status previo tipo "por revisar"?** Si no, cada
+  charla que no termina en nada deja basura en el tablero del taller.
+- **Cliente nuevo que nunca compró**: ¿el bot le arma el pedido igual, o lo pasa a
+  comercial para el alta en Alegra?
+- **Fuera de horario**: ¿el bot sigue armando pedidos de noche y encola el handoff para
+  la mañana? (`src/lib/schedule.ts` ya modela el horario comercial del tenant.)
+- **Productos custom**: los que no tienen BOM predefinido, ¿los toma el bot o son
+  handoff directo?
