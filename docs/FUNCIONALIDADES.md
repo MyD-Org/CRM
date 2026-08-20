@@ -39,15 +39,59 @@ se autentica por OTP → opera sobre su cuenta corriente.
 ## Multitenant
 
 Un mismo deploy sirve a múltiples clientes (tenants), cada uno con su config aislada
-(Alegra, branding, WhatsApp, chat IA).
+(Alegra, branding, WhatsApp, chat IA) y su propio dominio.
 
-- **`src/middleware.ts`** — resuelve el tenant por subdominio (`cliente.dominio.com`)
-  o por `TENANT_OVERRIDE` en dev. Corre en Edge runtime: solo valida que el ID exista
-  (`isKnownTenantId`), sin tocar la DB. Inyecta el header `x-tenant-id`.
-- **`src/lib/tenants.ts`** — `getTenantByIdFromDb()` carga la config completa del tenant
-  desde la tabla `tenants`, con fallback a variables de entorno.
-- **`src/lib/tenant-context.ts`** — `getTenantConfig()` lee el `x-tenant-id` y devuelve
-  la config (usado por páginas y API routes, server runtime).
+### El Host es la fuente de verdad
+
+`x-tenant-id` es un valor **derivado** del host, no una entrada. El proxy lo calcula y lo
+propaga haciendo `.set()` sobre un clon de los headers entrantes — **esa sobrescritura, y
+solo esa, es lo que lo hace confiable downstream**. Un `.append()` en un refactor futuro
+reabriría el bypass en silencio, porque `headers.get()` devuelve el primero de la lista.
+
+- **`src/proxy.ts`** — resuelve el tenant y lo inyecta como header de **request** con
+  `NextResponse.next({ request: { headers } })`. Corre en Edge: solo valida que el id
+  exista (`isKnownTenantId`), sin tocar la DB. Usa `tenantOverride()`, no la env cruda.
+- **`src/lib/tenants.ts`** — `resolveTenantIdFromHost()` mapea host → tenant (dominio
+  propio vía `{PREFIX}_DOMAINS`, o primer label del host). Normaliza adentro, así que
+  proxy y guard no pueden desincronizarse. `tenantOverride()` ignora `TENANT_OVERRIDE`
+  cuando `VERCEL_ENV === "production"`.
+- **`src/lib/tenant-context.ts`** — `resolveRequestTenantId()` para decisiones de
+  **seguridad**: Host → header → override (no-prod) → `null`. Ante discrepancia gana el
+  host. `null` significa fallar cerrado. `getTenantConfig()` es para **branding**, no
+  para autorizar.
+
+### Aislamiento del backoffice
+
+Una cuenta pertenece a **un** tenant y sus credenciales no sirven en otro.
+
+- **Login** (`/api/admin/auth/login`) — busca por `(email, tenant del host)`. Timing
+  parejo con un hash dummy: sin él, la existencia de la cuenta se filtra por latencia.
+  Rate limit por `${tenantId}:${email}`, no por email solo.
+- **Guard** (`admin/(protected)/layout.tsx`) — verifica contra la DB, no contra la
+  cookie: una membresía revocada moriría recién al expirar la sesión. Si el host no
+  coincide con el tenant de la sesión, redirige a `/api/admin/auth/expire`, que destruye
+  la cookie (el layout no puede: `cookies()` es read-only fuera de Server Actions y
+  Route Handlers).
+- **`assign`** — el `operatorId` explícito se valida por forma de UUID, tenant y cuenta
+  activa. Mismo 404 en los tres casos, para no dar oráculo.
+
+Contención adicional: la cookie `admin-session` es **host-only** (no setea `domain`), así
+que un navegador nunca la manda al dominio de otro tenant.
+
+### Dar de alta un tenant
+
+1. Fila en la tabla `tenants` — `npm run db:seed-tenant -- --id <id> ...`
+2. Dominio agregado en Vercel.
+3. `TENANT_IDS` con el id, y `{PREFIX}_DOMAINS` con los hosts **completos**
+   (ej. `TEVRO_DOMAINS=www.tevro.com.ar,tevro.com.ar`).
+4. **Redeploy** — las env vars se hornean en build.
+
+Sin el paso 3 el host cae al fallback por primer label: `www.tevro.com.ar` resuelve a
+`www` y responde `404 Tenant "www" not found`.
+
+> **Pendiente**: nada impide hoy que `www`, `api`, `admin` o `app` se interpreten como
+> ids de tenant vía ese fallback. Hay que blindarlo antes de dar de alta clientes como
+> subdominios wildcard.
 
 ---
 
