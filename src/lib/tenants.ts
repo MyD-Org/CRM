@@ -57,14 +57,52 @@ export const tenants: Map<string, TenantConfig> = new Map(
 const DOMAIN_TO_TENANT_ID: Map<string, string> = new Map(
   TENANT_IDS.flatMap((id) => {
     const prefix = id.toUpperCase().replace(/-/g, "_")
-    const domains = (process.env[`${prefix}_DOMAINS`] ?? "").split(",").map((d) => d.trim()).filter(Boolean)
+    const domains = (process.env[`${prefix}_DOMAINS`] ?? "")
+      .split(",")
+      .map((d) => normalizeHost(d))
+      .filter(Boolean)
     return domains.map((domain) => [domain, id] as [string, string])
   }),
 )
 
+/**
+ * Normaliza un header Host (o una entrada de `{PREFIX}_DOMAINS`) a una clave comparable.
+ *
+ * Vive acá a propósito: la usan `resolveTenantIdFromHost()` (proxy) y, por transitividad,
+ * `resolveRequestTenantId()` (guard). Si el proxy normalizara distinto que el guard el usuario
+ * queda en loop de redirect — el proxy lo deja pasar y el guard lo expulsa —, un modo de falla
+ * que parece caída de servicio. Un solo lugar donde un string de host se vuelve un id.
+ */
+function normalizeHost(hostHeader: string): string {
+  return (hostHeader ?? "")
+    .split(",")[0] // `Host: a, b` con proxies encadenados → el primero
+    .trim()
+    .toLowerCase() // hostnames son case-insensitive (RFC 4343)
+    .replace(/:\d+$/, "") // `localhost:3000`, `central-led.localhost:3000`. Exige dígitos → no rompe `[::1]`
+    .replace(/\.$/, "") // FQDN con root explícito: `example.com.`
+}
+
 /** Resuelve el id de tenant a partir del host del request (dominio propio o *.subdominio). */
 export function resolveTenantIdFromHost(host: string): string {
-  return DOMAIN_TO_TENANT_ID.get(host) ?? host.split(".")[0] ?? ""
+  const normalized = normalizeHost(host)
+  return DOMAIN_TO_TENANT_ID.get(normalized) ?? normalized.split(".")[0] ?? ""
+}
+
+/**
+ * `TENANT_OVERRIDE`, o `undefined` en producción.
+ *
+ * La override existe para los previews (`*.vercel.app`, cuyo primer label no matchea ningún
+ * tenant: sin ella todo responde 404) y para `localhost:3000` en dev. En producción vuelve no-op
+ * cualquier guard host↔sesión, así que se neutraliza **en código** — que alguien la re-agregue a
+ * Production en Vercel no debe reabrir el agujero.
+ *
+ * `|| undefined`, no `??`: un `TENANT_OVERRIDE=""` (seteada pero vacía, como quedó una vez en
+ * prod) no debe pisar la resolución por host. `??` solo cae al fallback con null/undefined, así
+ * que un string vacío rompía TODAS las requests con 404.
+ */
+export function tenantOverride(): string | undefined {
+  if (process.env.VERCEL_ENV === "production") return undefined
+  return process.env.TENANT_OVERRIDE || undefined
 }
 
 export function getTenantById(id: string): TenantConfig | null {

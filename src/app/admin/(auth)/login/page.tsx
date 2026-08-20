@@ -1,12 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button, Input, Field, Alert } from "@myd-org/ui"
 
 export default function AdminLoginPage() {
   const router = useRouter()
+  // `?expired=1` lo pone /api/admin/auth/expire cuando el guard del área protegida rechaza la
+  // sesión (tenant del host distinto al de la cuenta, usuario borrado, cuenta desactivada).
+  const expired = useSearchParams().get("expired") === "1"
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -48,6 +51,12 @@ export default function AdminLoginPage() {
         <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Backoffice</h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Ingresá con tu email y contraseña</p>
       </div>
+
+      {expired && !error && (
+        <div className="mb-4">
+          <Alert tone="warning">Tu sesión expiró, volvé a ingresar.</Alert>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Field label="Email">
