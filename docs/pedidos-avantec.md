@@ -7,8 +7,8 @@
 > Este repo no cambia.** El agente arma la comanda con una tool nueva que apunta
 > al inventario, y consume los endpoints `/api/agent/*` que el CRM ya expone.
 >
-> **Alcance del bot: únicamente armar pedidos nuevos.** Estado de pedidos, precios,
-> reclamos y consultas técnicas son handoff a un humano (ver §2 bis).
+> **Alcance del bot: armar pedidos nuevos y responder el estado de un pedido.**
+> Reclamos, consultas técnicas y precios son handoff a un humano (ver §2 bis).
 >
 > Este doc vive acá porque documenta **qué le da hoy el CRM al agente**. El contrato
 > definitivo entre proyectos va a `MyD-Org/platform` (`contracts/`), como manda `AGENTS.md`.
@@ -57,40 +57,53 @@ y en uso. **Se activa desde el prompt del agente**, no programando.
 
 ---
 
-## 2 bis. Alcance del bot: solo pedidos nuevos
+## 2 bis. Alcance del bot
 
-Al cliente le escribe a Avantec por muchos motivos: encargar algo, preguntar cómo viene
-un pedido, pedir precio, reclamar, consultar un dato técnico. **El bot resuelve uno solo:
-armar un pedido nuevo.** Todo lo demás va a un humano.
+Al cliente le escribe a Avantec por varios motivos: encargar algo, preguntar cómo viene
+un pedido, consultar un dato técnico, reclamar. El bot atiende **dos** de esos: armar un
+pedido nuevo y responder el estado de un pedido existente. El resto es handoff.
 
-La regla es una lista blanca, no una lista negra:
+### Lo que es prompt y lo que es trabajo real
 
-> **Handoff por defecto.** El bot sigue la conversación **únicamente** si el cliente
-> quiere encargar productos. Ante cualquier otra intención, o ante la duda, handoff.
+La distinción importa para planificar, porque las dos cosas tienen costos muy distintos:
 
-Esto es deliberado y conviene sostenerlo un tiempo: el parseo de pedidos es acotado y
-verificable (los datos entran o no entran en el vocabulario de specs), mientras que
-"responder preguntas" es abierto y ahí es donde un bot queda mal. Se abre después, con
-datos de uso reales.
+| | Se define en | Costo de cambiarlo |
+|---|---|---|
+| **Qué intenciones atiende el bot** | Prompt del agente | Minutos, sin deploy. Se afloja o se cierra cuando quieras |
+| **Qué es capaz de responder** | Tools disponibles | Requiere exponer el endpoint en el inventario |
+
+El prompt decide si el bot **tiene permitido** contestar algo. La tool decide si **puede**.
+Son independientes: un bot al que el prompt le permite responder el estado de un pedido,
+pero que no tiene la tool para consultarlo, **inventa** — y eso es peor que derivar.
+
+Por eso el estado de pedidos entra al alcance del inventario (`GET /api/pedidos`, §3): no
+alcanza con permitirlo en el prompt.
 
 ### Clasificación de intención (primer paso de cada conversación)
 
 | Intención | Quién atiende |
 |---|---|
 | Quiere encargar productos | **Bot** — arma la comanda |
-| Estado de un pedido existente | Handoff |
-| Precio, descuento, plazo de pago | Handoff |
+| Estado de un pedido existente | **Bot** — lo consulta al inventario |
 | Reclamo, garantía, devolución | Handoff |
 | Consulta técnica del producto | Handoff |
+| Precio, descuento, plazo de pago | Handoff |
 | Saludo suelto / no se entiende | Handoff |
+
+Sobre precios: por política, **por este canal no se habla de plata**. No es un caso
+frecuente, pero la regla queda escrita porque el cliente igual puede preguntar, y la
+respuesta tiene que ser siempre la misma (derivar, no improvisar un número).
+
+Esta tabla vive en el prompt. Ampliarla o achicarla no requiere tocar código **mientras
+la tool exista**; sumar una intención que necesite datos nuevos, sí.
 
 ### Casos límite (la parte que importa)
 
-- **"Quiero 20 equipos, ¿cuánto me salen?"** → mezcla pedido con precio. **Gana el
-  handoff**: en cuanto aparece plata, atiende una persona.
-- **La intención cambia a mitad del pedido** (*"ah, y de paso, ¿el pedido anterior está
-  listo?"*) → handoff, aunque el pedido esté a medio armar. El operador lee el hilo, ve
-  lo que el bot ya juntó y sigue desde ahí.
+- **La intención cambia a mitad del pedido** (*"ah, y de paso, ¿el anterior está listo?"*)
+  → el bot responde el estado y **retoma el pedido donde lo dejó**. Es el caso más común
+  de todos y conviene probarlo explícitamente.
+- **Pedido y precio juntos** (*"quiero 20 equipos, ¿cuánto salen?"*) → arma la comanda y
+  deriva **solo** la parte del precio, sin abandonar el pedido.
 - **Handoff sin cerrar el trabajo hecho**: cuando el bot deja la conversación con un
   pedido incompleto, su último paso es **resumir en el hilo lo recolectado hasta ahí**
   (cliente, ítems, specs confirmadas, qué falta). Como no hay borrador guardado en el
@@ -175,14 +188,26 @@ ante un `external_id` repetido, no crear uno nuevo ni tirar error.
 una comanda rara, puede ir a leer qué dijo el cliente textualmente. Sale casi gratis y
 vale mucho el día que el parser se equivoca.
 
-### `GET /api/pedidos/{id}` — más adelante, no ahora
+### `GET /api/pedidos?customer_external_id=` y `GET /api/pedidos/{id}`
 
-Sería para que el bot conteste *"¿cómo viene mi pedido?"*. **Queda fuera del alcance
-inicial**: por ahora esa consulta es handoff, y el operador la responde abriendo el
-Kanban del inventario. No hace falta ninguna integración para eso.
+Para que el bot conteste *"¿cómo viene mi pedido?"* — la consulta más repetida después
+del pedido en sí. Es de **solo lectura**: no puede romper nada, no dispara procesos, no
+mueve stock. De los tres endpoints es el más barato de construir.
 
-Cuando se decida abrirlo, es el candidato natural a ser lo segundo que automatice el bot:
-es de solo lectura, no puede romper nada y es la consulta más repetida.
+```json
+{ "order_number": 142, "status": "en_taller",
+  "eta": "2026-09-05", "updated_at": "2026-08-20T14:32:00Z" }
+```
+
+Dos cosas a definir acá, y las dos son de negocio, no técnicas:
+
+- **Qué status ve el cliente.** Los internos del Kanban ("esperando MP") pueden no ser
+  los que conviene mostrar. Recomendación: un mapa de status interno → texto al cliente,
+  configurable en el inventario, para no atar el vocabulario del taller al del cliente.
+- **Cómo se identifica quién pregunta.** Por WhatsApp el cliente está identificado por su
+  teléfono, no por una sesión. Un pedido solo debe devolverse a quien lo hizo: el
+  inventario tiene que filtrar por `customer_external_id`, nunca aceptar un número de
+  pedido suelto sin validar de quién es.
 
 ---
 
@@ -229,12 +254,31 @@ Se registra en `ai-api` junto a las que ya existen. Esbozo:
 }
 ```
 
-Más `consultar_specs` (o, más barato en tokens si las opciones cambian poco, el prompt
-las inyecta ya resueltas). **`consultar_pedido` no va en esta etapa**: el estado de un
-pedido es handoff.
+Y `consultar_pedido`, para el estado:
 
-Es decir: **una sola tool de escritura y ninguna de lectura del inventario.** Esa es toda
-la superficie del bot por ahora, y es lo que hace que el alcance sea verificable.
+```json
+{
+  "name": "consultar_pedido",
+  "description": "Consulta el estado de los pedidos del cliente con el que se está hablando. Usar cuando pregunta cómo viene un pedido. Devolver el status tal como viene, sin prometer fechas que no estén en la respuesta.",
+  "input_schema": {
+    "type": "object",
+    "required": ["customer_external_id"],
+    "properties": {
+      "customer_external_id": { "type": "string" },
+      "order_number": { "type": "integer", "description": "opcional; sin esto devuelve los pedidos abiertos del cliente" }
+    }
+  }
+}
+```
+
+Más `consultar_specs` (o, más barato en tokens si las opciones cambian poco, el prompt
+las inyecta ya resueltas).
+
+Total: **una tool de escritura y dos de lectura.** Superficie chica y verificable.
+
+Una regla para el prompt que vale la pena: *"si la tool no devuelve fecha de entrega, no
+inventes una; decí que todavía no está confirmada"*. Es el error típico y el más caro,
+porque el cliente después reclama por una fecha que nadie prometió.
 
 ### Comportamiento esperado: slot filling
 
@@ -279,6 +323,8 @@ con credenciales de Meta y con la lógica de la ventana de 24hs duplicada.
   la mañana? (`src/lib/schedule.ts` ya modela el horario comercial del tenant.)
 - **Productos custom**: los que no tienen BOM predefinido, ¿los toma el bot o son
   handoff directo?
-- **¿Con qué criterio se amplía el alcance?** Conviene fijarlo ahora y no por impulso.
-  Propuesta: se abre la consulta de estado cuando el bot lleve ~50 pedidos armados sin
-  que un operador tenga que corregir specs.
+- **¿Qué status ve el cliente?** Hace falta el mapa de status interno del Kanban → texto
+  al cliente (ver §3).
+- **¿Con qué criterio se amplía el alcance a consultas técnicas?** Es la única categoría
+  grande que queda en handoff y no depende de datos nuevos, solo de prompt — o sea que se
+  puede probar barato cuando haya ganas.
