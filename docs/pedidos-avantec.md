@@ -7,6 +7,9 @@
 > Este repo no cambia.** El agente arma la comanda con una tool nueva que apunta
 > al inventario, y consume los endpoints `/api/agent/*` que el CRM ya expone.
 >
+> **Alcance del bot: únicamente armar pedidos nuevos.** Estado de pedidos, precios,
+> reclamos y consultas técnicas son handoff a un humano (ver §2 bis).
+>
 > Este doc vive acá porque documenta **qué le da hoy el CRM al agente**. El contrato
 > definitivo entre proyectos va a `MyD-Org/platform` (`contracts/`), como manda `AGENTS.md`.
 
@@ -52,15 +55,57 @@ No requiere código nuevo en ningún lado. La mecánica (modo `bot`/`human`, rut
 departamento, inbox del operador, copiloto, auto-cierre a las 24hs) está implementada
 y en uso. **Se activa desde el prompt del agente**, no programando.
 
-Lo único a definir son los disparadores. Propuesta de arranque:
+---
+
+## 2 bis. Alcance del bot: solo pedidos nuevos
+
+Al cliente le escribe a Avantec por muchos motivos: encargar algo, preguntar cómo viene
+un pedido, pedir precio, reclamar, consultar un dato técnico. **El bot resuelve uno solo:
+armar un pedido nuevo.** Todo lo demás va a un humano.
+
+La regla es una lista blanca, no una lista negra:
+
+> **Handoff por defecto.** El bot sigue la conversación **únicamente** si el cliente
+> quiere encargar productos. Ante cualquier otra intención, o ante la duda, handoff.
+
+Esto es deliberado y conviene sostenerlo un tiempo: el parseo de pedidos es acotado y
+verificable (los datos entran o no entran en el vocabulario de specs), mientras que
+"responder preguntas" es abierto y ahí es donde un bot queda mal. Se abre después, con
+datos de uso reales.
+
+### Clasificación de intención (primer paso de cada conversación)
+
+| Intención | Quién atiende |
+|---|---|
+| Quiere encargar productos | **Bot** — arma la comanda |
+| Estado de un pedido existente | Handoff |
+| Precio, descuento, plazo de pago | Handoff |
+| Reclamo, garantía, devolución | Handoff |
+| Consulta técnica del producto | Handoff |
+| Saludo suelto / no se entiende | Handoff |
+
+### Casos límite (la parte que importa)
+
+- **"Quiero 20 equipos, ¿cuánto me salen?"** → mezcla pedido con precio. **Gana el
+  handoff**: en cuanto aparece plata, atiende una persona.
+- **La intención cambia a mitad del pedido** (*"ah, y de paso, ¿el pedido anterior está
+  listo?"*) → handoff, aunque el pedido esté a medio armar. El operador lee el hilo, ve
+  lo que el bot ya juntó y sigue desde ahí.
+- **Handoff sin cerrar el trabajo hecho**: cuando el bot deja la conversación con un
+  pedido incompleto, su último paso es **resumir en el hilo lo recolectado hasta ahí**
+  (cliente, ítems, specs confirmadas, qué falta). Como no hay borrador guardado en el
+  CRM, ese resumen en la conversación *es* el traspaso. Sin él, el operador arranca de cero.
+
+### Disparadores de handoff dentro de un pedido en curso
+
+Aun cuando la intención es correcta, el bot se retira si:
 
 1. El cliente pide hablar con una persona.
 2. Dos vueltas seguidas sin poder completar el mismo dato.
-3. Producto que no está en el catálogo → probable custom, sin BOM.
-4. Cualquier mención de precio, descuento, plazo de pago o reclamo.
-5. Cliente que no se puede identificar tras preguntar dos veces.
-6. Audio, foto o PDF (por ahora el bot no los procesa).
-7. Enojo o urgencia en el tono.
+3. El producto no está en el catálogo → probable custom, sin BOM.
+4. El cliente no se puede identificar tras preguntar dos veces.
+5. Llega un audio, una foto o un PDF (por ahora el bot no los procesa).
+6. Hay enojo o urgencia en el tono.
 
 ---
 
@@ -130,9 +175,14 @@ ante un `external_id` repetido, no crear uno nuevo ni tirar error.
 una comanda rara, puede ir a leer qué dijo el cliente textualmente. Sale casi gratis y
 vale mucho el día que el parser se equivoca.
 
-### `GET /api/pedidos/{id}` y `GET /api/pedidos?customer_external_id=`
+### `GET /api/pedidos/{id}` — más adelante, no ahora
 
-Para que el bot conteste *"¿cómo viene mi pedido?"*. Devuelve status y ETA.
+Sería para que el bot conteste *"¿cómo viene mi pedido?"*. **Queda fuera del alcance
+inicial**: por ahora esa consulta es handoff, y el operador la responde abriendo el
+Kanban del inventario. No hace falta ninguna integración para eso.
+
+Cuando se decida abrirlo, es el candidato natural a ser lo segundo que automatice el bot:
+es de solo lectura, no puede romper nada y es la consulta más repetida.
 
 ---
 
@@ -179,8 +229,12 @@ Se registra en `ai-api` junto a las que ya existen. Esbozo:
 }
 ```
 
-Más `consultar_pedido` (por número o por cliente) y `consultar_specs` (o el prompt
-inyecta las opciones ya resueltas, que gasta menos tokens si cambian poco).
+Más `consultar_specs` (o, más barato en tokens si las opciones cambian poco, el prompt
+las inyecta ya resueltas). **`consultar_pedido` no va en esta etapa**: el estado de un
+pedido es handoff.
+
+Es decir: **una sola tool de escritura y ninguna de lectura del inventario.** Esa es toda
+la superficie del bot por ahora, y es lo que hace que el alcance sea verificable.
 
 ### Comportamiento esperado: slot filling
 
@@ -225,3 +279,6 @@ con credenciales de Meta y con la lógica de la ventana de 24hs duplicada.
   la mañana? (`src/lib/schedule.ts` ya modela el horario comercial del tenant.)
 - **Productos custom**: los que no tienen BOM predefinido, ¿los toma el bot o son
   handoff directo?
+- **¿Con qué criterio se amplía el alcance?** Conviene fijarlo ahora y no por impulso.
+  Propuesta: se abre la consulta de estado cuando el bot lleve ~50 pedidos armados sin
+  que un operador tenga que corregir specs.
