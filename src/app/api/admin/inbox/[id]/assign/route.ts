@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { getDb } from "@/db"
-import { tenants } from "@/db/schema"
+import { adminUsers, tenants } from "@/db/schema"
 import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { listConversations } from "@/lib/inbox-api"
 import { assignInCrm, availableOperators, getAssignments, loadFromAssignments, pickLeastLoaded } from "@/lib/assignment"
 import { sendPushToOperator } from "@/lib/push"
+
+/** UUID v4 canónico, el formato que genera `defaultRandom()` en `admin_users.id`. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // POST /api/admin/inbox/:id/assign
 //
@@ -39,7 +42,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const convDepartment = conv?.assigned_department ?? null
 
   if (typeof body.operatorId === "string" && body.operatorId.trim()) {
-    targetOperatorId = body.operatorId.trim()
+    const requested = body.operatorId.trim()
+
+    // Validar la FORMA antes de tocar la DB: `admin_users.id` es uuid y un string que no lo
+    // sea levanta 22P02 en Postgres → 500. Ese 500 distingue "id mal formado" de "id de otro
+    // tenant" (404) y funciona como oráculo para enumerar. Mismo 404 para los dos casos.
+    if (!UUID_RE.test(requested)) {
+      return NextResponse.json({ error: "operador no encontrado" }, { status: 404 })
+    }
+
+    // El operador tiene que ser de ESTE tenant. Sin este filtro, cualquier operador podía
+    // asignarle una conversación a un usuario de otro tenant mandando su UUID (IDOR): el
+    // destinatario terminaba viendo —y notificado por push sobre— datos de un cliente ajeno.
+    // `passwordHash` NOT NULL = cuenta activa; una invitación pendiente no puede recibir.
+    const [operator] = await db
+      .select({ id: adminUsers.id, passwordHash: adminUsers.passwordHash })
+      .from(adminUsers)
+      .where(and(eq(adminUsers.id, requested), eq(adminUsers.tenantId, session.tenantId)))
+
+    if (!operator || !operator.passwordHash) {
+      return NextResponse.json({ error: "operador no encontrado" }, { status: 404 })
+    }
+
+    targetOperatorId = operator.id
   } else if (body.strategy === "least-loaded") {
     // Mismo criterio que la reconciliación automática (ADR 0006): operadores DISPONIBLES
     // del depto + menos cargado. La carga se cuenta desde la DB del CRM (fuente de verdad).
