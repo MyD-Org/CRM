@@ -31,6 +31,12 @@ export const tenants = pgTable("tenants", {
   alegraMock: boolean("alegra_mock").notNull().default(false),
   whatsappNumber: text("whatsapp_number").notNull().default(""),
   resendFrom: text("resend_from").notNull(),
+  // Datos legales para las páginas públicas de /legal (privacidad, términos, eliminación
+  // de datos). Vacío = el dato no se cargó y la página lo muestra como "[pendiente: ...]".
+  legalName: text("legal_name").notNull().default(""),
+  legalTaxId: text("legal_tax_id").notNull().default(""),
+  legalAddress: text("legal_address").notNull().default(""),
+  legalEmail: text("legal_email").notNull().default(""),
   aiApiUrl: text("ai_api_url").notNull().default(""),
   aiApiKey: text("ai_api_key").notNull().default(""),
   aiAgentId: text("ai_agent_id").notNull().default(""),

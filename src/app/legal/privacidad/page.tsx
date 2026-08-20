@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function PrivacidadPage() {
   const tenant = await getTenantConfig()
-  const legal = getLegalInfo(tenant.id)
+  const legal = await getLegalInfo(tenant.id)
 
   return (
     <LegalDoc title="Política de privacidad" tenantName={tenant.name} logoSrc={tenant.logoPath}>

@@ -48,6 +48,11 @@ async function main() {
       aiApiKey: arg("ai-api-key") ?? "",
       aiAgentId: arg("ai-agent-id") ?? "",
       aiTenantId: arg("ai-tenant-id") ?? "",
+      // Datos legales para /legal/*. Vacío = la página lo marca como "[pendiente: ...]".
+      legalName: arg("legal-name") ?? "",
+      legalTaxId: arg("legal-tax-id") ?? "",
+      legalAddress: arg("legal-address") ?? "",
+      legalEmail: arg("legal-email") ?? "",
       updatedAt: new Date(),
     }
 
