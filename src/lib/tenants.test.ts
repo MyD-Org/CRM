@@ -36,4 +36,67 @@ describe("tenant resolution", () => {
     // crm is not a known tenant id here
     expect(tenants.isKnownTenantId("crm")).toBe(false)
   })
+
+  // La normalización vive DENTRO de resolveTenantIdFromHost para que el proxy y el guard no
+  // puedan divergir (si divergieran: el proxy deja pasar, el guard expulsa → loop de redirect).
+  it("normaliza el host antes de resolver", async () => {
+    process.env.TENANT_IDS = "central-led"
+    process.env.CENTRAL_LED_DOMAINS = " crm.centralled.com.ar , crm.otro.com "
+
+    const { resolveTenantIdFromHost } = await import("./tenants")
+
+    // Puerto
+    expect(resolveTenantIdFromHost("crm.centralled.com.ar:3000")).toBe("central-led")
+    // Mayúsculas (RFC 4343)
+    expect(resolveTenantIdFromHost("CRM.CentralLed.com.ar")).toBe("central-led")
+    // Punto final del FQDN
+    expect(resolveTenantIdFromHost("crm.centralled.com.ar.")).toBe("central-led")
+    // Espacios en la env var (segunda entrada de CENTRAL_LED_DOMAINS)
+    expect(resolveTenantIdFromHost("crm.otro.com")).toBe("central-led")
+    // `Host: a, b` de proxies encadenados → el primero
+    expect(resolveTenantIdFromHost("crm.centralled.com.ar, interno.local")).toBe("central-led")
+    // Wildcard con puerto: dev local pasa a resolver por host, sin TENANT_OVERRIDE
+    expect(resolveTenantIdFromHost("central-led.localhost:3000")).toBe("central-led")
+    // `localhost:3000` a secas SIGUE sin resolver: el override local no se vuelve innecesario
+    expect(resolveTenantIdFromHost("localhost:3000")).toBe("localhost")
+    // Host vacío → "" → nunca es un tenant conocido (fail-closed)
+    expect(resolveTenantIdFromHost("")).toBe("")
+  })
+})
+
+describe("tenantOverride", () => {
+  beforeEach(() => {
+    delete process.env.VERCEL_ENV
+    delete process.env.TENANT_OVERRIDE
+  })
+
+  it("devuelve undefined en producción aunque la variable esté seteada", async () => {
+    process.env.VERCEL_ENV = "production"
+    process.env.TENANT_OVERRIDE = "otro-tenant"
+
+    const { tenantOverride } = await import("./tenants")
+
+    expect(tenantOverride()).toBeUndefined()
+  })
+
+  it("sigue aplicando en preview y en local (VERCEL_ENV ausente)", async () => {
+    process.env.TENANT_OVERRIDE = "central-led"
+
+    process.env.VERCEL_ENV = "preview"
+    let mod = await import("./tenants")
+    expect(mod.tenantOverride()).toBe("central-led")
+
+    delete process.env.VERCEL_ENV
+    vi.resetModules()
+    mod = await import("./tenants")
+    expect(mod.tenantOverride()).toBe("central-led")
+  })
+
+  it("una override vacía no pisa la resolución por host (regresión ya arreglada)", async () => {
+    process.env.TENANT_OVERRIDE = ""
+
+    const { tenantOverride } = await import("./tenants")
+
+    expect(tenantOverride()).toBeUndefined()
+  })
 })
