@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function TerminosPage() {
   const tenant = await getTenantConfig()
-  const legal = getLegalInfo(tenant.id)
+  const legal = await getLegalInfo(tenant.id)
 
   return (
     <LegalDoc title="Términos y condiciones" tenantName={tenant.name} logoSrc={tenant.logoPath}>

@@ -134,6 +134,13 @@
       "when": 1785850000000,
       "tag": "0018_drop_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785870000000,
+      "tag": "0019_tenant_legal_info",
+      "breakpoints": true
     }
   ]
 }
