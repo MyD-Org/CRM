@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { isKnownTenantId, resolveTenantIdFromHost } from "@/lib/tenants"
+import { isKnownTenantId, resolveTenantIdFromHost, tenantOverride } from "@/lib/tenants"
 import { checkSiteGate } from "@/lib/site-gate"
 
 export async function proxy(req: NextRequest) {
@@ -13,10 +13,11 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/admin", req.url), 307)
   }
 
-  // `|| undefined`, no `??`: un TENANT_OVERRIDE="" (seteada pero vacía, como quedó en algún
-  // momento en prod) no debe pisar la resolución por host. ?? solo cae al fallback con
-  // null/undefined, así que un string vacío rompía TODAS las requests con 404.
-  const override = process.env.TENANT_OVERRIDE || undefined
+  // `tenantOverride()` y no `process.env.TENANT_OVERRIDE` directo: en producción devuelve
+  // undefined, así que el override NO puede pisar la resolución por host. Si el proxy lo
+  // honrara y el guard no, el usuario entra (proxy) y el panel lo expulsa (guard): loop de
+  // redirect, un modo de falla que parece caída de servicio. Los dos leen la misma función.
+  const override = tenantOverride()
   const tenantId = override ?? resolveTenantIdFromHost(host)
 
   // La config completa del tenant se carga desde la DB en getTenantConfig (server runtime).
