@@ -1,10 +1,17 @@
 import { authAgentTenantRequest } from "@/lib/agent-auth"
 import { getTenantConfig } from "@/lib/tenant-context"
-import { searchContacts, createContact } from "@/lib/alegra"
+import { searchContacts, searchContactsByPhone, createContact } from "@/lib/alegra"
 
-// GET /api/agent/contacts?q=san+martin
-// Busca clientes en Alegra por nombre o CUIT/identificación. Lo usa la tool del agente
-// para resolver a qué contacto cotizarle antes de crear la cotización (POST /api/agent/quotes).
+// GET /api/agent/contacts?q=san+martin   → por nombre o CUIT/identificación
+// GET /api/agent/contacts?phone=549223...  → por teléfono
+//
+// Busca clientes en Alegra. Lo usa la tool del agente para resolver a qué contacto
+// cotizarle antes de crear la cotización (POST /api/agent/quotes).
+//
+// La variante por teléfono es la que usa el bot de WhatsApp para saber quién le escribe
+// sin preguntarle nada: el número llega verificado por Meta, un nombre lo escribe
+// cualquiera. Puede devolver más de un contacto (mismo número cargado en varios); quien
+// llama no debe elegir uno, es el caso ambiguo.
 //
 // POST /api/agent/contacts
 //   body: { name, identification?, email?, phone? }
@@ -21,10 +28,13 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const q = url.searchParams.get("q")?.trim() ?? ""
-    if (!q) return Response.json({ error: "q es requerido" }, { status: 400 })
+    const phone = url.searchParams.get("phone")?.trim() ?? ""
+    if (!q && !phone) return Response.json({ error: "q o phone es requerido" }, { status: 400 })
 
-    const contacts = await searchContacts(tenant, q)
-    console.log(`[agent/contacts] tenant=${tenant.id} cliente=${auth.codigocliente} q="${q}" → ${contacts.length}`)
+    // phone tiene prioridad: es el dato confiable cuando viene de un canal verificado.
+    const contacts = phone ? await searchContactsByPhone(tenant, phone) : await searchContacts(tenant, q)
+    const criterio = phone ? `phone="${phone}"` : `q="${q}"`
+    console.log(`[agent/contacts] tenant=${tenant.id} cliente=${auth.codigocliente} ${criterio} → ${contacts.length}`)
 
     return Response.json({
       contacts: contacts.map((c) => ({

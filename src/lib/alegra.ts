@@ -483,6 +483,69 @@ export async function createContact(config: TenantConfig, input: AlegraContactIn
   return mapRawContact(raw)
 }
 
+// ── Identificación por teléfono ──
+//
+// El bot de WhatsApp necesita saber quién le escribe sin preguntarle el nombre: el número
+// llega verificado por Meta, mientras que un nombre lo escribe cualquiera. Y buscar por
+// nombre en esta cuenta es ambiguo de entrada — hay tres "Sergio", dos "Arrow", dos
+// "Roberto" y varios "Carlos".
+//
+// La búsqueda de Alegra (?query=) mira nombre e identificación, NO los teléfonos, así que
+// hay que traer los contactos y filtrar acá.
+
+/**
+ * Últimos 10 dígitos del teléfono, que en Argentina son área + abonado. El mismo número
+ * llega en formatos distintos según de dónde salga: "5492235903012" (wa_id, sin '+'),
+ * "+5492235903012" (Alegra), "02235903012" y "223 590 3012" (carga a mano). Comparar la
+ * cola evita tener que adivinar si trae código de país o el 15.
+ *
+ * Menos de 8 dígitos devuelve "": no alcanza para identificar una línea y matchearía de
+ * más, así que se trata como si no hubiera teléfono.
+ */
+export function normalizePhone(raw: unknown): string {
+  const digits = String(raw ?? "").replace(/\D/g, "")
+  if (digits.length < 8) return ""
+  return digits.slice(-10)
+}
+
+// Contactos que existen en Alegra pero no son un cliente al que se le pueda atribuir un
+// pedido: cuentas internas y marcadores. Si alguno tiene un teléfono cargado por arrastre,
+// un match automático le colgaría el pedido a "Stock general". Se filtran SOLO en la
+// búsqueda por teléfono, que es la automática y desatendida; la búsqueda por nombre la
+// dispara una persona y no conviene ocultarle resultados.
+const CUENTAS_NO_CLIENTE = new Set(["no usar", "stock taller", "stock general", "pos", "general", "empresa", "hotel"])
+
+function esCliente(name: string): boolean {
+  const n = name.trim().toLowerCase()
+  if (!n) return false
+  if (n.includes("no usar")) return false
+  return !CUENTAS_NO_CLIENTE.has(n)
+}
+
+/**
+ * Contactos cuyo teléfono coincide con el dado. Devuelve todos los que matchean: si vuelve
+ * más de uno, quien llama NO debe elegir — es justamente el caso ambiguo (mismo número
+ * cargado en varios contactos, como los dos "Lescano Diego").
+ */
+export async function searchContactsByPhone(config: TenantConfig, phone: string): Promise<AlegraContact[]> {
+  const buscado = normalizePhone(phone)
+  if (!buscado) return []
+
+  if (config.alegraMock) {
+    return mockContacts.filter((c) => normalizePhone(c.phone) === buscado && esCliente(c.name))
+  }
+
+  // Alegra guarda hasta tres números por contacto y el que buscamos puede estar en
+  // cualquiera: en esta cuenta hay contactos con el celular en "phonePrimary" y otros en
+  // "mobile".
+  const filas = await fetchAllPages(config, "/contacts", (raw) => ({
+    contact: mapRawContact(raw),
+    phones: [raw.phonePrimary, raw.phoneSecondary, raw.mobile].map(normalizePhone).filter(Boolean),
+  }))
+
+  return filas.filter((f) => f.phones.includes(buscado) && esCliente(f.contact.name)).map((f) => f.contact)
+}
+
 /** Todos los contactos (para una futura sync). Pagina hasta agotar. */
 export async function listAllContacts(config: TenantConfig): Promise<AlegraContact[]> {
   if (config.alegraMock) return mockContacts
