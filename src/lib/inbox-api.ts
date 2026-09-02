@@ -395,13 +395,21 @@ export interface WhatsappTemplate {
 
 // Devuelven el Response crudo para que el proxy reenvíe status + body tal cual (así el
 // admin puede mostrar el detalle de un rechazo de Meta, 422 meta_rejected).
+// channelAccountId elige sobre qué WABA reconciliar. Solo hace falta cuando el tenant
+// tiene números en WABAs distintas; con una sola, ai-api resuelve sin preguntar y
+// responde 409 ambiguous_waba (con las opciones) cuando hace falta elegir.
 export async function listTemplatesRaw(
   aiApiUrl: string,
   aiTenantId: string,
   role: string,
   reconcile: boolean,
+  channelAccountId?: string,
 ): Promise<Response> {
-  return inboxFetch(aiApiUrl, aiTenantId, `/v1/staff/templates${reconcile ? "?reconcile=1" : ""}`, {}, role)
+  const params = new URLSearchParams()
+  if (reconcile) params.set("reconcile", "1")
+  if (channelAccountId) params.set("channelAccountId", channelAccountId)
+  const qs = params.toString()
+  return inboxFetch(aiApiUrl, aiTenantId, `/v1/staff/templates${qs ? `?${qs}` : ""}`, {}, role)
 }
 
 export async function createTemplateRaw(

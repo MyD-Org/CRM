@@ -1,4 +1,3 @@
-import { secureCompare } from "@/lib/secure-compare"
 import { getTenantConfig } from "@/lib/tenant-context"
 
 // Destino del redirect del Embedded Signup de Meta al conectar el WhatsApp real de un
@@ -7,12 +6,14 @@ import { getTenantConfig } from "@/lib/tenant-context"
 // de las páginas legales. La ai-api no queda expuesta a internet.
 //
 // Es PÚBLICA (excluida del site gate en proxy.ts): la abre el dueño del número desde su
-// navegador, que no tiene sesión del CRM. Lo que la protege es el `state`: un secreto que
-// viaja en el link de onboarding y que solo conoce quien lo armó. Sin eso, cualquiera con
-// el link podría conectar SU número y pisar la config de producción del tenant.
+// navegador, que no tiene sesión del CRM. Lo que la protege es el `state`: un token FIRMADO
+// por la ai-api que dice a qué tenant y con qué Meta App es el alta. Antes era un secreto
+// fijo en una env var del CRM, igual para todos los links: no identificaba al tenant, no
+// vencía, y sólo servía mientras hubiera un único cliente.
 //
-// El canje del code lo hace la ai-api (tiene la ENCRYPTION_KEY y la DB de channel_accounts);
-// acá solo se valida el state y se reenvía server-to-server con INTERNAL_SECRET.
+// Esta página NO lo valida: no tiene la clave de firma, y tenerla significaría poder emitir
+// links para cualquier tenant. Reenvía code+state a la ai-api server-to-server con
+// INTERNAL_SECRET y la ai-api decide.
 export const dynamic = "force-dynamic"
 
 interface OnboardingResult {
@@ -32,7 +33,7 @@ interface OnboardingResult {
   detail?: string
 }
 
-async function completeOnboarding(code: string): Promise<{ result: OnboardingResult; failed: boolean }> {
+async function completeOnboarding(code: string, state: string): Promise<{ result: OnboardingResult; failed: boolean }> {
   const tenant = await getTenantConfig()
   if (!tenant.aiApiBaseUrl) {
     return { result: { detail: "El tenant no tiene aiApiBaseUrl configurada." }, failed: true }
@@ -45,7 +46,7 @@ async function completeOnboarding(code: string): Promise<{ result: OnboardingRes
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.INTERNAL_SECRET ?? ""}`,
       },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, state }),
       cache: "no-store",
     })
     const body = (await res.json()) as OnboardingResult
@@ -69,8 +70,7 @@ export default async function WhatsAppOnboardingPage({
   const metaError = first(params.error)
   const metaErrorDescription = first(params.error_description)
 
-  const stateSecret = process.env.WA_ONBOARD_STATE_SECRET
-  if (!stateSecret || !state || !secureCompare(state, stateSecret)) {
+  if (!state) {
     return (
       <Shell>
         <h1 className="text-2xl font-bold text-red-700">Enlace no válido</h1>
@@ -104,7 +104,7 @@ export default async function WhatsAppOnboardingPage({
     )
   }
 
-  const { result, failed } = await completeOnboarding(code)
+  const { result, failed } = await completeOnboarding(code, state)
 
   if (failed || !result.ok) {
     return (
@@ -114,11 +114,6 @@ export default async function WhatsAppOnboardingPage({
           La conexión con Meta se hizo, pero falló el último paso de nuestro lado. El código de autorización dura
           pocos minutos, así que conviene reintentar desde el enlace original.
         </p>
-        {result.detail ? (
-          <pre className="mt-4 overflow-x-auto rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
-            {result.detail}
-          </pre>
-        ) : null}
       </Shell>
     )
   }
