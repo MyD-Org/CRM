@@ -28,10 +28,11 @@ async function forward(res: Response): Promise<NextResponse> {
 }
 
 // GET /api/admin/templates — lista (reconciliando contra Meta primero).
-export async function GET() {
+export async function GET(req: NextRequest) {
   const ctx = await requireSuperadmin()
   if ("error" in ctx) return ctx.error
-  return forward(await listTemplatesRaw(ctx.aiApiUrl, ctx.aiTenantId, ctx.role, true))
+  const channelAccountId = req.nextUrl.searchParams.get("channelAccountId") ?? undefined
+  return forward(await listTemplatesRaw(ctx.aiApiUrl, ctx.aiTenantId, ctx.role, true, channelAccountId))
 }
 
 // POST /api/admin/templates — crea una plantilla.
