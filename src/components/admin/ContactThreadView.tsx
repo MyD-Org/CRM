@@ -16,9 +16,13 @@ interface Props {
   initialPage: ContactMessagesPage
   currentUserId: string
   botEnabled: boolean
+  /** Copiloto del operador habilitado para este tenant. false = no se ofrece el botón.
+   *  Ver tenants.copilot_enabled: un tenant sin copiloto configurado en la ai-api mostraba
+   *  el botón igual y al tocarlo daba error. */
+  copilotEnabled: boolean
 }
 
-export function ContactThreadView({ contact, initialPage, currentUserId, botEnabled }: Props) {
+export function ContactThreadView({ contact, initialPage, currentUserId, botEnabled, copilotEnabled }: Props) {
   const router = useRouter()
   const { toast } = useToast()
   const convId = contact.current_conversation_id
@@ -446,6 +450,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
               cerrada (sirve para preparar un presupuesto antes de que el cliente reescriba). */}
           {/* En mobile mostramos solo el ícono para no reventar el header (que ya tiene back,
               nombre, teléfono y "Finalizar"). En sm+ se ve el label completo. */}
+          {copilotEnabled && (
           <Button
             variant={assistOpen ? "primary" : "secondary"}
             size="sm"
@@ -459,6 +464,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
             <Sparkles size={11} strokeWidth={1.6} />
             <span className="hidden sm:inline">Asistente IA</span>
           </Button>
+          )}
 
           {!contact.within_window && <Badge tone="warning">Ventana cerrada</Badge>}
 
@@ -621,11 +627,13 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       )}
 
       {/* Copiloto de IA, en flujo al costado: la conversación se achica, no se tapa. */}
+      {copilotEnabled && (
       <AiAssistPanel
         open={assistOpen}
         prefetch={assistPrefetch}
         onClose={() => toggleAssist(false)}
         endUserId={contact.end_user_id}
+        conversationId={contact.current_conversation_id}
         contactName={contact.contact}
         width={assistWidth}
         lastInboundAt={contact.last_inbound_at}
@@ -633,6 +641,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         onSendToChannel={handleSendToChannel}
         onUseSuggestion={handleUseSuggestion}
       />
+      )}
 
       <Dialog
         open={pendingBudget !== null}

@@ -14,6 +14,9 @@ interface Props {
   prefetch?: boolean
   onClose: () => void
   endUserId: string
+  /** La conversación ABIERTA. Se manda a ai-api para que el copiloto lea esa y no la que él
+   *  deduzca: con varios números por tenant, el mismo contacto tiene un hilo por número. */
+  conversationId: string | null
   contactName: string
   /** Ancho del panel en px (arrastrable desde la barra divisoria). Default 380. */
   width?: number
@@ -55,7 +58,7 @@ interface AssistInit {
 // conversación se achica y quedan lado a lado, sin tapar lo que el operador escribe al cliente.
 // El widget arranca con la conversación de asistencia pre-creada; ai-api le inyecta el contexto de
 // la charla del cliente por turno. El operador copia la respuesta y la pega en el cuadro de reply.
-export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel, onUseSuggestion }: Props) {
+export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, conversationId, contactName, width = 380, lastInboundAt, withinWindow, onSendToChannel, onUseSuggestion }: Props) {
   const [init, setInit] = useState<AssistInit | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -64,20 +67,26 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, cont
   // Busca-o-crea el hilo de asistencia y devuelve el payload. El widget usa fetchToken para
   // refrescar el token re-llamando a este endpoint (find-or-create → mismo conversationId).
   const fetchAssist = useCallback(async () => {
-    const res = await fetch(`/api/admin/inbox/contacts/${endUserId}/assist`, { method: "POST" })
+    const res = await fetch(`/api/admin/inbox/contacts/${endUserId}/assist`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(conversationId ? { conversationId } : {}),
+    })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       throw new Error(body.error ?? "assist_failed")
     }
     return res.json() as Promise<{ conversationId: string; token: string; agentId: string; baseUrl: string }>
-  }, [endUserId])
+  }, [endUserId, conversationId])
 
-  // Al abrir —o al precargar, o al cambiar de contacto— arranca el hilo una sola vez por
-  // contacto. Con `prefetch` esto corre con el panel cerrado: abajo devolvemos null igual, pero
+  // Al abrir —o al precargar, o al cambiar de contacto o de conversación— arranca el hilo una
+  // sola vez por CONVERSACIÓN: con varios números un contacto tiene varias, y cachear por
+  // contacto le dejaría al copiloto el hilo de la charla anterior. Con `prefetch` esto corre con el panel cerrado: abajo devolvemos null igual, pero
   // cuando el operador hace click el token ya está y el panel aparece sin espera.
   useEffect(() => {
-    if ((!open && !prefetch) || startedFor.current === endUserId) return
-    startedFor.current = endUserId
+    const key = `${endUserId}:${conversationId ?? ""}`
+    if ((!open && !prefetch) || startedFor.current === key) return
+    startedFor.current = key
     setInit(null)
     setLoading(true)
     setError("")

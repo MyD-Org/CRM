@@ -10,7 +10,7 @@ import { startAssist } from "@/lib/inbox-api"
 // Copiloto del operador (ADR 0007). Busca-o-crea el hilo de asistencia del contacto en ai-api y
 // devuelve al widget la conversación pre-creada + el session token (que el widget refresca
 // re-llamando a este mismo endpoint). El baseUrl es el rewrite same-origin /ai-api.
-export async function POST(_req: Request, { params }: { params: Promise<{ endUserId: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ endUserId: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId) return NextResponse.json({ error: "no autorizado" }, { status: 401 })
 
@@ -20,7 +20,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ endUse
     return NextResponse.json({ error: "inbox no configurado" }, { status: 503 })
   }
 
-  const result = await startAssist(tenant.aiApiUrl, tenant.aiTenantId, endUserId)
+  // La conversación abierta en el inbox. Opcional: sin ella ai-api deduce la más reciente
+  // del contacto, que con varios números puede no ser la que el operador está mirando.
+  const body = (await req.json().catch(() => null)) as { conversationId?: string } | null
+
+  const result = await startAssist(tenant.aiApiUrl, tenant.aiTenantId, endUserId, body?.conversationId)
   if (!result.ok) {
     const status = result.error === "contact_not_found" ? 404
       : result.error === "assist_agent_not_configured" ? 409

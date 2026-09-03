@@ -1,0 +1,14 @@
+-- Copiloto del operador on/off por tenant.
+--
+-- Sin esto, un tenant sin copiloto configurado (Avantec: `settings.assistAgentId` vacío en
+-- la ai-api) igual muestra el botón "Asistente IA" en el inbox, y al tocarlo el operador
+-- recibe un error. Que la ai-api responda `assist_agent_not_configured` no alcanza: para
+-- entonces el operador ya hizo click esperando algo. Un botón que falla es peor que un
+-- botón que no está.
+--
+-- Escrita a mano, como 0014-0020: los snapshots de drizzle-kit quedaron congelados en 0013
+-- y `db:generate` pide resolver drift viejo ajeno a este cambio.
+--
+-- DEFAULT true: los tenants que ya tienen copiloto andando (Central Led) siguen igual sin
+-- tocar nada. Se apaga explícitamente donde no corresponda.
+ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "copilot_enabled" boolean NOT NULL DEFAULT true;
