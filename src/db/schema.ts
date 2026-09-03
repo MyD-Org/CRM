@@ -31,6 +31,12 @@ export const tenants = pgTable("tenants", {
   alegraMock: boolean("alegra_mock").notNull().default(false),
   whatsappNumber: text("whatsapp_number").notNull().default(""),
   resendFrom: text("resend_from").notNull(),
+  // Hosts COMPLETOS donde vive este tenant, coma-separados (ej. "crm.centralled.com.ar").
+  // Solo hace falta para dominios propios: el caso normal es el subdominio de la plataforma
+  // ("avantec.tevro.com.ar"), que resuelve por el primer label = este `id` sin configurar nada.
+  // Vivía en la env var `{PREFIX}_DOMAINS`; está acá para que dar de alta una empresa sea un
+  // INSERT y no un redeploy. Ver src/lib/tenants.ts.
+  domains: text("domains").notNull().default(""),
   // Datos legales para las páginas públicas de /legal (privacidad, términos, eliminación
   // de datos). Vacío = el dato no se cargó y la página lo muestra como "[pendiente: ...]".
   legalName: text("legal_name").notNull().default(""),

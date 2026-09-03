@@ -18,10 +18,10 @@ export async function proxy(req: NextRequest) {
   // honrara y el guard no, el usuario entra (proxy) y el panel lo expulsa (guard): loop de
   // redirect, un modo de falla que parece caída de servicio. Los dos leen la misma función.
   const override = tenantOverride()
-  const tenantId = override ?? resolveTenantIdFromHost(host)
+  const tenantId = override ?? (await resolveTenantIdFromHost(host))
 
   // La config completa del tenant se carga desde la DB en getTenantConfig (server runtime).
-  if (!isKnownTenantId(tenantId)) {
+  if (!(await isKnownTenantId(tenantId))) {
     return new NextResponse(`Tenant "${tenantId}" not found`, { status: 404 })
   }
 

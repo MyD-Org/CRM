@@ -141,6 +141,13 @@
       "when": 1785870000000,
       "tag": "0019_tenant_legal_info",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788480000000,
+      "tag": "0020_tenant_domains",
+      "breakpoints": true
     }
   ]
 }

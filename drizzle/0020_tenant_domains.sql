@@ -1,0 +1,17 @@
+-- Hosts propios del tenant, en la DB en vez de en `{PREFIX}_DOMAINS`.
+--
+-- El modelo de plataforma es un subdominio por empresa (`avantec.tevro.com.ar`), que ya
+-- resuelve solo: el proxy toma el PRIMER label del host y lo usa como id de tenant. Esta
+-- columna cubre el otro caso, el dominio propio (`crm.centralled.com.ar`), cuyo primer
+-- label ("crm") no matchea ningún id.
+--
+-- Por qué mover: con la lista en env vars, dar de alta una empresa exigía editar
+-- `TENANT_IDS` + `{PREFIX}_DOMAINS` en Vercel y REDEPLOYAR. Con la config en la DB el alta
+-- es un INSERT. Ver `getTenantRegistry()` en src/lib/tenants.ts.
+--
+-- Escrita a mano, como 0014-0019: los snapshots de drizzle-kit quedaron congelados en 0013
+-- y `db:generate` pide resolver drift viejo ajeno a este cambio.
+--
+-- Append-only y con DEFAULT '': las filas existentes quedan válidas (sin dominio propio =
+-- se llega por el subdominio de la plataforma).
+ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "domains" text NOT NULL DEFAULT '';

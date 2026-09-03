@@ -22,6 +22,15 @@ vi.mock("@/lib/site-gate", () => ({
   checkSiteGate: vi.fn(async () => null),
 }))
 
+// El registro de tenants sale de la DB (`getTenantRegistry`). Acá no hay Postgres y no es lo
+// que se está testeando: cortamos el acceso para que caiga a su fallback de env
+// (`TENANT_IDS` / `{PREFIX}_DOMAINS`), que es lo que estos tests configuran.
+vi.mock("@/db", () => ({
+  getDb: () => {
+    throw new Error("sin DB en unit tests")
+  },
+}))
+
 const ENV = { ...process.env }
 
 beforeEach(() => {
