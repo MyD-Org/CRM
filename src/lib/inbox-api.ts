@@ -317,12 +317,20 @@ export interface AssistSession {
   expiresAt: string
 }
 
+// conversationId = la conversación que el operador tiene ABIERTA. Se manda explícitamente
+// porque con varios números por tenant el mismo contacto tiene un hilo por número, y
+// deducirla del contacto (la más reciente) haría que el copiloto lea una charla mientras el
+// operador mira la otra.
 export async function startAssist(
   aiApiUrl: string,
   aiTenantId: string,
   endUserId: string,
+  conversationId?: string,
 ): Promise<{ ok: true; session: AssistSession } | { ok: false; error: string }> {
-  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/contacts/${endUserId}/assist`, { method: "POST" })
+  const res = await inboxFetch(aiApiUrl, aiTenantId, `/v1/inbox/contacts/${endUserId}/assist`, {
+    method: "POST",
+    body: JSON.stringify(conversationId ? { conversationId } : {}),
+  })
   if (res.status === 409 || res.status === 404) {
     const body = await res.json().catch(() => ({}))
     return { ok: false, error: body.error ?? "assist_unavailable" }
@@ -419,4 +427,15 @@ export async function createTemplateRaw(
   body: unknown,
 ): Promise<Response> {
   return inboxFetch(aiApiUrl, aiTenantId, "/v1/staff/templates", { method: "POST", body: JSON.stringify(body) }, role)
+}
+
+// Los números de WhatsApp del tenant, para que el admin pueda ofrecer "por qué número
+// mando" en las automatizaciones proactivas. No devuelve credenciales: solo lo que hace
+// falta para elegir.
+export async function listWhatsappNumbersRaw(
+  aiApiUrl: string,
+  aiTenantId: string,
+  role: string,
+): Promise<Response> {
+  return inboxFetch(aiApiUrl, aiTenantId, "/v1/staff/whatsapp-numbers", {}, role)
 }

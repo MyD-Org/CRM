@@ -43,6 +43,11 @@ export const tenants = pgTable("tenants", {
   legalTaxId: text("legal_tax_id").notNull().default(""),
   legalAddress: text("legal_address").notNull().default(""),
   legalEmail: text("legal_email").notNull().default(""),
+  // Copiloto del operador en el inbox (ADR 0007). false = ni siquiera se ofrece el botón.
+  // No alcanza con que la ai-api responda "no configurado": sin esto el operador ve un
+  // "Asistente IA" que al tocarlo da error, que es peor que no tenerlo. Avantec todavía
+  // no tiene copiloto (tenants.settings.assistAgentId vacío en la ai-api).
+  copilotEnabled: boolean("copilot_enabled").notNull().default(true),
   aiApiUrl: text("ai_api_url").notNull().default(""),
   aiApiKey: text("ai_api_key").notNull().default(""),
   aiAgentId: text("ai_agent_id").notNull().default(""),

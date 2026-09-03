@@ -59,5 +59,13 @@ export default async function ContactThreadPage({ params }: { params: Promise<{ 
     botStatusP,
   ])
 
-  return <ContactThreadView contact={enrichedContact} initialPage={page} currentUserId={session.userId} botEnabled={botEnabled} />
+  return (
+    <ContactThreadView
+      contact={enrichedContact}
+      initialPage={page}
+      currentUserId={session.userId}
+      botEnabled={botEnabled}
+      copilotEnabled={tenant.copilotEnabled}
+    />
+  )
 }
