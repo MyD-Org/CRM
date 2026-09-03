@@ -56,9 +56,9 @@ export async function resolveRequestTenantId(req?: Request): Promise<string | nu
   const host = h.get("host") ?? h.get("x-forwarded-host") ?? ""
   const headerTenant = h.get("x-tenant-id")?.trim() ?? ""
 
-  const hostTenant = resolveTenantIdFromHost(host)
-  if (isKnownTenantId(hostTenant)) {
-    if (headerTenant && headerTenant !== hostTenant && isKnownTenantId(headerTenant)) {
+  const hostTenant = await resolveTenantIdFromHost(host)
+  if (await isKnownTenantId(hostTenant)) {
+    if (headerTenant && headerTenant !== hostTenant && (await isKnownTenantId(headerTenant))) {
       console.warn(
         `[tenant] x-tenant-id="${headerTenant}" no coincide con el host ("${hostTenant}"); gana el host`,
       )
@@ -68,10 +68,10 @@ export async function resolveRequestTenantId(req?: Request): Promise<string | nu
 
   // El host no resuelve: preview (`*.vercel.app`) y destinos de rewrite. Acá el header sí decide,
   // pero solo si es un tenant conocido.
-  if (isKnownTenantId(headerTenant)) return headerTenant
+  if (await isKnownTenantId(headerTenant)) return headerTenant
 
   const override = tenantOverride()
-  if (override && isKnownTenantId(override)) return override
+  if (override && (await isKnownTenantId(override))) return override
 
   return null
 }
