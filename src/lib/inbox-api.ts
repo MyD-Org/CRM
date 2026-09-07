@@ -33,12 +33,33 @@ export interface InboxConversation {
   awaiting_reply: boolean
 }
 
+// Adjunto de un mensaje de canal (audio, imagen, documento que mandó el cliente por
+// WhatsApp). Lo devuelve ai-api junto al mensaje.
+//
+// `url` es una URL FIRMADA de vida corta, generada en cada request: no se puede cachear ni
+// guardar. Y que exista no garantiza que el archivo esté: el bucket borra los adjuntos
+// pesados a los 30 días, y ahí la URL se firma igual pero devuelve 404. Es un estado
+// esperado, no un error — por eso el render tiene que tolerar que la carga falle.
+export interface MessageAttachment {
+  /** Identidad estable del adjunto. `url` cambia en cada request (se firma de nuevo), así
+   *  que es lo único con lo que el cliente puede saber si es el MISMO archivo. */
+  id: string
+  kind: "audio" | "image" | "video" | "document" | "sticker" | "location" | "contacts" | "reaction" | "unknown"
+  mime: string
+  size_bytes: number
+  filename?: string
+  /** null cuando ai-api no pudo firmar (storage sin configurar). */
+  url: string | null
+}
+
 export interface InboxMessage {
   id: string
   role: string
   source: string | null
   text: string
   created_at: string
+  /** Ausente en la enorme mayoría de los mensajes: solo los que traen un archivo. */
+  attachments?: MessageAttachment[]
 }
 
 // Una entrada por CONTACTO (persona), no por sesión. La sesión actual aporta mode/asignación.

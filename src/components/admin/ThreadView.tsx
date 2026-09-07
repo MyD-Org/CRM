@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, User } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
+import { MessageAttachments, stripAttachmentMarker } from "./MessageAttachments"
 import type { InboxConversation, InboxMessage } from "@/lib/inbox-api"
 
 interface Props {
@@ -202,6 +203,7 @@ function MessageBubble({ message }: { message: InboxMessage }) {
   const isOutbound = message.role === "assistant"
   const isHuman = message.source === "human"
   const isBot = message.source === "bot"
+  const bodyText = stripAttachmentMarker(message.text, !!message.attachments?.length)
 
   return (
     <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
@@ -211,6 +213,8 @@ function MessageBubble({ message }: { message: InboxMessage }) {
             {isHuman ? "Operador" : isBot ? "Bot" : "Asistente"}
           </p>
         )}
+        <MessageAttachments attachments={message.attachments} />
+        {bodyText && (
         <div
           className="px-3 py-2 rounded-[var(--radius)] text-sm"
           style={{
@@ -219,8 +223,9 @@ function MessageBubble({ message }: { message: InboxMessage }) {
             border: isOutbound ? "none" : "1px solid var(--border)",
           }}
         >
-          {message.text}
+          {bodyText}
         </div>
+        )}
         <p className="text-[10px] mt-1" style={{ color: "var(--ink-faint)", textAlign: isOutbound ? "right" : "left" }}>
           {formatTime(message.created_at)}
         </p>
