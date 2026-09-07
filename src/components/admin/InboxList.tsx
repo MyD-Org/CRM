@@ -5,6 +5,7 @@ import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning, AlertTriangle } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
 import { channelLabel, type InboxContact } from "@/lib/inbox-api"
+import { previewText } from "@/lib/message-text"
 
 type Tab = "active" | "history"
 type Scope = "all" | "mine"
@@ -207,7 +208,7 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
                 <div className="flex items-baseline gap-1 mt-0.5 text-xs" style={{ color: "var(--ink-soft)" }}>
                   <span className="truncate">
                     {c.last_message
-                      ? c.last_message
+                      ? previewText(c.last_message)
                       : `${channelLabel(c.channel)}${c.phone && c.phone !== c.contact ? ` · ${c.phone}` : ""}`}
                   </span>
                   <span className="shrink-0" suppressHydrationWarning>· {c.last_inbound_at && mounted ? formatTime(c.last_inbound_at) : "—"}</span>

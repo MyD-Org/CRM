@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 import { channelLabel, type InboxContact, type ContactMessage, type ContactMessagesPage } from "@/lib/inbox-api"
 import { AiAssistPanel } from "./AiAssistPanel"
 import { subscribeAssistOpen, getAssistOpen, setAssistOpen } from "@/lib/assist-open"
+import { MessageAttachments, stripAttachmentMarker } from "./MessageAttachments"
 
 const PAGE_SIZE = 30
 
@@ -717,6 +718,7 @@ function MessageBubble({ message, onRetry, onDismiss }: {
   const failed = message.delivery_status === "failed" && !dismissed && !pending
   const [retrying, setRetrying] = useState(false)
   const [dismissing, setDismissing] = useState(false)
+  const bodyText = stripAttachmentMarker(message.text, !!message.attachments?.length)
 
   async function retry() {
     setRetrying(true)
@@ -736,6 +738,10 @@ function MessageBubble({ message, onRetry, onDismiss }: {
             {isHuman ? "Operador" : isBot ? "Bot" : "Asistente"}
           </p>
         )}
+        <MessageAttachments attachments={message.attachments} />
+        {/* Sin caption, el adjunto se explica solo: una burbuja vacía debajo del
+            reproductor o de la foto sería ruido. */}
+        {bodyText && (
         <div
           className="px-3 py-2 rounded-[var(--radius)] text-sm"
           style={{
@@ -752,8 +758,9 @@ function MessageBubble({ message, onRetry, onDismiss }: {
             textDecoration: dismissed ? "line-through" : "none",
           }}
         >
-          {message.text}
+          {bodyText}
         </div>
+        )}
         {(pending || (!failed && !dismissed)) ? (
           // Un solo <p> para "Enviando..." y para la hora: solo cambia el contenido. Evita
           // que React desmonte el nodo al pasar de pending a sent (fuente del salto visual).
