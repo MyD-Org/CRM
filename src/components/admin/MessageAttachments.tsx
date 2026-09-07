@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { FileText, Download, ExternalLink, FileQuestion } from "lucide-react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
+import { FileText, Download, ExternalLink, FileQuestion, X } from "lucide-react"
 import type { MessageAttachment } from "@/lib/inbox-api"
 export { stripAttachmentMarker } from "@/lib/message-text"
 
@@ -64,23 +65,80 @@ function CouldNotLoad({ url, label }: { url: string; label: string }) {
   )
 }
 
+// Visor de imagen a pantalla casi completa. No usamos el Dialog del design system a
+// propósito: exige un `title` y topea en max-w-3xl, así que la foto quedaría chica y con
+// una barra de título encima. Acá la imagen ES el contenido y no queremos cromo alrededor.
+//
+// Va por portal a document.body: el thread es un contenedor con overflow-y-auto, y un
+// fixed adentro de un scroller queda recortado por él.
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", handleKeydown)
+    // Sin esto, la rueda del mouse sigue scrolleando la conversación por detrás del visor.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", handleKeydown)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Imagen enviada por el cliente"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 cursor-zoom-out"
+      style={{ background: "rgba(0,0,0,0.8)" }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar"
+        className="absolute top-4 right-4 flex items-center justify-center w-9 h-9 rounded-full"
+        style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}
+      >
+        <X size={18} />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada de otro origen */}
+      <img
+        src={src}
+        alt="Imagen enviada por el cliente"
+        // El click en la imagen NO cierra: solo el fondo. Si no, arrastrar para mirar un
+        // detalle o errarle por un pixel cierra el visor sin querer.
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full object-contain rounded-[var(--radius)] cursor-default"
+      />
+    </div>,
+    document.body,
+  )
+}
+
 function ImageAttachment({ att }: { att: MessageAttachment }) {
   const [broken, setBroken] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
   const src = useStableUrl(att.url)
   if (!src) return <Unavailable label="Imagen no disponible" />
   if (broken) return <CouldNotLoad url={src} label="No se pudo mostrar la imagen." />
   return (
-    <a href={src} target="_blank" rel="noopener noreferrer" className="block">
-      {/* eslint-disable-next-line @next/next/no-img-element -- el src es una URL firmada
-          de otro origen y de vida corta: el optimizador de Next no puede procesarla. */}
-      <img
-        src={src}
-        alt="Imagen enviada por el cliente"
-        onError={() => setBroken(true)}
-        className="rounded-[var(--radius)] max-h-64 w-auto object-cover cursor-zoom-in"
-        style={{ border: "1px solid var(--border)" }}
-      />
-    </a>
+    <>
+      <button type="button" onClick={() => setZoomed(true)} className="block" aria-label="Ampliar imagen">
+        {/* eslint-disable-next-line @next/next/no-img-element -- el src es una URL firmada
+            de otro origen y de vida corta: el optimizador de Next no puede procesarla. */}
+        <img
+          src={src}
+          alt="Imagen enviada por el cliente"
+          onError={() => setBroken(true)}
+          className="rounded-[var(--radius)] max-h-64 w-auto object-cover cursor-zoom-in"
+          style={{ border: "1px solid var(--border)" }}
+        />
+      </button>
+      {zoomed && <ImageLightbox src={src} onClose={() => setZoomed(false)} />}
+    </>
   )
 }
 
