@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning, AlertTriangle } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
 import { channelLabel, type InboxContact } from "@/lib/inbox-api"
 import { previewText } from "@/lib/message-text"
+import { useVisiblePoll } from "@/lib/use-visible-poll"
 
 type Tab = "active" | "history"
 type Scope = "all" | "mine"
@@ -43,62 +44,72 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
   // nadie disponible en ese depto: en ese caso esperamos al tick de 60s.
   const reconcileTriedFor = useRef(new Set<string>())
 
+  // La solapa vigente, para descartar la respuesta de un fetch que quedó en vuelo cuando el
+  // operador ya cambió de solapa (antes lo hacía el flag `cancelled` del cleanup del effect).
+  const tabRef = useRef(tab)
+  useEffect(() => {
+    tabRef.current = tab
+  }, [tab])
+
   // El fetch depende solo de la solapa principal: "Activas" trae solo ventana abierta;
   // "Históricas" trae todos. "Todas / Mis conversaciones" es una sub-solapa que filtra
   // esa misma lista en el cliente, no dispara otro fetch.
-  useEffect(() => {
+  const load = useCallback(async () => {
     const fetchScope = tab === "active" ? "active" : "all"
-    let cancelled = false
-    const load = async () => {
-      // Leer va cada 10s, pero RECONCILIAR (que escribe en la DB) solo cada 60s: repartir la
-      // cola en cada pasada era carga constante sobre Neon, multiplicada por pestaña abierta.
-      const now = Date.now()
-      if (lastReconcileAt.current === null) lastReconcileAt.current = now
-      const shouldReconcile =
-        forceReconcile.current || now - lastReconcileAt.current >= RECONCILE_EVERY_MS
-      if (shouldReconcile) {
-        lastReconcileAt.current = now
-        forceReconcile.current = false
-      }
-
-      // `no-store`: sin esto el navegador cachea el GET (misma URL en cada poll) y la lista
-      // se queda con datos viejos —p. ej. una conversación recién asignada sigue "Sin asignar"—
-      // hasta un reload manual.
-      // Estado del kill switch: si el bot está pausado, las conversaciones en modo bot NO las
-      // atiende nadie, así que se muestran "Sin asignar" (no "Bot"). Se pollea para reflejar
-      // el toggle sin recargar. Las dos llamadas son independientes: en paralelo.
-      const [res, bs] = await Promise.all([
-        fetch(
-          `/api/admin/inbox/contacts?scope=${fetchScope}${shouldReconcile ? "&reconcile=1" : ""}`,
-          { cache: "no-store" },
-        ).catch(() => null),
-        fetch("/api/admin/inbox/bot-status", { cache: "no-store" }).catch(() => null),
-      ])
-      if (res?.ok && !cancelled) {
-        const next: InboxContact[] = await res.json()
-        setContacts(next)
-
-        // ¿Apareció una conversación derivada sin operador que todavía no intentamos
-        // repartir? Adelantamos la reconciliación al próximo poll en vez de esperar los 60s.
-        const fresh = next.filter(
-          (c) =>
-            c.mode === "human" &&
-            c.status !== "closed" &&
-            !c.assigned_operator_id &&
-            c.current_conversation_id &&
-            !reconcileTriedFor.current.has(c.current_conversation_id),
-        )
-        if (fresh.length) {
-          for (const c of fresh) reconcileTriedFor.current.add(c.current_conversation_id!)
-          forceReconcile.current = true
-        }
-      }
-      if (bs?.ok && !cancelled) setBotEnabled((await bs.json()).botEnabled)
+    // Leer va cada 10s, pero RECONCILIAR (que escribe en la DB) solo cada 60s: repartir la
+    // cola en cada pasada era carga constante sobre Neon, multiplicada por pestaña abierta.
+    const now = Date.now()
+    if (lastReconcileAt.current === null) lastReconcileAt.current = now
+    const shouldReconcile =
+      forceReconcile.current || now - lastReconcileAt.current >= RECONCILE_EVERY_MS
+    if (shouldReconcile) {
+      lastReconcileAt.current = now
+      forceReconcile.current = false
     }
-    load()
-    const interval = setInterval(load, 10_000)
-    return () => { cancelled = true; clearInterval(interval) }
+
+    // `no-store`: sin esto el navegador cachea el GET (misma URL en cada poll) y la lista
+    // se queda con datos viejos —p. ej. una conversación recién asignada sigue "Sin asignar"—
+    // hasta un reload manual.
+    // Estado del kill switch: si el bot está pausado, las conversaciones en modo bot NO las
+    // atiende nadie, así que se muestran "Sin asignar" (no "Bot"). Se pollea para reflejar
+    // el toggle sin recargar. Las dos llamadas son independientes: en paralelo.
+    const [res, bs] = await Promise.all([
+      fetch(
+        `/api/admin/inbox/contacts?scope=${fetchScope}${shouldReconcile ? "&reconcile=1" : ""}`,
+        { cache: "no-store" },
+      ).catch(() => null),
+      fetch("/api/admin/inbox/bot-status", { cache: "no-store" }).catch(() => null),
+    ])
+    if (res?.ok && tabRef.current === tab) {
+      const next: InboxContact[] = await res.json()
+      setContacts(next)
+
+      // ¿Apareció una conversación derivada sin operador que todavía no intentamos
+      // repartir? Adelantamos la reconciliación al próximo poll en vez de esperar los 60s.
+      const fresh = next.filter(
+        (c) =>
+          c.mode === "human" &&
+          c.status !== "closed" &&
+          !c.assigned_operator_id &&
+          c.current_conversation_id &&
+          !reconcileTriedFor.current.has(c.current_conversation_id),
+      )
+      if (fresh.length) {
+        for (const c of fresh) reconcileTriedFor.current.add(c.current_conversation_id!)
+        forceReconcile.current = true
+      }
+    }
+    if (bs?.ok && tabRef.current === tab) setBotEnabled((await bs.json()).botEnabled)
   }, [tab])
+
+  // Carga inmediata al montar y al cambiar de solapa.
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // Poll cada 10s, pausado mientras la pestaña no esté visible (con la pestaña oculta el
+  // aviso lo da el push, no esto; ver use-visible-poll.ts).
+  useVisiblePoll(load, 10_000)
 
   const mine = contacts.filter((c) => c.assigned_operator_id === currentUserId)
   const pendingCount = contacts.filter((c) => c.awaiting_reply).length

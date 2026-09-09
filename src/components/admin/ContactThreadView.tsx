@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, Sparkles, UserPlus, User, AlertTriangle, RefreshCw, X, Clock } from "lucide-react"
 import { Button, Badge, Textarea, Dialog, useToast } from "@myd-org/ui"
@@ -9,6 +9,7 @@ import { channelLabel, type InboxContact, type ContactMessage, type ContactMessa
 import { AiAssistPanel } from "./AiAssistPanel"
 import { subscribeAssistOpen, getAssistOpen, setAssistOpen } from "@/lib/assist-open"
 import { MessageAttachments, stripAttachmentMarker } from "./MessageAttachments"
+import { useVisiblePoll } from "@/lib/use-visible-poll"
 
 const PAGE_SIZE = 30
 
@@ -136,18 +137,18 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     return [...prev.filter((m) => !recentIds.has(m.id)), ...recent]
   }
 
-  // Polling de la primera página (lo reciente) cada 5s.
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      // `no-store`: evita que el navegador sirva del cache el mismo GET en cada poll y deje
-      // el thread sin mensajes nuevos hasta un reload.
-      const res = await fetch(`/api/admin/inbox/contacts/${contact.end_user_id}/messages?limit=${PAGE_SIZE}`, { cache: "no-store" })
-      if (!res.ok) return
-      const page: ContactMessagesPage = await res.json()
-      setMessages((prev) => mergeRecent(prev, page.messages))
-    }, 5_000)
-    return () => clearInterval(interval)
+  // Polling de la primera página (lo reciente) cada 5s, pausado mientras la pestaña no esté
+  // visible: con la pestaña oculta nadie está leyendo este thread y el aviso de un mensaje
+  // nuevo llega por push. Al volver a la pestaña se refetchea al instante.
+  const pollRecent = useCallback(async () => {
+    // `no-store`: evita que el navegador sirva del cache el mismo GET en cada poll y deje
+    // el thread sin mensajes nuevos hasta un reload.
+    const res = await fetch(`/api/admin/inbox/contacts/${contact.end_user_id}/messages?limit=${PAGE_SIZE}`, { cache: "no-store" })
+    if (!res.ok) return
+    const page: ContactMessagesPage = await res.json()
+    setMessages((prev) => mergeRecent(prev, page.messages))
   }, [contact.end_user_id])
+  useVisiblePoll(pollRecent, 5_000)
 
   // Scroll: preservar posición al prepender histórico; si no, pegarse al fondo.
   useEffect(() => {

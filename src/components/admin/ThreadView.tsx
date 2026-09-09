@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, CheckCheck, Bot, User } from "lucide-react"
 import { Button, Badge, Textarea } from "@myd-org/ui"
 import { useRouter } from "next/navigation"
 import { MessageAttachments, stripAttachmentMarker } from "./MessageAttachments"
 import type { InboxConversation, InboxMessage } from "@/lib/inbox-api"
+import { useVisiblePoll } from "@/lib/use-visible-poll"
 
 interface Props {
   conversation: InboxConversation
@@ -25,13 +26,13 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
   const [archiving, setArchiving] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const res = await fetch(`/api/admin/inbox/${conversation.id}/messages`)
-      if (res.ok) setMessages(await res.json())
-    }, 5_000)
-    return () => clearInterval(interval)
+  // Poll pausado mientras la pestaña no esté visible (ver use-visible-poll.ts): con la
+  // pestaña oculta el aviso lo da el push, y cada pasada despertaba el compute de Neon.
+  const pollMessages = useCallback(async () => {
+    const res = await fetch(`/api/admin/inbox/${conversation.id}/messages`)
+    if (res.ok) setMessages(await res.json())
   }, [conversation.id])
+  useVisiblePoll(pollMessages, 5_000)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
