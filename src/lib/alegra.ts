@@ -666,9 +666,22 @@ export async function listPaymentsByContact(config: TenantConfig, contactAlegraI
   })
 }
 
-/** Saldo de cuenta corriente derivado de las facturas abiertas (vencido vs. a vencer). */
+/**
+ * Saldo de cuenta corriente derivado de las facturas abiertas (vencido vs. a vencer).
+ *
+ * Pide SOLO las abiertas (`status=open`) en vez de escanear el historial entero. Alegra no
+ * tiene endpoint de saldo —probados /statement, /balance, /account-statement (404) y
+ * fields=balance (null)—, pero este filtro sí funciona y deja el mismo número: para un
+ * cliente con 1282 facturas son 10 filas y una request en lugar de 43 páginas, verificado
+ * contra el total que mostraba el cálculo viejo.
+ */
 export async function getContactBalance(config: TenantConfig, contactAlegraId: string): Promise<AlegraContactBalance> {
-  const invoices = await listInvoicesByContact(config, contactAlegraId)
+  const invoices = config.alegraMock
+    ? await listInvoicesByContact(config, contactAlegraId)
+    : await fetchAllPages(config, "/invoices", mapRawInvoice, {
+        client_id: contactAlegraId,
+        status: "open",
+      })
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   let total = 0

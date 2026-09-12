@@ -150,6 +150,8 @@ interface Props {
   initialQuery?: string
   openFacturaId?: string
   shopUrl?: string
+  /** Secciones que Alegra no pudo devolver en esta carga. Se avisan en vez de mostrarlas vacías. */
+  seccionesCaidas?: readonly Tab[]
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -162,7 +164,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl }: Props) {
+export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl, seccionesCaidas = [] }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -304,6 +306,18 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
           />
 
           <div className="p-4">
+            {/* Una sección caída y una vacía se ven igual: sin este aviso, el cliente lee
+                "No hay pagos para mostrar" y cree que el portal le perdió los pagos. */}
+            {seccionesCaidas.includes(activeTab) && (
+              <div
+                className="mb-3 flex items-center gap-2 p-3 rounded-[var(--radius)] text-sm"
+                style={{ background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e" }}
+                role="status"
+              >
+                <Info size={16} strokeWidth={1.6} color="currentColor" />
+                <span>No pudimos cargar esta sección en este momento. Actualizá la página en unos minutos.</span>
+              </div>
+            )}
             {activeTab === "facturas" && (
               <FacturasTable
                 facturas={facturas}
