@@ -74,18 +74,17 @@ async function descargarDocumento(kind: DocKind, doc: DocumentoRef) {
   }
 }
 
-/** Abre el PDF en una pestaña nueva. */
-async function verDocumento(kind: DocKind, doc: DocumentoRef) {
+/**
+ * Abre el PDF en una pestaña nueva, apuntándola al endpoint.
+ *
+ * SIN fetch previo a propósito: un `window.open` después de un `await` ya no cuenta como
+ * gesto del usuario y Chrome y Safari lo bloquean — el botón no hacía nada y no se veía
+ * ningún error. Abriendo la URL directo, el navegador la pide con la cookie de sesión y
+ * el endpoint responde el PDF inline.
+ */
+function verDocumento(kind: DocKind, doc: DocumentoRef) {
   if (!doc.alegraId) return
-  try {
-    const blob = await fetchDocumento(kind, doc.alegraId, false)
-    const url = URL.createObjectURL(blob)
-    window.open(url, "_blank", "noopener")
-    // Margen para que la pestaña nueva alcance a cargarlo antes de soltar el blob.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  } catch (err) {
-    alert(err instanceof Error ? err.message : "No pudimos abrir el documento")
-  }
+  window.open(`/api/portal/documentos/${kind}/${doc.alegraId}`, "_blank", "noopener")
 }
 
 /** Descarga varios, de a uno: el navegador bloquea una ráfaga de descargas simultáneas. */
