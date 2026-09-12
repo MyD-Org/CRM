@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm"
-import { Resend } from "resend"
 import { getDb } from "@/db"
 import { notificationLog, notificationRules, tenants as tenantsTable } from "@/db/schema"
 import { getClientes, getFacturas } from "@/lib/erp"
+import { sendEmail } from "@/lib/email"
 import type { TenantConfig } from "@/lib/tenants"
 import type { Cliente, Factura } from "@/types"
 
@@ -101,18 +101,6 @@ function buildEmail(tenant: TenantConfig, cliente: Cliente, items: PendingNotifi
   </div>`
 
   return { subject, html }
-}
-
-async function sendEmail(tenant: TenantConfig, to: string, subject: string, html: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    // Dry-run en entornos sin Resend configurado: loguea en vez de enviar
-    console.log(`[notifications dry-run] to=${to} subject="${subject}"`)
-    return
-  }
-  const resend = new Resend(apiKey)
-  const { error } = await resend.emails.send({ from: tenant.resendFrom, to, subject, html })
-  if (error) throw new Error(error.message)
 }
 
 export async function runNotifications(filter?: {
