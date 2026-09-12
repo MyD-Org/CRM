@@ -681,3 +681,109 @@ export async function getContactBalance(config: TenantConfig, contactAlegraId: s
   }
   return { total, overdue, toFallDue: total - overdue }
 }
+
+// ── PDF de documentos (facturas, recibos de pago, cotizaciones) ──────────────
+// Alegra no expone el PDF como recurso propio: hay que pedir el documento con
+// `?fields=pdf` y devuelve una URL FIRMADA de su CDN, con `Expires` y `Signature`.
+// Dos consecuencias:
+//   1. La URL vence → no sirve guardarla en la DB ni mandársela al cliente para después.
+//   2. Quien tenga la URL entra sin autenticarse → nunca se la devolvemos al navegador
+//      a secas: el portal valida primero que el documento sea del cliente logueado
+//      (por eso esto también devuelve el id del cliente dueño).
+
+/** Tipos de documento del portal y su recurso en Alegra. */
+export const DOCUMENT_RESOURCES = {
+  factura: "invoices",
+  pago: "payments",
+  presupuesto: "estimates",
+} as const
+
+export type DocumentKind = keyof typeof DOCUMENT_RESOURCES
+
+export interface AlegraDocumentPdf {
+  /** Id del contacto dueño del documento. `null` si Alegra no lo trae (→ tratar como ajeno). */
+  clientAlegraId: string | null
+  /** URL firmada del PDF, o `null` si Alegra no generó ninguno para este documento. */
+  pdfUrl: string | null
+  /** Número legible del documento, para nombrar el archivo que baja el cliente. */
+  number: string | null
+}
+
+/**
+ * Documento con su PDF firmado y el contacto dueño, para que el llamador valide
+ * la pertenencia ANTES de servirlo. No filtra por cliente: eso es responsabilidad
+ * de quien lo llama, que es el único que sabe quién está logueado.
+ */
+export async function getDocumentPdf(
+  config: TenantConfig,
+  kind: DocumentKind,
+  documentId: string,
+): Promise<AlegraDocumentPdf | null> {
+  const raw = (await alegraFetch(config, `/${DOCUMENT_RESOURCES[kind]}/${documentId}`, {
+    fields: "pdf",
+  })) as Record<string, unknown> | null
+  if (!raw || raw.id == null) return null
+
+  const client = (raw.client ?? {}) as Record<string, unknown>
+  const numberTemplate = raw.numberTemplate as { fullNumber?: unknown; formattedNumber?: unknown } | undefined
+  const fullNumber = numberTemplate?.fullNumber ?? numberTemplate?.formattedNumber ?? raw.number
+
+  return {
+    clientAlegraId: client.id != null ? String(client.id) : null,
+    pdfUrl: typeof raw.pdf === "string" && raw.pdf ? raw.pdf : null,
+    number: fullNumber != null ? String(fullNumber) : null,
+  }
+}
+
+// ── Búsqueda de contacto por identificador del portal (email o CUIT) ─────────
+// El `query` de /contacts de Alegra matchea SOLO por nombre: no mira `email` ni
+// `identification`. Verificado contra la cuenta real — buscar un email exacto de un
+// contacto existente devuelve []. Por eso el login del portal, que promete "CUIT o
+// email", necesita traer los contactos y filtrar acá, igual que `searchContactsByPhone`.
+
+/** Deja solo los dígitos: "20-12345678-9", "20123456789" y "20.123.456.789" son el mismo CUIT. */
+function normalizeIdentification(value: string | null | undefined): string {
+  return (value ?? "").replace(/\D/g, "")
+}
+
+/**
+ * Contacto por email o CUIT exactos, para el login del portal.
+ *
+ * Escanea todos los contactos porque la API no ofrece filtro por esos campos. Si el
+ * identificador no parece ni email ni documento, cae en la búsqueda por nombre de
+ * Alegra, que sí funciona y es una sola request.
+ */
+export async function findContactByIdentifier(
+  config: TenantConfig,
+  identifier: string,
+): Promise<AlegraContact | null> {
+  const trimmed = identifier.trim()
+  if (!trimmed) return null
+
+  if (config.alegraMock) {
+    const [match] = await searchContacts(config, trimmed, 1)
+    return match ?? null
+  }
+
+  const email = trimmed.toLowerCase()
+  const isEmail = trimmed.includes("@")
+  const documento = normalizeIdentification(trimmed)
+  // 6 dígitos = piso de un DNI. Menos que eso no es un documento, es otra cosa.
+  const isDocumento = !isEmail && documento.length >= 6
+
+  if (isEmail || isDocumento) {
+    const contacts = await listAllContacts(config)
+    const match = contacts.find((c) =>
+      isEmail
+        ? (c.email ?? "").trim().toLowerCase() === email
+        : normalizeIdentification(c.identification) === documento,
+    )
+    if (match) return match
+    // Sin match exacto no se intenta por nombre: un email nunca es el nombre de una
+    // empresa, y un match parcial acá deja entrar a la cuenta equivocada.
+    return null
+  }
+
+  const [byName] = await searchContacts(config, trimmed, 1)
+  return byName ?? null
+}

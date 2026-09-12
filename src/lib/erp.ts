@@ -3,7 +3,7 @@ import type { TenantConfig } from "./tenants"
 import type { AlegraContact, AlegraEstimate, AlegraInvoice, AlegraPayment } from "./alegra"
 import {
   getContact,
-  searchContacts,
+  findContactByIdentifier,
   listAllContacts,
   listInvoicesByContact,
   listPaymentsByContact,
@@ -41,6 +41,7 @@ function facturaEstado(inv: AlegraInvoice, hoy: Date): FacturaEstado {
 function mapInvoice(inv: AlegraInvoice, hoy: Date): Factura {
   return {
     id: inv.number ?? inv.alegraId,
+    alegraId: inv.alegraId,
     // Alegra no expone el tipo fiscal (A/B/C) de forma estándar en la factura de venta.
     tipo: "Factura",
     emision: isoToDMY(inv.date),
@@ -54,6 +55,7 @@ function mapInvoice(inv: AlegraInvoice, hoy: Date): Factura {
 function mapPayment(p: AlegraPayment): Pago {
   return {
     id: p.number ?? p.alegraId,
+    alegraId: p.alegraId,
     fecha: isoToDMY(p.date),
     medio: p.method,
     monto: p.amount,
@@ -74,6 +76,7 @@ function presupuestoEstado(e: AlegraEstimate, hoy: Date): PresupuestoEstado {
 function mapEstimate(e: AlegraEstimate, hoy: Date): Presupuesto {
   return {
     id: e.number ?? e.alegraId,
+    alegraId: e.alegraId,
     fecha: isoToDMY(e.date),
     validoHasta: e.dueDate ? isoToDMY(e.dueDate) : "",
     total: e.total,
@@ -112,8 +115,7 @@ export async function getCliente(config: TenantConfig, codigocliente: string): P
 /** Resuelve el cliente por email o CUIT/identificación (usado por el login OTP). */
 export async function getClienteByIdentifier(config: TenantConfig, identifier: string): Promise<Cliente | null> {
   if (config.alegraMock) return mockCliente
-  const matches = await searchContacts(config, identifier, 1)
-  const contact = matches[0]
+  const contact = await findContactByIdentifier(config, identifier)
   if (!contact) return null
   const balance = await getContactBalance(config, contact.alegraId)
   return mapContactToCliente(contact, balance)

@@ -32,6 +32,69 @@ import { CreditCard, Search, Plus, X, Upload, FileText, Eye, Download, Info, Cal
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
+// ── PDF de documentos ────────────────────────────────────────────────────────
+// El PDF lo genera Alegra y lo sirve /api/portal/documentos/[kind]/[id], que valida
+// que el documento sea del cliente logueado. Acá se baja con fetch (en vez de apuntar
+// un <a> a la URL) para poder mostrar el error del server: si el endpoint responde
+// JSON de error, un link directo le dejaría al cliente un PDF roto o un JSON en
+// pantalla. `alegraId` falta en los fixtures del modo mock → botón deshabilitado.
+
+type DocKind = "factura" | "pago" | "presupuesto"
+
+interface DocumentoRef {
+  id: string
+  alegraId?: string
+}
+
+async function fetchDocumento(kind: DocKind, alegraId: string, download: boolean): Promise<Blob> {
+  const res = await fetch(`/api/portal/documentos/${kind}/${alegraId}${download ? "?download=1" : ""}`)
+  if (!res.ok) {
+    const msg = await res.json().then((d) => d.error).catch(() => null)
+    throw new Error(msg ?? "No pudimos obtener el documento")
+  }
+  return res.blob()
+}
+
+/** Baja el PDF como archivo. */
+async function descargarDocumento(kind: DocKind, doc: DocumentoRef) {
+  if (!doc.alegraId) return
+  try {
+    const blob = await fetchDocumento(kind, doc.alegraId, true)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${kind}-${doc.id.replace(/[^\w.-]+/g, "-")}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Sin esto el blob queda en memoria hasta que se cierre la pestaña.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  } catch (err) {
+    alert(err instanceof Error ? err.message : "No pudimos descargar el documento")
+  }
+}
+
+/** Abre el PDF en una pestaña nueva. */
+async function verDocumento(kind: DocKind, doc: DocumentoRef) {
+  if (!doc.alegraId) return
+  try {
+    const blob = await fetchDocumento(kind, doc.alegraId, false)
+    const url = URL.createObjectURL(blob)
+    window.open(url, "_blank", "noopener")
+    // Margen para que la pestaña nueva alcance a cargarlo antes de soltar el blob.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    alert(err instanceof Error ? err.message : "No pudimos abrir el documento")
+  }
+}
+
+/** Descarga varios, de a uno: el navegador bloquea una ráfaga de descargas simultáneas. */
+async function descargarVarios(kind: DocKind, docs: DocumentoRef[]) {
+  for (const doc of docs) {
+    await descargarDocumento(kind, doc)
+  }
+}
+
 function Tooltip({ text, white = false }: { text: string; white?: boolean }) {
   return (
     <DSTooltip content={text}>
@@ -535,7 +598,18 @@ function FacturasTable({
           <ActionBtn onClick={() => setModalFactura(f)} label="Ver">
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => verDocumento("factura", f)}
+            label={f.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!f.alegraId}
+          >
+            <FileIcon />
+          </ActionBtn>
+          <ActionBtn
+            onClick={() => descargarDocumento("factura", f)}
+            label={f.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!f.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -576,7 +650,7 @@ function FacturasTable({
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga de facturas: próximamente")}
+          onDownload={() => descargarVarios("factura", selectedFacturas)}
           onWhatsapp={() => openWhatsAppModal("pagar")}
           itemLabel="factura"
         />
@@ -724,7 +798,18 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           <ActionBtn onClick={() => setModalPago(p)} label="Ver">
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => verDocumento("pago", p)}
+            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
+            <FileIcon />
+          </ActionBtn>
+          <ActionBtn
+            onClick={() => descargarDocumento("pago", p)}
+            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -769,7 +854,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga de recibos: próximamente")}
+          onDownload={() => descargarVarios("pago", selectedPagos)}
           onWhatsapp={() => setWspModal(true)}
           itemLabel="recibo"
         />
@@ -926,7 +1011,18 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
           <ActionBtn onClick={() => setModalPresupuesto(p)} label="Ver">
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => verDocumento("presupuesto", p)}
+            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
+            <FileIcon />
+          </ActionBtn>
+          <ActionBtn
+            onClick={() => descargarDocumento("presupuesto", p)}
+            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -963,7 +1059,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga: próximamente")}
+          onDownload={() => descargarVarios("presupuesto", selectedPresupuestos)}
           onWhatsapp={() => setWspModal("avanzar")}
           itemLabel="presupuesto"
         />
@@ -1812,7 +1908,8 @@ function FacturaModal({
         {/* Acciones */}
         <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("factura", factura)}
+            disabled={!factura.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
@@ -1868,7 +1965,8 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
 
         <div className="flex justify-end">
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("pago", pago)}
+            disabled={!pago.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ background: "var(--blue)", color: "white" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue-hover)" }}
@@ -1944,7 +2042,8 @@ function PresupuestoModal({ presupuesto, tenantName, whatsappNumber, onClose }: 
 
         <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("presupuesto", presupuesto)}
+            disabled={!presupuesto.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
@@ -2124,15 +2223,16 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-function ActionBtn({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+function ActionBtn({ onClick, label, children, disabled = false }: { onClick: () => void; label: string; children: React.ReactNode; disabled?: boolean }) {
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="h-7 w-7 rounded-[6px] border border-border text-muted hover:bg-bg hover:text-text"
+      className="h-7 w-7 rounded-[6px] border border-border text-muted hover:bg-bg hover:text-text disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {children}
     </Button>
@@ -2145,6 +2245,10 @@ function EyeIcon() {
 
 function DownloadIcon() {
   return <Download size={14} strokeWidth={1.4} color="currentColor" />
+}
+
+function FileIcon() {
+  return <FileText size={14} strokeWidth={1.4} color="currentColor" />
 }
 
 // ── WhatsApp Pagos Modal ──────────────────────────────────────────────────────
