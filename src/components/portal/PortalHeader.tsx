@@ -141,6 +141,8 @@ export function PortalHeader({ logoSrc, tenantName, logoSubtitle, razonsocial, s
 interface NotifRow {
   id: string
   facturaId: string
+  /** Id de Alegra. `null` en las notificaciones anteriores a la migración 0022. */
+  facturaAlegraId: string | null
   type: string
   channel: string
   sentAt: string
@@ -165,8 +167,13 @@ interface NotifMeta {
 
 // URL del dashboard apuntando a un comprobante. Para facturas abre el detalle
 // directamente (?factura=ID); para el resto filtra la tab por comprobante.
-function dashboardHref(kind: EntityKind, id: string) {
-  if (kind === "factura") return `/portal/dashboard?factura=${encodeURIComponent(id)}`
+function dashboardHref(kind: EntityKind, id: string, alegraId?: string | null) {
+  if (kind === "factura") {
+    // Con el id de Alegra, el dashboard abre el PDF directo aunque la factura sea vieja y no
+    // esté entre las cargadas. Sin él (notificaciones anteriores a 0022) solo lleva el número.
+    const alegra = alegraId ? `&alegra=${encodeURIComponent(alegraId)}` : ""
+    return `/portal/dashboard?factura=${encodeURIComponent(id)}${alegra}`
+  }
   return `/portal/dashboard?tab=${kind}s&q=${encodeURIComponent(id)}`
 }
 
@@ -176,7 +183,7 @@ function dashboardHref(kind: EntityKind, id: string) {
 function describeNotif(row: NotifRow): NotifMeta {
   const before = row.type.match(/^before_due_(\d+)$/)
   const after = row.type.match(/^after_due_(\d+)$/)
-  const facturaTarget: NotifTarget = { label: "Ver factura", href: dashboardHref("factura", row.facturaId) }
+  const facturaTarget: NotifTarget = { label: "Ver factura", href: dashboardHref("factura", row.facturaId, row.facturaAlegraId) }
 
   if (before) {
     const n = Number(before[1])

@@ -273,6 +273,11 @@ export const notificationLog = pgTable(
       .references(() => tenants.id),
     codigocliente: text("codigocliente").notNull(),
     facturaId: text("factura_id").notNull(),
+    // Id de la factura en Alegra. `factura_id` es el número legible (el que ve el cliente),
+    // que no sirve para abrirla: Alegra no busca por número. Sin este id, el "Ver factura"
+    // de una notificación solo encontraba la factura si estaba entre las cargadas.
+    // Nullable: las notificaciones anteriores a esta columna no lo tienen.
+    facturaAlegraId: text("factura_alegra_id"),
     type: text("type").notNull(), // ej. 'before_due_3' | 'after_due_7'
     channel: text("channel").notNull(), // 'email' | 'whatsapp'
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
