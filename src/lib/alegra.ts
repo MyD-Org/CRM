@@ -60,6 +60,17 @@ export interface AlegraContact {
   sellerId: string | null
   paymentTermId: string | null
   status: string
+  // ── Información comercial ("Información comercial" en la ficha del contacto en Alegra).
+  // Vienen embebidos en /contacts, sin requests extra. Cualquiera puede faltar: en la cuenta
+  // de Avantec el plazo está en 90 de 107 contactos, la lista en 17, el vendedor en 3 y el
+  // límite de crédito en 5. Por eso son todos nullable y la UI esconde lo vacío.
+  /** Ej. "15 días", "De contado". */
+  paymentTermName: string | null
+  paymentTermDays: number | null
+  priceListName: string | null
+  sellerName: string | null
+  /** `null` = no cargado. Distinto de 0, que sería "sin crédito" puesto a propósito. */
+  creditLimit: number | null
 }
 export interface AlegraContactInput {
   name: string
@@ -260,9 +271,9 @@ function mapRawItem(raw: Record<string, unknown>): AlegraProduct {
 
 function mapRawContact(raw: Record<string, unknown>): AlegraContact {
   const ident = raw.identification
-  const priceList = raw.priceList as { id?: unknown } | undefined
-  const seller = raw.seller as { id?: unknown } | undefined
-  const term = raw.term as { id?: unknown } | undefined
+  const priceList = raw.priceList as { id?: unknown; name?: unknown } | undefined
+  const seller = raw.seller as { id?: unknown; name?: unknown } | undefined
+  const term = raw.term as { id?: unknown; name?: unknown; days?: unknown } | undefined
   return {
     alegraId: String(raw.id),
     name: String(raw.name ?? ""),
@@ -279,6 +290,12 @@ function mapRawContact(raw: Record<string, unknown>): AlegraContact {
     sellerId: seller?.id != null ? String(seller.id) : null,
     paymentTermId: term?.id != null ? String(term.id) : null,
     status: String(raw.status ?? "active"),
+    paymentTermName: term?.name ? String(term.name) : null,
+    // `days` llega como string ("15"); "De contado" puede traerlo vacío o en 0.
+    paymentTermDays: term?.days != null && term.days !== "" && !Number.isNaN(Number(term.days)) ? Number(term.days) : null,
+    priceListName: priceList?.name ? String(priceList.name) : null,
+    sellerName: seller?.name ? String(seller.name) : null,
+    creditLimit: raw.creditLimit != null && raw.creditLimit !== "" ? Number(raw.creditLimit) : null,
   }
 }
 
@@ -471,6 +488,11 @@ export async function createContact(config: TenantConfig, input: AlegraContactIn
       sellerId: null,
       paymentTermId: null,
       status: "active",
+      paymentTermName: null,
+      paymentTermDays: null,
+      priceListName: null,
+      sellerName: null,
+      creditLimit: null,
     }
     mockContacts.push(created)
     return created

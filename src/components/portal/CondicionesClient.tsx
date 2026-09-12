@@ -48,8 +48,17 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function CondicionesClient({ cliente, condiciones, razonsocial, tenantName, logoSrc, logoSubtitle }: Props) {
-  const disponible = cliente.limitecredito - cliente.deudatotal
-  const usadoPct = Math.min(100, Math.round((cliente.deudatotal / cliente.limitecredito) * 100))
+  // Lo que no está cargado en Alegra no se muestra. Antes esta pantalla rellenaba con un mock
+  // (vendedor de otra empresa, descuentos inventados) y el cliente lo leía como propio.
+  const limite = cliente.limitecredito != null && cliente.limitecredito > 0 ? cliente.limitecredito : null
+  const disponible = limite != null ? limite - cliente.deudatotal : null
+  const usadoPct = limite != null ? Math.min(100, Math.round((cliente.deudatotal / limite) * 100)) : null
+
+  const hayPago = Boolean(condiciones.condicionPago) || condiciones.plazoDias != null || limite != null
+  const hayPrecios = Boolean(condiciones.listaPrecios) || condiciones.descuentos.length > 0
+  const vendedor = condiciones.vendedor
+  const transporte = condiciones.transporte
+  const nada = !hayPago && !hayPrecios && !vendedor && !transporte
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
@@ -73,33 +82,56 @@ export function CondicionesClient({ cliente, condiciones, razonsocial, tenantNam
           </p>
         </div>
 
+        {nada ? (
+          <div
+            className="p-6 rounded-[var(--radius)] text-sm text-center"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--ink-soft)" }}
+          >
+            Todavía no hay condiciones comerciales cargadas para tu cuenta. Consultá con {tenantName}.
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Condición de pago + crédito */}
+          {hayPago && (
           <Card icon={<CreditCard size={15} strokeWidth={1.8} />} title="Condición de pago y crédito">
             <div className="flex flex-col gap-2.5">
-              <Row label="Condición de pago" value={condiciones.condicionPago} />
-              <Row label="Plazo" value={`${condiciones.plazoDias} días`} />
-              <div className="h-px" style={{ background: "var(--border)" }} />
-              <Row label="Límite de crédito" value={fmt(cliente.limitecredito)} />
-              <Row label="Deuda actual" value={fmt(cliente.deudatotal)} />
-              <Row label="Disponible" value={<span style={{ color: "var(--green)" }}>{fmt(disponible)}</span>} />
-              <div className="flex flex-col gap-1 mt-1">
-                <div className="h-1.5 rounded-full" style={{ background: "var(--border)" }}>
-                  <div
-                    className="h-1.5 rounded-full"
-                    style={{ width: `${usadoPct}%`, background: usadoPct > 85 ? "var(--red)" : "var(--blue)" }}
+              {condiciones.condicionPago && <Row label="Condición de pago" value={condiciones.condicionPago} />}
+              {/* El nombre del plazo ya dice los días ("15 días"); repetirlo solo suma si no los dice. */}
+              {condiciones.plazoDias != null && condiciones.plazoDias > 0 && !condiciones.condicionPago?.includes(String(condiciones.plazoDias)) && (
+                <Row label="Plazo" value={`${condiciones.plazoDias} días`} />
+              )}
+              {limite != null && disponible != null && usadoPct != null && (
+                <>
+                  <div className="h-px" style={{ background: "var(--border)" }} />
+                  <Row label="Límite de crédito" value={fmt(limite)} />
+                  <Row label="Deuda actual" value={fmt(cliente.deudatotal)} />
+                  <Row
+                    label="Disponible"
+                    value={<span style={{ color: disponible < 0 ? "var(--red)" : "var(--green)" }}>{fmt(disponible)}</span>}
                   />
-                </div>
-                <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{usadoPct}% del crédito utilizado</span>
-              </div>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <div className="h-1.5 rounded-full" style={{ background: "var(--border)" }}>
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{ width: `${usadoPct}%`, background: usadoPct > 85 ? "var(--red)" : "var(--blue)" }}
+                      />
+                    </div>
+                    <span className="text-xs" style={{ color: "var(--ink-faint)" }}>{usadoPct}% del crédito utilizado</span>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
+          )}
 
           {/* Lista de precios y descuentos */}
+          {hayPrecios && (
           <Card icon={<Tag size={15} strokeWidth={1.8} />} title="Lista de precios y descuentos">
             <div className="flex flex-col gap-2.5">
-              <Row label="Lista asignada" value={condiciones.listaPrecios} />
-              <div className="h-px" style={{ background: "var(--border)" }} />
+              {condiciones.listaPrecios && <Row label="Lista asignada" value={condiciones.listaPrecios} />}
+              {condiciones.listaPrecios && condiciones.descuentos.length > 0 && (
+                <div className="h-px" style={{ background: "var(--border)" }} />
+              )}
               {condiciones.descuentos.map((d) => (
                 <Row
                   key={d.concepto}
@@ -109,44 +141,58 @@ export function CondicionesClient({ cliente, condiciones, razonsocial, tenantNam
               ))}
             </div>
           </Card>
+          )}
 
           {/* Vendedor asignado */}
+          {vendedor && (
           <Card icon={<UserRound size={15} strokeWidth={1.8} />} title="Vendedor asignado">
             <div className="flex flex-col gap-2.5">
-              <Row label="Nombre" value={condiciones.vendedor.nombre} />
-              <Row
-                label="Teléfono"
-                value={
-                  <a href={`tel:${condiciones.vendedor.telefono.replace(/[^+\d]/g, "")}`} className="hover:underline" style={{ color: "var(--blue)" }}>
-                    {condiciones.vendedor.telefono}
-                  </a>
-                }
-              />
-              <Row
-                label="Email"
-                value={
-                  <a href={`mailto:${condiciones.vendedor.email}`} className="hover:underline" style={{ color: "var(--blue)" }}>
-                    {condiciones.vendedor.email}
-                  </a>
-                }
-              />
+              <Row label="Nombre" value={vendedor.nombre} />
+              {vendedor.telefono && (
+                <Row
+                  label="Teléfono"
+                  value={
+                    <a href={`tel:${vendedor.telefono.replace(/[^+\d]/g, "")}`} className="hover:underline" style={{ color: "var(--blue)" }}>
+                      {vendedor.telefono}
+                    </a>
+                  }
+                />
+              )}
+              {vendedor.email && (
+                <Row
+                  label="Email"
+                  value={
+                    <a href={`mailto:${vendedor.email}`} className="hover:underline" style={{ color: "var(--blue)" }}>
+                      {vendedor.email}
+                    </a>
+                  }
+                />
+              )}
             </div>
           </Card>
+          )}
 
           {/* Transporte y entregas */}
+          {transporte && (
           <Card icon={<Truck size={15} strokeWidth={1.8} />} title="Transporte y entregas">
             <div className="flex flex-col gap-2.5">
-              <Row label="Modalidad" value={condiciones.transporte.modalidad} />
-              <div className="h-px" style={{ background: "var(--border)" }} />
-              <p className="text-sm leading-relaxed" style={{ color: "var(--ink-soft)" }}>
-                {condiciones.transporte.observaciones}
-              </p>
+              <Row label="Modalidad" value={transporte.modalidad} />
+              {transporte.observaciones && (
+                <>
+                  <div className="h-px" style={{ background: "var(--border)" }} />
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--ink-soft)" }}>
+                    {transporte.observaciones}
+                  </p>
+                </>
+              )}
             </div>
           </Card>
+          )}
         </div>
+        )}
 
         <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-          Estas condiciones son informativas y pueden actualizarse. Ante cualquier duda, contactá a tu vendedor asignado.
+          Estas condiciones son informativas y pueden actualizarse. Ante cualquier duda, contactá a {vendedor ? "tu vendedor asignado" : tenantName}.
         </p>
       </main>
     </div>
