@@ -8,7 +8,7 @@ import type { Cliente } from "@/types"
 
 const state = vi.hoisted(() => ({
   cliente: null as Cliente | null,
-  sent: [] as { to: string; subject: string; html: string }[],
+  sent: [] as { to: string; subject: string; html: string; text?: string }[],
   sendError: null as Error | null,
   session: {} as Record<string, unknown>,
   saved: 0,
@@ -37,9 +37,9 @@ vi.mock("@/lib/email", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/email")>()
   return {
     ...actual,
-    sendEmail: async (_t: unknown, to: string, subject: string, html: string) => {
+    sendEmail: async (_t: unknown, to: string, subject: string, html: string, text?: string) => {
       if (state.sendError) throw state.sendError
-      state.sent.push({ to, subject, html })
+      state.sent.push({ to, subject, html, text })
       return true
     },
   }
@@ -91,6 +91,21 @@ describe("POST /api/auth/send-code", () => {
     // El código va en el mail, nunca en el cuerpo de la respuesta salvo devCode fuera de prod.
     expect(body.devCode).toMatch(/^\d{6}$/)
     expect(state.sent[0].html).toContain(body.devCode)
+  })
+
+  it("manda el código en formato detectable por el celular", async () => {
+    const POST = await loadRoute()
+    const body = await (await POST(req("20-12345678-9"))).json()
+    const code = body.devCode
+    const { subject, text, html } = state.sent[0]
+
+    // El asunto lleva el código: es lo único que el celular ve en la notificación.
+    expect(subject).toContain(code)
+    // Parte en texto plano presente (la que parsean los detectores) con la frase gatillo.
+    expect(text).toContain(`Tu código de verificación es ${code}`)
+    // Los 6 dígitos van juntos: un separador o un espaciado que los parta rompe la detección.
+    expect(text).not.toMatch(new RegExp(code.split("").join("[\\s-]")))
+    expect(html).toContain(code)
   })
 
   it("guarda en la sesión el mismo código que se envió, con vencimiento futuro", async () => {

@@ -12,6 +12,10 @@ import type { TenantConfig } from "@/lib/tenants"
  * Manda un mail. Sin `RESEND_API_KEY` es dry-run: loguea y no envía, para que dev/local
  * funcione sin credenciales.
  *
+ * `text` es la alternativa en texto plano. Vale la pena mandarla siempre: mejora la
+ * entregabilidad (un mail solo-HTML puntúa peor en los filtros de spam) y es la parte
+ * que miran los detectores de códigos de verificación del celular.
+ *
  * @returns true si salió de verdad, false si fue dry-run.
  * @throws si Resend rechaza el envío (from no verificado, destinatario inválido, …).
  */
@@ -20,6 +24,7 @@ export async function sendEmail(
   to: string,
   subject: string,
   html: string,
+  text?: string,
 ): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
@@ -27,7 +32,13 @@ export async function sendEmail(
     return false
   }
   const resend = new Resend(apiKey)
-  const { error } = await resend.emails.send({ from: tenant.resendFrom, to, subject, html })
+  const { error } = await resend.emails.send({
+    from: tenant.resendFrom,
+    to,
+    subject,
+    html,
+    ...(text ? { text } : {}),
+  })
   if (error) throw new Error(error.message)
   return true
 }

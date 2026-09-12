@@ -46,15 +46,27 @@ function takeSendSlot(key: string, now: number): boolean {
   return true
 }
 
+// Formato pensado para que el celular ofrezca "Copiar código" desde la notificación,
+// sin abrir el mail. No hay estándar para email (el `@dominio #código` es solo de SMS):
+// iOS y Gmail lo detectan por heurística, así que el mail cumple lo que esa heurística
+// busca — el código en el asunto, la frase "código de verificación" pegada al número,
+// los 6 dígitos SIN separadores ni espaciado que los parta, y una parte en texto plano
+// (`text`), que es la que suelen parsear. Si se cambia la redacción, mantener la frase
+// "Tu código de verificación es NNNNNN" literal en ambas partes.
 function buildOtpEmail(tenant: TenantConfig, razonsocial: string, otp: string) {
   return {
-    subject: `${tenant.name} — Tu código de acceso: ${otp}`,
+    subject: `${otp} es tu código de verificación de ${tenant.name}`,
+    text:
+      `Tu código de verificación es ${otp}\n\n` +
+      `Hola ${razonsocial}: usá este código para entrar al portal de clientes de ${tenant.name}. ` +
+      `Vence en 10 minutos y sirve una sola vez.\n\n` +
+      `Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.`,
     html: `
   <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#111827">
     <h2 style="font-size:18px">${tenant.name}</h2>
     <p>Hola ${razonsocial},</p>
-    <p>Este es tu código para entrar al portal de clientes:</p>
-    <p style="font-size:32px;font-weight:700;letter-spacing:8px;margin:24px 0">${otp}</p>
+    <p>Tu código de verificación es <strong>${otp}</strong>:</p>
+    <p style="font-size:32px;font-weight:700;margin:24px 0">${otp}</p>
     <p style="color:#6b7280;font-size:14px">Vence en 10 minutos y sirve una sola vez.</p>
     <p style="color:#6b7280;font-size:12px">Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.</p>
   </div>`,
@@ -100,10 +112,10 @@ export async function POST(request: Request) {
     // Código robusto: RNG criptográfico (no Math.random), 6 dígitos con padding.
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0")
 
-    const { subject, html } = buildOtpEmail(tenant, cliente.razonsocial, otp)
+    const { subject, html, text } = buildOtpEmail(tenant, cliente.razonsocial, otp)
     let delivered: boolean
     try {
-      delivered = await sendEmail(tenant, cliente.email, subject, html)
+      delivered = await sendEmail(tenant, cliente.email, subject, html, text)
     } catch (err) {
       // No se guarda la sesión OTP: un código que no llegó no debe dejar al usuario
       // esperando en la pantalla de los 6 dígitos.
