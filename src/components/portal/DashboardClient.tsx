@@ -74,17 +74,9 @@ async function descargarDocumento(kind: DocKind, doc: DocumentoRef) {
   }
 }
 
-/**
- * Abre el PDF en una pestaña nueva, apuntándola al endpoint.
- *
- * SIN fetch previo a propósito: un `window.open` después de un `await` ya no cuenta como
- * gesto del usuario y Chrome y Safari lo bloquean — el botón no hacía nada y no se veía
- * ningún error. Abriendo la URL directo, el navegador la pide con la cookie de sesión y
- * el endpoint responde el PDF inline.
- */
-function verDocumento(kind: DocKind, doc: DocumentoRef) {
-  if (!doc.alegraId) return
-  window.open(`/api/portal/documentos/${kind}/${doc.alegraId}`, "_blank", "noopener")
+/** URL del PDF para embeberlo o abrirlo. El navegador la pide con la cookie de sesión. */
+function documentoUrl(kind: DocKind, alegraId: string) {
+  return `/api/portal/documentos/${kind}/${alegraId}`
 }
 
 /** Descarga varios, de a uno: el navegador bloquea una ráfaga de descargas simultáneas. */
@@ -474,6 +466,7 @@ function FacturasTable({
     setSearchOpen(!!initialSearch)
   }
   const [modalFactura, setModalFactura] = useState<Factura | null>(null)
+  const [pdfFactura, setPdfFactura] = useState<Factura | null>(null)
   const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -595,7 +588,7 @@ function FacturasTable({
       render: (f) => (
         <div className="flex items-center justify-end gap-2">
           <ActionBtn
-            onClick={() => verDocumento("factura", f)}
+            onClick={() => setPdfFactura(f)}
             label={f.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!f.alegraId}
           >
@@ -664,6 +657,10 @@ function FacturasTable({
         empty="No hay facturas para mostrar"
       />
 
+      {pdfFactura?.alegraId && (
+        <PdfModal kind="factura" doc={pdfFactura} titulo={`Factura ${pdfFactura.id}`} onClose={() => setPdfFactura(null)} />
+      )}
+
       {modalFactura && (
         <FacturaModal
           factura={modalFactura}
@@ -702,6 +699,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     setSearchOpen(!!initialSearch)
   }
   const [modalPago, setModalPago] = useState<Pago | null>(null)
+  const [pdfPago, setPdfPago] = useState<Pago | null>(null)
   const [showAdjuntar, setShowAdjuntar] = useState(false)
   const [wspModal, setWspModal] = useState(false)
   const [fromDate, setFromDate] = useState("")
@@ -792,7 +790,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
           <ActionBtn
-            onClick={() => verDocumento("pago", p)}
+            onClick={() => setPdfPago(p)}
             label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!p.alegraId}
           >
@@ -877,6 +875,10 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
         empty="No hay pagos para mostrar"
       />
 
+      {pdfPago?.alegraId && (
+        <PdfModal kind="pago" doc={pdfPago} titulo={`Recibo ${pdfPago.id}`} onClose={() => setPdfPago(null)} />
+      )}
+
       {modalPago && (
         <PagoModal pago={modalPago} facturas={facturas} onClose={() => setModalPago(null)} />
       )}
@@ -917,6 +919,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
   }
   const [filterEstados, setFilterEstados] = useState<Set<PresupuestoEstado>>(new Set())
   const [modalPresupuesto, setModalPresupuesto] = useState<Presupuesto | null>(null)
+  const [pdfPresupuesto, setPdfPresupuesto] = useState<Presupuesto | null>(null)
   const [wspModal, setWspModal] = useState<WhatsAppPresupuestoIntent | null>(null)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
@@ -1003,7 +1006,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
           <ActionBtn
-            onClick={() => verDocumento("presupuesto", p)}
+            onClick={() => setPdfPresupuesto(p)}
             label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!p.alegraId}
           >
@@ -1079,6 +1082,10 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
         defaultSort={{ key: "fecha", dir: "desc" }}
         empty="No hay presupuestos para mostrar"
       />
+
+      {pdfPresupuesto?.alegraId && (
+        <PdfModal kind="presupuesto" doc={pdfPresupuesto} titulo={`Presupuesto ${pdfPresupuesto.id}`} onClose={() => setPdfPresupuesto(null)} />
+      )}
 
       {modalPresupuesto && (
         <PresupuestoModal presupuesto={modalPresupuesto} tenantName={tenantName} whatsappNumber={whatsappNumber} onClose={() => setModalPresupuesto(null)} />
@@ -1916,6 +1923,41 @@ function FacturaModal({
 }
 
 // ── Pago Modal ────────────────────────────────────────────────────────────────
+
+
+/**
+ * Visor del PDF dentro de la página.
+ *
+ * `<iframe>` y no fetch + blob: el endpoint ya sirve el PDF inline y el navegador lo
+ * renderiza con su propio visor, que trae zoom, búsqueda e impresión gratis.
+ *
+ * El botón de abrir en pestaña no es decorativo: el visor embebido de Safari en iPhone
+ * muestra solo la primera página, así que ahí hace falta la salida.
+ */
+function PdfModal({ kind, doc, titulo, onClose }: { kind: DocKind; doc: DocumentoRef; titulo: string; onClose: () => void }) {
+  const url = documentoUrl(kind, doc.alegraId!)
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }} title={titulo} size="lg" className="max-w-4xl">
+      <div className="flex flex-col gap-3">
+        <iframe
+          src={url}
+          title={titulo}
+          className="w-full rounded-[var(--radius)]"
+          style={{ height: "min(70vh, 780px)", border: "1px solid var(--border)", background: "var(--bg)" }}
+        />
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" onClick={() => window.open(url, "_blank", "noopener")}>
+            Abrir en pestaña nueva
+          </Button>
+          <Button onClick={() => descargarDocumento(kind, doc)}>
+            <DownloadIcon />
+            Descargar PDF
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
 
 function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[]; onClose: () => void }) {
   return (
