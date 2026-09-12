@@ -30,6 +30,9 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
   const [countdown, setCountdown] = useState(0)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Último código auto-enviado. Evita que un código rechazado se reenvíe solo si el
+  // componente se vuelve a renderizar con los mismos dígitos en pantalla.
+  const autoEnviadoRef = useRef("")
 
   const startCountdown = useCallback(() => {
     setCountdown(30)
@@ -80,12 +83,16 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
 
   async function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault()
-    setError("")
     const code = otp.join("")
     if (code.length < 6) {
       setError("Ingresá los 6 dígitos del código")
       return
     }
+    await verificar(code)
+  }
+
+  async function verificar(code: string) {
+    setError("")
     setLoading(true)
     try {
       const res = await fetch("/api/auth/verify-code", {
@@ -123,6 +130,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
       }
       setSentTo(data.sentTo ?? "")
       setOtp(["", "", "", "", "", ""])
+      autoEnviadoRef.current = ""
       startCountdown()
       otpRefs.current[0]?.focus()
     } catch {
@@ -162,6 +170,17 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
     setOtp(next)
     const ultimo = Math.min(index + digitos.length, 5)
     otpRefs.current[ultimo]?.focus()
+
+    // Si el código quedó completo, se verifica solo: pegarlo y tener que apretar
+    // "Verificar" es un paso de más cuando ya no falta nada que decidir.
+    //
+    // Solo por esta vía, no al tipear el sexto dígito: con 5 intentos permitidos, mandar
+    // solo mientras alguien tipea le quema un intento por cada dedazo.
+    const code = next.join("")
+    if (code.length === 6 && !next.includes("") && autoEnviadoRef.current !== code) {
+      autoEnviadoRef.current = code
+      void verificar(code)
+    }
   }
 
   function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
