@@ -6,7 +6,9 @@ export interface Cliente {
   email?: string
   numerocuentacorriente: number
   tipoCuenta: "corriente" | "contado"
-  limitecredito: number
+  /** Límite de crédito de Alegra. `null` = no cargado: la UI no muestra barra de crédito,
+   *  porque con 0 de límite toda deuda aparece como "crédito excedido". */
+  limitecredito: number | null
   deudatotal: number
   saldovencido: number
   saldoavencer: number
@@ -67,22 +69,31 @@ export interface Presupuesto {
   alegraId?: string
 }
 
+/**
+ * Condiciones comerciales del cliente. Salen de dos lugares:
+ * - Alegra (la ficha del contacto): condición/plazo de pago, lista de precios, vendedor.
+ * - La tabla propia `client_commercial_conditions`: descuentos y transporte, que Alegra no modela.
+ *
+ * Todo es nullable: lo que no está cargado se esconde. Antes, sin datos se devolvía un mock
+ * con un vendedor de otra empresa, y el cliente lo veía como si fuera suyo.
+ */
 export interface CondicionesComerciales {
-  /** Ej. "Cuenta corriente 30 días" */
-  condicionPago: string
-  /** Días de plazo de pago */
-  plazoDias: number
-  listaPrecios: string
+  /** Ej. "15 días", "De contado". Es el nombre del plazo en Alegra. */
+  condicionPago: string | null
+  /** Días de plazo. `null` si no está cargado; 0 es "de contado". */
+  plazoDias: number | null
+  listaPrecios: string | null
   descuentos: { concepto: string; porcentaje: number }[]
+  /** Alegra solo guarda el nombre del vendedor: teléfono y email vienen de la tabla propia. */
   vendedor: {
     nombre: string
-    telefono: string
-    email: string
-  }
+    telefono: string | null
+    email: string | null
+  } | null
   transporte: {
     modalidad: string
     observaciones: string
-  }
+  } | null
 }
 
 export interface SessionData {
