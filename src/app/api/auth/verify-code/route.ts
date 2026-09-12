@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 import { getIronSession } from "iron-session"
-import { sessionOptions, otpSessionOptions } from "@/lib/session"
+import { sessionOptionsForHost, otpSessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { getClienteByIdentifier } from "@/lib/erp"
 import type { SessionData, OtpSessionData } from "@/types"
@@ -56,7 +56,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "No encontramos una cuenta asociada. Contactate con atención al cliente." }, { status: 404 })
     }
 
-    const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
+    // Las opciones salen del HOST: una COOKIE_DOMAIN que no cubra este host hace que
+    // el navegador descarte la cookie en silencio y el dashboard rebote al login.
+    const session = await getIronSession<SessionData>(
+      cookieStore,
+      sessionOptionsForHost(request.headers.get("host")),
+    )
     session.isLoggedIn = true
     session.codigocliente = clienteData.codigocliente
     session.razonsocial = clienteData.razonsocial
