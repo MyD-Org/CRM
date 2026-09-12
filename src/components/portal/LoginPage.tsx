@@ -21,6 +21,9 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
   const redirectTo = searchParams.get("redirect") ?? undefined
   const [step, setStep] = useState<Step>("identify")
   const [identifier, setIdentifier] = useState("")
+  // Email (enmascarado) al que el server mandó el código: el contacto de Alegra, que
+  // no tiene por qué ser lo que se tipeó (se puede entrar con CUIT).
+  const [sentTo, setSentTo] = useState("")
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -63,6 +66,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
         setError(data.error ?? "Error al enviar el código")
         return
       }
+      setSentTo(data.sentTo ?? "")
       setOtp(["", "", "", "", "", ""])
       setStep("otp")
       startCountdown()
@@ -117,6 +121,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
         setError(data.error ?? "Error al reenviar")
         return
       }
+      setSentTo(data.sentTo ?? "")
       setOtp(["", "", "", "", "", ""])
       startCountdown()
       otpRefs.current[0]?.focus()
@@ -220,6 +225,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
             {step === "otp" && (
               <OtpStep
                 identifier={identifier}
+                sentTo={sentTo}
                 otp={otp}
                 otpRefs={otpRefs}
                 onOtpChange={handleOtpChange}
@@ -306,6 +312,7 @@ function IdentifyStep({
 
 function OtpStep({
   identifier,
+  sentTo,
   otp,
   otpRefs,
   onOtpChange,
@@ -319,6 +326,7 @@ function OtpStep({
   countdown,
 }: {
   identifier: string
+  sentTo: string
   otp: string[]
   otpRefs: React.MutableRefObject<(HTMLInputElement | null)[]>
   onOtpChange: (i: number, v: string) => void
@@ -331,10 +339,13 @@ function OtpStep({
   error: string
   countdown: number
 }) {
-  const maskedId =
-    identifier.includes("@")
+  // El server dice a qué email salió (enmascarado). Si no vino, se cae al identificador
+  // tipeado enmascarado acá — con CUIT eso no dice a qué casilla mirar, pero es mejor que nada.
+  const destino =
+    sentTo ||
+    (identifier.includes("@")
       ? identifier.replace(/(.{2}).+(@.+)/, "$1***$2")
-      : identifier.replace(/^(.{4}).+(.{3})$/, "$1***$2")
+      : identifier.replace(/^(.{4}).+(.{3})$/, "$1***$2"))
 
   return (
     <form onSubmit={onSubmit} className="p-8 flex flex-col gap-6">
@@ -354,7 +365,7 @@ function OtpStep({
         </h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
           Ingresá el código de 6 dígitos enviado a{" "}
-          <span className="font-medium" style={{ color: "var(--ink)" }}>{maskedId}</span>
+          <span className="font-medium" style={{ color: "var(--ink)" }}>{destino}</span>
         </p>
       </div>
 
