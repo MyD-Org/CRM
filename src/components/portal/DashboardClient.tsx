@@ -612,13 +612,13 @@ function FacturasTable({
   }
 
   function toggleEstado(estado: FacturaEstado) {
-    setFilterEstados(prev => {
-      const next = new Set(prev)
-      if (next.has(estado)) next.delete(estado)
-      else next.add(estado)
-      void refiltrar(queryFiltros(next))
-      return next
-    })
+    // Se calcula desde el ref y fuera del updater de setState: React corre los updaters dos
+    // veces en desarrollo, y la consulta al server no puede ser parte de uno.
+    const next = new Set(filtrosRef.current.estados)
+    if (next.has(estado)) next.delete(estado)
+    else next.add(estado)
+    setFilterEstados(next)
+    cambiarFiltros({ estados: next })
   }
 
   /**
@@ -665,13 +665,29 @@ function FacturasTable({
   // consecuencia de que alguien tocó un filtro, no de que el componente se haya renderizado.
   // Un efecto acá además setea estado en forma sincrónica y encadena renders.
   const consultaRef = useRef(0)
+
+  // Últimos valores de los filtros, actualizados en el acto. "Limpiar" del filtro de fecha
+  // llama a onFromDateChange("") y onToDateChange("") en el mismo click: armando la consulta
+  // con el estado del render, cada uno veía el valor VIEJO del otro, y la última consulta
+  // que salía todavía traía fecha. El ref siempre tiene lo último.
+  const filtrosRef = useRef({ estados: filterEstados, campo: dateFilterField, desde: fromDate, hasta: toDate })
+
+  function cambiarFiltros(patch: Partial<typeof filtrosRef.current>) {
+    const f = { ...filtrosRef.current, ...patch }
+    filtrosRef.current = f
+    void refiltrar(queryFiltros(f.estados, f.campo, f.desde, f.hasta))
+  }
   async function refiltrar(params: URLSearchParams) {
+    // Se incrementa ANTES de cualquier return: volver a "sin filtros" también tiene que
+    // invalidar la consulta que esté en vuelo. Si no, esa respuesta llega después y pisa la
+    // vista limpia con el resultado filtrado.
+    const consulta = ++consultaRef.current
     if ([...params.keys()].length === 0) {
       setVista(null) // sin filtros server-side: vuelve a lo que trajo el server component
+      setCargando(false)
+      setErrorCarga("")
       return
     }
-    // Descarta respuestas viejas: tocar tres chips rápido puede resolverse desordenado.
-    const consulta = ++consultaRef.current
     setCargando(true)
     setErrorCarga("")
     try {
@@ -822,10 +838,10 @@ function FacturasTable({
         setSearch={setSearch}
         fromDate={fromDate}
         toDate={toDate}
-        onFromDateChange={(v) => { setFromDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, v, toDate)) }}
-        onToDateChange={(v) => { setToDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, fromDate, v)) }}
+        onFromDateChange={(v) => { setFromDate(v); cambiarFiltros({ desde: v }) }}
+        onToDateChange={(v) => { setToDate(v); cambiarFiltros({ hasta: v }) }}
         dateFilterField={dateFilterField}
-        onDateFilterFieldChange={(v) => { setDateFilterField(v); void refiltrar(queryFiltros(filterEstados, v, fromDate, toDate)) }}
+        onDateFilterFieldChange={(v) => { setDateFilterField(v); cambiarFiltros({ campo: v }) }}
         multiFilterOptions={[
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
@@ -834,7 +850,7 @@ function FacturasTable({
         ]}
         activeFilters={filterEstados}
         onToggleFilter={(v) => toggleEstado(v as FacturaEstado)}
-        onClearFilters={() => { setFilterEstados(new Set()); void refiltrar(queryFiltros(new Set(), dateFilterField, fromDate, toDate)) }}
+        onClearFilters={() => { setFilterEstados(new Set()); cambiarFiltros({ estados: new Set() }) }}
       />
 
       {(
