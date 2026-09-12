@@ -97,7 +97,9 @@ function mapContactToCliente(c: AlegraContact, balance?: { total: number; overdu
     email: c.email ?? undefined,
     numerocuentacorriente: Number(c.alegraId) || 0,
     tipoCuenta: "corriente",
-    limitecredito: 0, // Alegra no expone límite de crédito; se completará desde la DB si hace falta
+    // Alegra SÍ lo expone (`creditLimit` del contacto). El comentario que había acá decía
+    // lo contrario y por eso se hardcodeaba en 0.
+    limitecredito: c.creditLimit,
     deudatotal: balance?.total ?? 0,
     saldovencido: balance?.overdue ?? 0,
     saldoavencer: balance?.toFallDue ?? 0,
@@ -190,9 +192,51 @@ export async function getPresupuestos(config: TenantConfig, codigocliente: strin
   return estimates.map((e) => mapEstimate(e, hoy))
 }
 
-// Las condiciones comerciales NO viven en el ERP: se leen de la DB propia por (tenant, cliente),
-// con fallback a mock en dev sin seed. (Idéntico a como estaba en la capa Flexxus.)
+// Condiciones comerciales: lo que Alegra ya tiene en la ficha del contacto (plazo, lista de
+// precios, vendedor) se lee de ahí, y la tabla propia aporta solo lo que Alegra no modela
+// (descuentos por rubro, transporte, y el teléfono/email del vendedor, porque Alegra guarda
+// solo su nombre).
+//
+// Antes esto salía ENTERO de la tabla propia, con fallback a un mock cuando no había fila y
+// SIN distinguir dev de producción. Avantec no tenía ninguna fila, así que todos sus clientes
+// veían el vendedor "Martín Gutiérrez" de Central Led como si fuera el suyo.
 export async function getCondiciones(config: TenantConfig, codigocliente: string): Promise<CondicionesComerciales> {
+  if (config.alegraMock) return mockCondiciones
+
+  const [contact, propias] = await Promise.all([
+    getContact(config, codigocliente),
+    getCondicionesPropias(config, codigocliente),
+  ])
+
+  const vendedorNombre = contact?.sellerName ?? propias?.vendedor?.nombre ?? null
+
+  return {
+    condicionPago: contact?.paymentTermName ?? propias?.condicionPago ?? null,
+    plazoDias: contact?.paymentTermDays ?? propias?.plazoDias ?? null,
+    listaPrecios: contact?.priceListName ?? propias?.listaPrecios ?? null,
+    descuentos: propias?.descuentos ?? [],
+    vendedor: vendedorNombre
+      ? {
+          nombre: vendedorNombre,
+          telefono: propias?.vendedor?.telefono || null,
+          email: propias?.vendedor?.email || null,
+        }
+      : null,
+    transporte: propias?.transporte?.modalidad ? propias.transporte : null,
+  }
+}
+
+type CondicionesPropias = {
+  condicionPago: string | null
+  plazoDias: number | null
+  listaPrecios: string | null
+  descuentos: CondicionesComerciales["descuentos"]
+  vendedor: { nombre?: string; telefono?: string; email?: string } | null
+  transporte: { modalidad: string; observaciones: string } | null
+}
+
+/** La fila de `client_commercial_conditions`, o `null` si el cliente no tiene. Sin fallback a mock. */
+async function getCondicionesPropias(config: TenantConfig, codigocliente: string): Promise<CondicionesPropias | null> {
   try {
     const { getDb } = await import("@/db")
     const { clientCommercialConditions } = await import("@/db/schema")
@@ -207,19 +251,19 @@ export async function getCondiciones(config: TenantConfig, codigocliente: string
           eq(clientCommercialConditions.codigocliente, codigocliente),
         ),
       )
-
-    if (!row) return mockCondiciones
+    if (!row) return null
 
     return {
-      condicionPago: row.condicionPago,
+      condicionPago: row.condicionPago || null,
       plazoDias: row.plazoDias,
-      listaPrecios: row.listaPrecios,
-      descuentos: row.descuentos as CondicionesComerciales["descuentos"],
-      vendedor: row.vendedor as CondicionesComerciales["vendedor"],
-      transporte: row.transporte as CondicionesComerciales["transporte"],
+      listaPrecios: row.listaPrecios || null,
+      descuentos: (row.descuentos as CondicionesComerciales["descuentos"]) ?? [],
+      vendedor: (row.vendedor as CondicionesPropias["vendedor"]) ?? null,
+      transporte: (row.transporte as CondicionesPropias["transporte"]) ?? null,
     }
   } catch (err) {
-    console.error("getCondiciones: DB no disponible, fallback a mock:", err)
-    return mockCondiciones
+    // Una DB caída no tiene por qué dejar al cliente sin lo que sí vino de Alegra.
+    console.error("getCondicionesPropias: DB no disponible:", err)
+    return null
   }
 }

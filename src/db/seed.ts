@@ -43,12 +43,13 @@ async function main() {
     const condicionesRow = {
       tenantId,
       codigocliente: "CLI001",
-      condicionPago: mockCondiciones.condicionPago,
-      plazoDias: mockCondiciones.plazoDias,
-      listaPrecios: mockCondiciones.listaPrecios,
+      // Las columnas son NOT NULL; el tipo de dominio ahora admite null (dato no cargado en Alegra).
+      condicionPago: mockCondiciones.condicionPago ?? "",
+      plazoDias: mockCondiciones.plazoDias ?? 0,
+      listaPrecios: mockCondiciones.listaPrecios ?? "",
       descuentos: mockCondiciones.descuentos,
-      vendedor: mockCondiciones.vendedor,
-      transporte: mockCondiciones.transporte,
+      vendedor: mockCondiciones.vendedor ?? {},
+      transporte: mockCondiciones.transporte ?? {},
       updatedAt: new Date(),
     }
 

@@ -64,13 +64,13 @@ export function getMockItemLive(alegraId: string): AlegraProduct | null {
 // ── Contactos ──
 
 export const mockContacts: AlegraContact[] = [
-  { alegraId: "ct-1", name: "Electricidad San Martín SRL", identification: "30712345678", email: "compras@esanmartin.com.ar", phone: "+54 11 4555-1234", priceListId: "2", sellerId: "sl-1", paymentTermId: "tm-30", status: "active" },
-  { alegraId: "ct-2", name: "Ferretería El Tornillo", identification: "20281234567", email: "eltornillo@gmail.com", phone: "+54 223 495-8877", priceListId: "1", sellerId: "sl-2", paymentTermId: "tm-contado", status: "active" },
-  { alegraId: "ct-3", name: "Constructora Delta SA", identification: "30587654321", email: "proveedores@constructoradelta.com", phone: "+54 11 4788-9900", priceListId: "2", sellerId: "sl-1", paymentTermId: "tm-60", status: "active" },
+  { alegraId: "ct-1", name: "Electricidad San Martín SRL", identification: "30712345678", email: "compras@esanmartin.com.ar", phone: "+54 11 4555-1234", priceListId: "2", sellerId: "sl-1", paymentTermId: "tm-30", status: "active", paymentTermName: "30 días", paymentTermDays: 30, priceListName: "Mayorista", sellerName: "Martín Gutiérrez", creditLimit: 2500000 },
+  { alegraId: "ct-2", name: "Ferretería El Tornillo", identification: "20281234567", email: "eltornillo@gmail.com", phone: "+54 223 495-8877", priceListId: "1", sellerId: "sl-2", paymentTermId: "tm-contado", status: "active", paymentTermName: "De contado", paymentTermDays: 0, priceListName: "Público", sellerName: "Laura Pérez", creditLimit: null },
+  { alegraId: "ct-3", name: "Constructora Delta SA", identification: "30587654321", email: "proveedores@constructoradelta.com", phone: "+54 11 4788-9900", priceListId: "2", sellerId: "sl-1", paymentTermId: "tm-60", status: "active", paymentTermName: "60 días", paymentTermDays: 60, priceListName: "Mayorista", sellerName: "Martín Gutiérrez", creditLimit: 8000000 },
   // Cuenta interna con un teléfono cargado por arrastre. Existe en las cuentas reales
   // ("Stock general", "NO USAR", "POS") y no es un cliente al que se le pueda atribuir un
   // pedido: la búsqueda por teléfono tiene que dejarla afuera.
-  { alegraId: "ct-4", name: "Stock general", identification: null, email: null, phone: "+54 11 4788-9900", priceListId: "1", sellerId: null, paymentTermId: "tm-contado", status: "active" },
+  { alegraId: "ct-4", name: "Stock general", identification: null, email: null, phone: "+54 11 4788-9900", priceListId: "1", sellerId: null, paymentTermId: "tm-contado", status: "active", paymentTermName: "De contado", paymentTermDays: 0, priceListName: "Público", sellerName: null, creditLimit: null },
 ]
 
 // ── Configuración de venta ──

@@ -17,7 +17,6 @@ import {
   Field,
   Select,
 } from "@myd-org/ui"
-import { Logo } from "./Logo"
 import { PortalHeader } from "./PortalHeader"
 import type { Cliente, Factura, Pago, Presupuesto, FacturaEstado, PresupuestoEstado } from "@/types"
 import {
@@ -244,24 +243,29 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
                 </span>
               </div>
               <div className="text-3xl font-bold tracking-tight">{fmt(cliente.deudatotal)}</div>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-xs opacity-70">
-                  <span>Límite de crédito</span>
-                  <span>{fmt(cliente.limitecredito)}</span>
+              {/* Solo con un límite cargado en Alegra. Antes el límite era 0 fijo y la barra
+                  dividía la deuda por cero: "Disponible" salía negativo para cualquier cliente
+                  que debiera algo. */}
+              {cliente.limitecredito != null && cliente.limitecredito > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between text-xs opacity-70">
+                    <span>Límite de crédito</span>
+                    <span>{fmt(cliente.limitecredito)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }}>
+                    <div
+                      className="h-1.5 rounded-full transition-all"
+                      style={{
+                        background: "rgba(255,255,255,0.85)",
+                        width: `${Math.min(100, (cliente.deudatotal / cliente.limitecredito) * 100).toFixed(1)}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs opacity-70">
+                    Disponible: {fmt(cliente.limitecredito - cliente.deudatotal)}
+                  </div>
                 </div>
-                <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }}>
-                  <div
-                    className="h-1.5 rounded-full transition-all"
-                    style={{
-                      background: "rgba(255,255,255,0.85)",
-                      width: `${Math.min(100, (cliente.deudatotal / cliente.limitecredito) * 100).toFixed(1)}%`,
-                    }}
-                  />
-                </div>
-                <div className="text-xs opacity-70">
-                  Disponible: {fmt(cliente.limitecredito - cliente.deudatotal)}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Saldo vencido */}
@@ -328,7 +332,6 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
                 cuentaCorriente={cliente.numerocuentacorriente}
                 tenantName={tenantName}
                 whatsappNumber={whatsappNumber}
-                logoSrc={logoSrc}
                 initialFilter={facturasFilter}
                 onFilterChange={setFacturasFilter}
                 initialSearch={facturasSearch}
@@ -482,7 +485,6 @@ function FacturasTable({
   cuentaCorriente,
   tenantName,
   whatsappNumber,
-  logoSrc,
   initialFilter = "todos",
   onFilterChange,
   initialSearch = "",
@@ -495,7 +497,6 @@ function FacturasTable({
   cuentaCorriente: number
   tenantName: string
   whatsappNumber: string
-  logoSrc: string
   initialFilter?: FacturaEstado | "todos"
   onFilterChange?: (v: FacturaEstado | "todos") => void
   initialSearch?: string
@@ -577,18 +578,23 @@ function FacturasTable({
     setSearch(initialSearch)
     setSearchOpen(!!initialSearch)
   }
-  const [modalFactura, setModalFactura] = useState<Factura | null>(null)
   const [pdfFactura, setPdfFactura] = useState<Factura | null>(null)
   const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  // Abre el detalle de la factura indicada por URL (?factura=ID) — usado al tocar
-  // una notificación. Se reabre si cambia el id.
+  // Abre la factura indicada por URL (?factura=NUMERO) — usado al tocar una notificación.
+  // Abre el PDF de Alegra, que es el comprobante de verdad: el modal que había acá lo
+  // fabricaba (ítems inventados, CAE fijo, receptor de los fixtures) y se borró.
+  //
+  // Solo resuelve si la factura está entre las cargadas. Para una vieja no hay forma de
+  // resolverla: Alegra no busca por número, así que el número queda en la búsqueda y el
+  // cliente carga más. Se arregla de raíz guardando el alegra_id en notification_log.
   const [prevOpen, setPrevOpen] = useState<string | undefined>(undefined)
   if (openFacturaId && prevOpen !== openFacturaId) {
     setPrevOpen(openFacturaId)
     const target = facturas.find((f) => f.id === openFacturaId)
-    if (target) setModalFactura(target)
+    if (target?.alegraId) setPdfFactura(target)
+    else setSearch(openFacturaId)
   }
 
   function toggleEstado(estado: FacturaEstado) {
@@ -895,15 +901,6 @@ function FacturasTable({
 
       {pdfFactura?.alegraId && (
         <PdfModal kind="factura" doc={pdfFactura} titulo={`Factura ${pdfFactura.id}`} onClose={() => setPdfFactura(null)} />
-      )}
-
-      {modalFactura && (
-        <FacturaModal
-          factura={modalFactura}
-          tenantName={tenantName}
-          logoSrc={logoSrc}
-          onClose={() => setModalFactura(null)}
-        />
       )}
 
       {whatsappModal && (
@@ -1990,171 +1987,6 @@ function Modal({ onClose, title, children }: { onClose: () => void; title: strin
     >
       {children}
     </Dialog>
-  )
-}
-
-// ── Factura Modal ─────────────────────────────────────────────────────────────
-
-function FacturaModal({
-  factura,
-  onClose,
-  tenantName,
-  logoSrc,
-}: {
-  factura: Factura
-  onClose: () => void
-  tenantName: string
-  logoSrc: string
-}) {
-  const items = [
-    { desc: "Luminaria LED Panel 60x60 48W", qty: 10, unit: factura.importe * 0.4 / 10, total: factura.importe * 0.4 },
-    { desc: "Tira LED 5050 RGB 5m c/fuente", qty: 5, unit: factura.importe * 0.35 / 5, total: factura.importe * 0.35 },
-    { desc: "Downlight LED embutido 12W", qty: 8, unit: factura.importe * 0.25 / 8, total: factura.importe * 0.25 },
-  ]
-  const subtotal = factura.importe / 1.21
-  const iva = factura.importe - subtotal
-
-  return (
-    <Modal onClose={onClose} title={`${factura.tipo} ${factura.id}`}>
-      <div className="flex flex-col gap-6">
-        {/* Header doc */}
-        <div className="flex justify-between items-start pb-4" style={{ borderBottom: "2px solid var(--border)" }}>
-          <div>
-            <Logo size="sm" src={logoSrc} name={tenantName} />
-            <div className="mt-2 text-xs" style={{ color: "var(--ink-soft)" }}>
-              <p>{tenantName}</p>
-              <p>CUIT: 30-71234567-8</p>
-              <p>San Martín 1245, Posadas, Misiones</p>
-              <p>IVA Responsable Inscripto</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div
-              className="inline-flex items-center px-4 py-2 rounded-[var(--radius)] text-lg font-bold"
-              style={{ border: "2px solid var(--ink)", color: "var(--ink)" }}
-            >
-              {factura.tipo === "Factura A" ? "A" : "B"}
-            </div>
-            <div className="mt-2 text-xs" style={{ color: "var(--ink-soft)" }}>
-              <p>N°: {factura.id.replace(/\w+-/, "")}</p>
-              <p>Fecha: {factura.emision}</p>
-              <p>Vto: {factura.vencimiento}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Receptor */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ink-faint)" }}>Receptor</p>
-            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-              <p className="font-medium" style={{ color: "var(--ink)" }}>Ferretería Sol S.R.L.</p>
-              <p>CUIT: 30-71045887-3</p>
-              <p>Cond. IVA: Responsable Inscripto</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--ink-faint)" }}>Condición de pago</p>
-            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-              <p>Cuenta Corriente 30 días</p>
-              <p>Moneda: Peso Argentino</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Items */}
-        <div>
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr style={{ background: "var(--bg)", borderRadius: "var(--radius)" }}>
-                <th className="py-2 px-3 text-left font-semibold" style={{ color: "var(--ink-soft)" }}>Descripción</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Cant.</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Precio unit.</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td className="py-2 px-3" style={{ color: "var(--ink)" }}>{item.desc}</td>
-                  <td className="py-2 px-3 text-right tabular-nums" style={{ color: "var(--ink-soft)" }}>{item.qty}</td>
-                  <td className="py-2 px-3 text-right tabular-nums" style={{ color: "var(--ink-soft)" }}>{fmt(item.unit)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums font-medium" style={{ color: "var(--ink)" }}>{fmt(item.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totals */}
-        <div className="flex justify-end">
-          <div className="flex flex-col gap-1.5 min-w-[200px]">
-            <div className="flex justify-between text-xs" style={{ color: "var(--ink-soft)" }}>
-              <span>Subtotal</span>
-              <span className="tabular-nums">{fmt(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-xs" style={{ color: "var(--ink-soft)" }}>
-              <span>IVA 21%</span>
-              <span className="tabular-nums">{fmt(iva)}</span>
-            </div>
-            <div
-              className="flex justify-between text-sm font-bold pt-2"
-              style={{ borderTop: "2px solid var(--border)", color: "var(--ink)" }}
-            >
-              <span>Total</span>
-              <span className="tabular-nums">{fmt(factura.importe)}</span>
-            </div>
-            {esPagoParcial(factura) && (
-              <>
-                <div className="flex justify-between text-xs" style={{ color: "var(--green)" }}>
-                  <span>Pagos registrados</span>
-                  <span className="tabular-nums">−{fmt(factura.pagado ?? 0)}</span>
-                </div>
-                <div
-                  className="flex justify-between text-sm font-bold pt-2"
-                  style={{ borderTop: "2px solid var(--border)", color: "var(--blue)" }}
-                >
-                  <span>Saldo pendiente</span>
-                  <span className="tabular-nums">{fmt(saldoDe(factura))}</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* CAE */}
-        <div
-          className="flex items-center justify-between p-3 rounded-[var(--radius)]"
-          style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-        >
-          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-            <p className="font-semibold" style={{ color: "var(--ink)" }}>CAE: 74123456789012</p>
-            <p>Vto. CAE: {factura.vencimiento}</p>
-          </div>
-          {/* QR decorativo */}
-          <div className="w-12 h-12 grid grid-cols-4 grid-rows-4 gap-0.5 opacity-60">
-            {Array.from({ length: 16 }, (_, i) => (
-              <div key={i} className="rounded-[1px]" style={{ background: [0,1,4,5,10,11,14,15].includes(i) ? "var(--ink)" : "transparent" }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Acciones */}
-        <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <button
-            onClick={() => descargarDocumento("factura", factura)}
-            disabled={!factura.alegraId}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
-            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
-          >
-            <DownloadIcon />
-            Descargar PDF
-          </button>
-        </div>
-      </div>
-    </Modal>
   )
 }
 
