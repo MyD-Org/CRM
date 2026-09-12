@@ -148,6 +148,8 @@ interface Props {
   initialTab?: string
   initialQuery?: string
   openFacturaId?: string
+  /** Id de Alegra de `openFacturaId`, cuando lo trae el link (notificaciones desde 0022). */
+  openFacturaAlegraId?: string
   shopUrl?: string
   /** Secciones que Alegra no pudo devolver en esta carga. Se avisan en vez de mostrarlas vacías. */
   seccionesCaidas?: readonly Tab[]
@@ -165,7 +167,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl, seccionesCaidas = [] }: Props) {
+export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, openFacturaAlegraId, shopUrl, seccionesCaidas = [] }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -337,6 +339,7 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
                 initialSearch={facturasSearch}
                 onSearchChange={setFacturasSearch}
                 openFacturaId={openFacturaId}
+                openFacturaAlegraId={openFacturaAlegraId}
               />
             )}
             {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={pagosSearch} />}
@@ -490,6 +493,7 @@ function FacturasTable({
   initialSearch = "",
   onSearchChange,
   openFacturaId,
+  openFacturaAlegraId,
 }: {
   facturas: Factura[]
   total: number
@@ -502,6 +506,7 @@ function FacturasTable({
   initialSearch?: string
   onSearchChange?: (v: string) => void
   openFacturaId?: string
+  openFacturaAlegraId?: string
 }) {
   // Lo que se está mostrando. `null` = la primera página tal como la trajo el server
   // component, sin filtros ni navegación todavía.
@@ -586,15 +591,24 @@ function FacturasTable({
   // Abre el PDF de Alegra, que es el comprobante de verdad: el modal que había acá lo
   // fabricaba (ítems inventados, CAE fijo, receptor de los fixtures) y se borró.
   //
-  // Solo resuelve si la factura está entre las cargadas. Para una vieja no hay forma de
-  // resolverla: Alegra no busca por número, así que el número queda en la búsqueda y el
-  // cliente carga más. Se arregla de raíz guardando el alegra_id en notification_log.
+  // Con el id de Alegra en el link (notificaciones desde la migración 0022) se abre directo,
+  // esté o no entre las facturas cargadas. El endpoint del PDF igual valida que la factura
+  // sea del cliente logueado: un id ajeno en la URL da 404 y no filtra nada.
+  //
+  // Sin el id (notificaciones viejas) se busca entre las cargadas, y si no está, el número
+  // queda en la búsqueda: Alegra no permite encontrar una factura por su número.
   const [prevOpen, setPrevOpen] = useState<string | undefined>(undefined)
   if (openFacturaId && prevOpen !== openFacturaId) {
     setPrevOpen(openFacturaId)
     const target = facturas.find((f) => f.id === openFacturaId)
-    if (target?.alegraId) setPdfFactura(target)
-    else setSearch(openFacturaId)
+    if (openFacturaAlegraId) {
+      // El visor usa solo `id` (título) y `alegraId`: si la factura no está cargada, alcanza.
+      setPdfFactura({ ...(target ?? ({} as Factura)), id: openFacturaId, alegraId: openFacturaAlegraId })
+    } else if (target?.alegraId) {
+      setPdfFactura(target)
+    } else {
+      setSearch(openFacturaId)
+    }
   }
 
   function toggleEstado(estado: FacturaEstado) {
@@ -2004,24 +2018,72 @@ function Modal({ onClose, title, children }: { onClose: () => void; title: strin
  */
 function PdfModal({ kind, doc, titulo, onClose }: { kind: DocKind; doc: DocumentoRef; titulo: string; onClose: () => void }) {
   const url = documentoUrl(kind, doc.alegraId!)
+
+  // El PDF se pide con fetch antes de mostrarlo, en vez de apuntar el iframe directo al
+  // endpoint: un iframe no expone el status de la respuesta, así que un 404 (link viejo, o un
+  // id ajeno puesto a mano en la URL) o un 502 (Alegra caído) se veía como JSON crudo adentro
+  // del visor. Con fetch se distingue el error y se muestra un mensaje; el iframe recibe el
+  // PDF ya descargado como blob, así que no se baja dos veces.
+  const [estado, setEstado] = useState<{ blobUrl: string } | { error: string } | null>(null)
+  useEffect(() => {
+    let cancelado = false
+    let blobUrl: string | null = null
+    fetch(url)
+      .then(async (res) => {
+        if (!res.ok) {
+          const msg = await res.json().then((d) => d.error as string).catch(() => null)
+          if (!cancelado) setEstado({ error: msg ?? "No pudimos abrir el documento" })
+          return
+        }
+        const blob = await res.blob()
+        blobUrl = URL.createObjectURL(blob)
+        if (!cancelado) setEstado({ blobUrl })
+      })
+      .catch(() => {
+        if (!cancelado) setEstado({ error: "Error de conexión. Intentá de nuevo." })
+      })
+    return () => {
+      cancelado = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [url])
+
+  const alto = { height: "min(70vh, 780px)" }
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }} title={titulo} size="lg" className="max-w-4xl">
       <div className="flex flex-col gap-3">
-        <iframe
-          src={url}
-          title={titulo}
-          className="w-full rounded-[var(--radius)]"
-          style={{ height: "min(70vh, 780px)", border: "1px solid var(--border)", background: "var(--bg)" }}
-        />
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={() => window.open(url, "_blank", "noopener")}>
-            Abrir en pestaña nueva
-          </Button>
-          <Button onClick={() => descargarDocumento(kind, doc)}>
-            <DownloadIcon />
-            Descargar PDF
-          </Button>
-        </div>
+        {estado === null && (
+          <div className="w-full flex items-center justify-center rounded-[var(--radius)] text-sm" style={{ ...alto, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--ink-soft)" }}>
+            Cargando documento…
+          </div>
+        )}
+        {estado && "error" in estado && (
+          <div className="w-full flex flex-col items-center justify-center gap-2 p-6 rounded-[var(--radius)] text-sm text-center" style={{ minHeight: 220, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--ink-soft)" }}>
+            <Info size={20} strokeWidth={1.6} color="currentColor" />
+            <p>{estado.error}</p>
+          </div>
+        )}
+        {estado && "blobUrl" in estado && (
+          <iframe
+            src={estado.blobUrl}
+            title={titulo}
+            className="w-full rounded-[var(--radius)]"
+            style={{ ...alto, border: "1px solid var(--border)", background: "var(--bg)" }}
+          />
+        )}
+        {/* Sin documento no hay nada que abrir ni bajar: los botones confundirían. */}
+        {estado && "blobUrl" in estado && (
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => window.open(url, "_blank", "noopener")}>
+              Abrir en pestaña nueva
+            </Button>
+            <Button onClick={() => descargarDocumento(kind, doc)}>
+              <DownloadIcon />
+              Descargar PDF
+            </Button>
+          </div>
+        )}
       </div>
     </Dialog>
   )

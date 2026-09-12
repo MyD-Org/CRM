@@ -1,0 +1,18 @@
+-- Id de Alegra de la factura en cada notificación del portal.
+--
+-- `factura_id` guarda el número legible (el que ve el cliente, ej. "05297"). El botón
+-- "Ver factura" de la campanita lleva a `?factura=NUMERO`, y para abrir el PDF hace falta el
+-- id de Alegra — que el número no da, porque Alegra no busca por número. Hasta ahora el portal
+-- lo resolvía buscando entre las facturas ya cargadas en pantalla (las 30 más recientes), así
+-- que "Ver factura" no encontraba una factura vieja, que es justo el caso de cobranza.
+--
+-- Escrita a mano, como 0014-0021: los snapshots de drizzle-kit quedaron congelados en 0013
+-- y `db:generate` regeneraría todo desde ahí.
+--
+-- Nullable y sin backfill: las notificaciones ya enviadas no tienen el id y siguen andando
+-- con el camino viejo (buscar entre las cargadas). Las nuevas lo guardan.
+--
+-- APLICAR EN PROD ANTES DE MERGEAR. Drizzle selecciona las columnas del schema por nombre:
+-- si el código llega antes que la columna, `GET /api/notifications/log` falla y la campanita
+-- deja de cargar para todos los clientes.
+ALTER TABLE "notification_log" ADD COLUMN IF NOT EXISTS "factura_alegra_id" text;

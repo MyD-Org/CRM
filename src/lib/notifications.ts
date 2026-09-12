@@ -201,6 +201,9 @@ export async function runNotifications(filter?: {
             tenantId: tenant.id,
             codigocliente: cliente.codigocliente,
             facturaId: p.factura.id,
+            // Para que "Ver factura" en la campanita abra el PDF sin tener que encontrar la
+            // factura por número, que Alegra no permite.
+            facturaAlegraId: p.factura.alegraId ?? null,
             type: p.type,
             channel: "email",
             status,
@@ -214,7 +217,7 @@ export async function runNotifications(filter?: {
               notificationLog.type,
               notificationLog.channel,
             ],
-            set: { status, error: errorMsg, sentAt: new Date() },
+            set: { status, error: errorMsg, sentAt: new Date(), facturaAlegraId: p.factura.alegraId ?? null },
           })
       }
     }
