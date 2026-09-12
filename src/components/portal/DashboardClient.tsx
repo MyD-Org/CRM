@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react"
+import { useState, useMemo, useRef, useEffect, useSyncExternalStore } from "react"
 import Link from "next/link"
 import {
   Table,
@@ -444,6 +444,37 @@ function initialToSet(f: FacturaEstado | "todos"): Set<FacturaEstado> {
 /** A partir de acá vale la pena decir cuántas se están mostrando; con menos, es ruido. */
 const FACTURAS_VISIBLES_SIN_PAGINAR = 30
 
+/** Tamaño de página del portal. Igual a FACTURAS_PAGE_SIZE del server (máximo de Alegra). */
+const PAGINA = 30
+
+interface Vista {
+  /** Índice de la primera fila mostrada dentro del total. En celular siempre 0: se acumula. */
+  start: number
+  facturas: Factura[]
+  total: number
+}
+
+/**
+ * Desktop o celular, para elegir cómo se recorre el historial: flechas de página en
+ * pantalla grande, "Cargar más" en chica. La tabla es la misma en los dos.
+ *
+ * Arranca en `false` y se corrige después de montar: en el server no hay `window`, y
+ * asumir desktop haría que el HTML del server no coincida con el del cliente.
+ */
+const MQ_DESKTOP = "(min-width: 640px)"
+
+function useEsDesktop() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(MQ_DESKTOP)
+      mq.addEventListener("change", onChange)
+      return () => mq.removeEventListener("change", onChange)
+    },
+    () => window.matchMedia(MQ_DESKTOP).matches,
+    () => false, // en el server no hay `window`: se asume celular y se corrige al hidratar
+  )
+}
+
 function FacturasTable({
   facturas: primeraPagina,
   total,
@@ -471,27 +502,23 @@ function FacturasTable({
   onSearchChange?: (v: string) => void
   openFacturaId?: string
 }) {
-  // Las páginas siguientes se acumulan acá. `primeraPagina` viene del server y cambia si
-  // el server component se vuelve a renderizar: en ese caso se descarta lo acumulado, que
-  // podría estar desactualizado.
-  const [extra, setExtra] = useState<Factura[]>([])
+  // Lo que se está mostrando. `null` = la primera página tal como la trajo el server
+  // component, sin filtros ni navegación todavía.
+  const [vista, setVista] = useState<Vista | null>(null)
   const [prevPrimera, setPrevPrimera] = useState(primeraPagina)
   if (prevPrimera !== primeraPagina) {
+    // El server component volvió a renderizar: lo que teníamos cargado puede estar viejo.
     setPrevPrimera(primeraPagina)
-    setExtra([])
+    setVista(null)
   }
   const [cargando, setCargando] = useState(false)
   const [errorCarga, setErrorCarga] = useState("")
-  // Resultado de una consulta filtrada al server. `null` = sin filtros, se usa lo que vino
-  // del server component.
-  const [filtrado, setFiltrado] = useState<{ facturas: Factura[]; total: number } | null>(null)
+  const esDesktop = useEsDesktop()
 
-  const facturas = useMemo(
-    () => (filtrado ? filtrado.facturas : [...primeraPagina, ...extra]),
-    [filtrado, primeraPagina, extra],
-  )
-  const totalActual = filtrado ? filtrado.total : total
-  const hayMas = facturas.length < totalActual
+  const facturas = vista ? vista.facturas : primeraPagina
+  const totalActual = vista ? vista.total : total
+  const desde = vista ? vista.start : 0
+  const hayMas = desde + facturas.length < totalActual
 
   async function pedirPagina(start: number, params: URLSearchParams): Promise<{ facturas: Factura[]; total: number }> {
     params.set("start", String(start))
@@ -501,18 +528,33 @@ function FacturasTable({
     return data as { facturas: Factura[]; total: number }
   }
 
-  async function cargarMas() {
+  async function navegar(accion: () => Promise<void>) {
     setCargando(true)
     setErrorCarga("")
     try {
-      const page = await pedirPagina(facturas.length, queryFiltros())
-      if (filtrado) setFiltrado({ facturas: [...filtrado.facturas, ...page.facturas], total: page.total })
-      else setExtra((prev) => [...prev, ...page.facturas])
+      await accion()
     } catch (err) {
-      setErrorCarga(err instanceof Error ? err.message : "No pudimos cargar más facturas")
+      setErrorCarga(err instanceof Error ? err.message : "No pudimos cargar las facturas")
     } finally {
       setCargando(false)
     }
+  }
+
+  /** Celular: suma la siguiente tanda a lo que ya está en pantalla. */
+  function cargarMas() {
+    return navegar(async () => {
+      const page = await pedirPagina(desde + facturas.length, queryFiltros())
+      setVista({ start: desde, facturas: [...facturas, ...page.facturas], total: page.total })
+    })
+  }
+
+  /** Desktop: reemplaza por la página pedida. */
+  function irAPagina(start: number) {
+    return navegar(async () => {
+      const page = await pedirPagina(start, queryFiltros())
+      setVista({ start, facturas: page.facturas, total: page.total })
+      setSelected(new Set()) // la selección era de la página anterior
+    })
   }
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -605,7 +647,7 @@ function FacturasTable({
   const consultaRef = useRef(0)
   async function refiltrar(params: URLSearchParams) {
     if ([...params.keys()].length === 0) {
-      setFiltrado(null) // sin filtros server-side: vuelve a lo que trajo el server component
+      setVista(null) // sin filtros server-side: vuelve a lo que trajo el server component
       return
     }
     // Descarta respuestas viejas: tocar tres chips rápido puede resolverse desordenado.
@@ -614,7 +656,7 @@ function FacturasTable({
     setErrorCarga("")
     try {
       const page = await pedirPagina(0, params)
-      if (consultaRef.current === consulta) setFiltrado(page)
+      if (consultaRef.current === consulta) setVista({ start: 0, ...page })
     } catch (err) {
       if (consultaRef.current === consulta) {
         setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar")
@@ -627,7 +669,7 @@ function FacturasTable({
   // Lo que el server ya filtró no se vuelve a filtrar acá: se aplica solo lo que no sabe
   // resolver (la búsqueda por número, el vencimiento y las selecciones mezcladas).
   const filtered = useMemo(() => {
-    const porServer = filtrado !== null
+    const porServer = vista !== null
     const desde = fromDate ? isoToLocal(fromDate) : null
     const hasta = toDate ? isoToLocal(toDate) : null
     return facturas.filter((f) => {
@@ -639,7 +681,7 @@ function FacturasTable({
       const matchTo = !aplicaFechaLocal || !hasta || !fecha || fecha <= hasta
       return matchSearch && matchEstado && matchFrom && matchTo
     })
-  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField, filtrado])
+  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField, vista])
 
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
@@ -814,13 +856,31 @@ function FacturasTable({
             <p className="text-xs" style={{ color: "var(--red)" }}>{errorCarga}</p>
           )}
 
-          {hayMas ? (
+          {esDesktop ? (
+            // Pantalla grande: flechas de página. Llegar a una factura de hace años no
+            // puede costar 40 clicks en "Cargar más".
+            (hayMas || desde > 0) && (
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" onClick={() => irAPagina(Math.max(0, desde - PAGINA))} disabled={cargando || desde === 0}>
+                  Anterior
+                </Button>
+                <p className="text-xs tabular-nums" style={{ color: "var(--ink-faint)" }}>
+                  {cargando ? "Cargando…" : `${desde + 1}–${desde + facturas.length} de ${totalActual}`}
+                </p>
+                <Button variant="ghost" onClick={() => irAPagina(desde + PAGINA)} disabled={cargando || !hayMas}>
+                  Siguiente
+                </Button>
+              </div>
+            )
+          ) : hayMas ? (
+            // Celular: acumular. Además le da más material a la búsqueda por número, que
+            // trabaja sobre lo cargado.
             <>
               <Button variant="ghost" onClick={cargarMas} disabled={cargando}>
                 {cargando ? "Cargando…" : "Cargar más"}
               </Button>
               <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                Mostrando {facturas.length} de {total}
+                Mostrando {facturas.length} de {totalActual}
               </p>
             </>
           ) : (
