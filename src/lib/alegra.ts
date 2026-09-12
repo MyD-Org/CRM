@@ -666,9 +666,22 @@ export async function listPaymentsByContact(config: TenantConfig, contactAlegraI
   })
 }
 
-/** Saldo de cuenta corriente derivado de las facturas abiertas (vencido vs. a vencer). */
+/**
+ * Saldo de cuenta corriente derivado de las facturas abiertas (vencido vs. a vencer).
+ *
+ * Pide SOLO las abiertas (`status=open`) en vez de escanear el historial entero. Alegra no
+ * tiene endpoint de saldo —probados /statement, /balance, /account-statement (404) y
+ * fields=balance (null)—, pero este filtro sí funciona y deja el mismo número: para un
+ * cliente con 1282 facturas son 10 filas y una request en lugar de 43 páginas, verificado
+ * contra el total que mostraba el cálculo viejo.
+ */
 export async function getContactBalance(config: TenantConfig, contactAlegraId: string): Promise<AlegraContactBalance> {
-  const invoices = await listInvoicesByContact(config, contactAlegraId)
+  const invoices = config.alegraMock
+    ? await listInvoicesByContact(config, contactAlegraId)
+    : await fetchAllPages(config, "/invoices", mapRawInvoice, {
+        client_id: contactAlegraId,
+        status: "open",
+      })
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   let total = 0
@@ -680,4 +693,189 @@ export async function getContactBalance(config: TenantConfig, contactAlegraId: s
     if (due && due < today) overdue += inv.balance
   }
   return { total, overdue, toFallDue: total - overdue }
+}
+
+// ── PDF de documentos (facturas, recibos de pago, cotizaciones) ──────────────
+// Alegra no expone el PDF como recurso propio: hay que pedir el documento con
+// `?fields=pdf` y devuelve una URL FIRMADA de su CDN, con `Expires` y `Signature`.
+// Dos consecuencias:
+//   1. La URL vence → no sirve guardarla en la DB ni mandársela al cliente para después.
+//   2. Quien tenga la URL entra sin autenticarse → nunca se la devolvemos al navegador
+//      a secas: el portal valida primero que el documento sea del cliente logueado
+//      (por eso esto también devuelve el id del cliente dueño).
+
+/** Tipos de documento del portal y su recurso en Alegra. */
+export const DOCUMENT_RESOURCES = {
+  factura: "invoices",
+  pago: "payments",
+  presupuesto: "estimates",
+} as const
+
+export type DocumentKind = keyof typeof DOCUMENT_RESOURCES
+
+export interface AlegraDocumentPdf {
+  /** Id del contacto dueño del documento. `null` si Alegra no lo trae (→ tratar como ajeno). */
+  clientAlegraId: string | null
+  /** URL firmada del PDF, o `null` si Alegra no generó ninguno para este documento. */
+  pdfUrl: string | null
+  /** Número legible del documento, para nombrar el archivo que baja el cliente. */
+  number: string | null
+}
+
+/**
+ * Documento con su PDF firmado y el contacto dueño, para que el llamador valide
+ * la pertenencia ANTES de servirlo. No filtra por cliente: eso es responsabilidad
+ * de quien lo llama, que es el único que sabe quién está logueado.
+ */
+export async function getDocumentPdf(
+  config: TenantConfig,
+  kind: DocumentKind,
+  documentId: string,
+): Promise<AlegraDocumentPdf | null> {
+  const raw = (await alegraFetch(config, `/${DOCUMENT_RESOURCES[kind]}/${documentId}`, {
+    fields: "pdf",
+  })) as Record<string, unknown> | null
+  if (!raw || raw.id == null) return null
+
+  const client = (raw.client ?? {}) as Record<string, unknown>
+  const numberTemplate = raw.numberTemplate as { fullNumber?: unknown; formattedNumber?: unknown } | undefined
+  const fullNumber = numberTemplate?.fullNumber ?? numberTemplate?.formattedNumber ?? raw.number
+
+  return {
+    clientAlegraId: client.id != null ? String(client.id) : null,
+    pdfUrl: typeof raw.pdf === "string" && raw.pdf ? raw.pdf : null,
+    number: fullNumber != null ? String(fullNumber) : null,
+  }
+}
+
+// ── Búsqueda de contacto por identificador del portal (email o CUIT) ─────────
+// El `query` de /contacts de Alegra matchea SOLO por nombre: no mira `email` ni
+// `identification`. Verificado contra la cuenta real — buscar un email exacto de un
+// contacto existente devuelve []. Por eso el login del portal, que promete "CUIT o
+// email", necesita traer los contactos y filtrar acá, igual que `searchContactsByPhone`.
+
+/** Deja solo los dígitos: "20-12345678-9", "20123456789" y "20.123.456.789" son el mismo CUIT. */
+function normalizeIdentification(value: string | null | undefined): string {
+  return (value ?? "").replace(/\D/g, "")
+}
+
+/**
+ * Contacto por email o CUIT exactos, para el login del portal.
+ *
+ * Escanea todos los contactos porque la API no ofrece filtro por esos campos. Si el
+ * identificador no parece ni email ni documento, cae en la búsqueda por nombre de
+ * Alegra, que sí funciona y es una sola request.
+ */
+export async function findContactByIdentifier(
+  config: TenantConfig,
+  identifier: string,
+): Promise<AlegraContact | null> {
+  const trimmed = identifier.trim()
+  if (!trimmed) return null
+
+  if (config.alegraMock) {
+    const [match] = await searchContacts(config, trimmed, 1)
+    return match ?? null
+  }
+
+  const email = trimmed.toLowerCase()
+  const isEmail = trimmed.includes("@")
+  const documento = normalizeIdentification(trimmed)
+  // 6 dígitos = piso de un DNI. Menos que eso no es un documento, es otra cosa.
+  const isDocumento = !isEmail && documento.length >= 6
+
+  if (isEmail || isDocumento) {
+    const contacts = await listAllContacts(config)
+    const match = contacts.find((c) =>
+      isEmail
+        ? (c.email ?? "").trim().toLowerCase() === email
+        : normalizeIdentification(c.identification) === documento,
+    )
+    if (match) return match
+    // Sin match exacto no se intenta por nombre: un email nunca es el nombre de una
+    // empresa, y un match parcial acá deja entrar a la cuenta equivocada.
+    return null
+  }
+
+  const [byName] = await searchContacts(config, trimmed, 1)
+  return byName ?? null
+}
+
+// ── Facturas paginadas ──────────────────────────────────────────────────────
+// El portal no puede bajar el historial completo: un cliente con 1282 facturas son 43
+// páginas y ~7 s de espera.
+//
+// Qué acepta Alegra, probado contra la cuenta real (los nombres importan):
+//   date_afterOrNow / date_beforeOrNow  ✅ rango por fecha de EMISIÓN
+//   status=open|closed|void             ✅ y se combina con las fechas
+//   date_after                          ❌ no existe, se ignora en silencio
+//   dueDate_afterOrNow / _beforeOrNow   ❌ se ignoran: el vencimiento no se filtra
+//   number / query                      ❌ se ignoran: no se puede buscar por número
+//
+// `limit` tiene tope 30 y pedir más no falla: DEVUELVE BASURA (con limit=100 vuelven 2
+// filas). Por eso una ventana más grande se arma con varias requests de 30 en paralelo.
+
+export interface AlegraInvoicePage {
+  items: AlegraInvoice[]
+  /** Total de facturas del contacto según Alegra, para saber cuántas faltan. */
+  total: number
+}
+
+/**
+ * Una ventana de facturas del contacto, de la más reciente a la más vieja.
+ *
+ * El `total` sale de `metadata=true` e incluye los borradores, que el portal esconde: si
+ * el contacto tuviera borradores, el "mostrando X de Y" quedaría corto por esa cantidad.
+ */
+export interface AlegraInvoiceFilters {
+  /** `open` | `closed` | `void`. Alegra no acepta varios a la vez. */
+  status?: string
+  /** Fecha de EMISIÓN desde / hasta, "YYYY-MM-DD". Ojo: el vencimiento no se puede filtrar
+   *  — `dueDate_afterOrNow` y `dueDate_beforeOrNow` los ignora (probado). */
+  dateFrom?: string
+  dateTo?: string
+}
+
+export async function listInvoicesPageByContact(
+  config: TenantConfig,
+  contactAlegraId: string,
+  { start, limit, filters = {} }: { start: number; limit: number; filters?: AlegraInvoiceFilters },
+): Promise<AlegraInvoicePage> {
+  if (config.alegraMock) {
+    const all = await listInvoicesByContact(config, contactAlegraId)
+    return { items: all.slice(start, start + limit), total: all.length }
+  }
+
+
+  const chunks = Math.max(1, Math.ceil(limit / PAGE_SIZE))
+  const requests = Array.from({ length: chunks }, (_, i) =>
+    alegraFetch(config, "/invoices", {
+      client_id: contactAlegraId,
+      order_field: "date",
+      order_direction: "DESC",
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.dateFrom ? { date_afterOrNow: filters.dateFrom } : {}),
+      ...(filters.dateTo ? { date_beforeOrNow: filters.dateTo } : {}),
+      start: String(start + i * PAGE_SIZE),
+      limit: String(Math.min(PAGE_SIZE, limit - i * PAGE_SIZE)),
+      // Solo la primera pide el total: viene igual en todas y no hace falta repetirlo.
+      ...(i === 0 ? { metadata: "true" } : {}),
+    }),
+  )
+
+  const responses = await Promise.all(requests)
+  let total = 0
+  const items: AlegraInvoice[] = []
+  responses.forEach((res, i) => {
+    // Con metadata=true la respuesta es { metadata, data }; sin él, el array pelado.
+    const rows = Array.isArray(res)
+      ? res
+      : ((res as { data?: unknown }).data as Record<string, unknown>[] | undefined) ?? []
+    if (i === 0 && !Array.isArray(res)) {
+      total = Number((res as { metadata?: { total?: unknown } }).metadata?.total ?? 0)
+    }
+    for (const row of rows) items.push(mapRawInvoice(row))
+  })
+
+  return { items, total }
 }

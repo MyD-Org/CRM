@@ -30,6 +30,9 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
   const [countdown, setCountdown] = useState(0)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Último código auto-enviado. Evita que un código rechazado se reenvíe solo si el
+  // componente se vuelve a renderizar con los mismos dígitos en pantalla.
+  const autoEnviadoRef = useRef("")
 
   const startCountdown = useCallback(() => {
     setCountdown(30)
@@ -80,12 +83,16 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
 
   async function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault()
-    setError("")
     const code = otp.join("")
     if (code.length < 6) {
       setError("Ingresá los 6 dígitos del código")
       return
     }
+    await verificar(code)
+  }
+
+  async function verificar(code: string) {
+    setError("")
     setLoading(true)
     try {
       const res = await fetch("/api/auth/verify-code", {
@@ -123,6 +130,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
       }
       setSentTo(data.sentTo ?? "")
       setOtp(["", "", "", "", "", ""])
+      autoEnviadoRef.current = ""
       startCountdown()
       otpRefs.current[0]?.focus()
     } catch {
@@ -133,12 +141,45 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
   }
 
   function handleOtpChange(index: number, value: string) {
-    const v = value.replace(/\D/g, "").slice(-1)
+    const digitos = value.replace(/\D/g, "")
+
+    // El código completo puede entrar por acá, sin evento `paste`: es lo que hace el
+    // autocompletado del celular cuando ofrece "Copiar código" desde la notificación del
+    // mail. Antes se quedaba con un dígito y tiraba los otros cinco.
+    if (digitos.length > 2) {
+      rellenarDesde(index, digitos)
+      return
+    }
+
+    // Tipeo normal: el último carácter pisa lo que hubiera en el casillero.
+    const v = digitos.slice(-1)
     const next = [...otp]
     next[index] = v
     setOtp(next)
     if (v && index < 5) {
       otpRefs.current[index + 1]?.focus()
+    }
+  }
+
+  /** Reparte `digitos` desde `index` en adelante y deja el foco en el último que llenó. */
+  function rellenarDesde(index: number, digitos: string) {
+    const next = [...otp]
+    for (let i = 0; i < digitos.length && index + i < 6; i++) {
+      next[index + i] = digitos[i]
+    }
+    setOtp(next)
+    const ultimo = Math.min(index + digitos.length, 5)
+    otpRefs.current[ultimo]?.focus()
+
+    // Si el código quedó completo, se verifica solo: pegarlo y tener que apretar
+    // "Verificar" es un paso de más cuando ya no falta nada que decidir.
+    //
+    // Solo por esta vía, no al tipear el sexto dígito: con 5 intentos permitidos, mandar
+    // solo mientras alguien tipea le quema un intento por cada dedazo.
+    const code = next.join("")
+    if (code.length === 6 && !next.includes("") && autoEnviadoRef.current !== code) {
+      autoEnviadoRef.current = code
+      void verificar(code)
     }
   }
 
@@ -160,15 +201,10 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
 
   function handleOtpPaste(e: React.ClipboardEvent) {
     e.preventDefault()
+    // Pegar siempre arranca del primer casillero: el código es uno solo y completo.
     const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
     if (text.length === 0) return
-    const next = [...otp]
-    for (let i = 0; i < 6; i++) {
-      next[i] = text[i] ?? ""
-    }
-    setOtp(next)
-    const focusIdx = Math.min(text.length, 5)
-    otpRefs.current[focusIdx]?.focus()
+    rellenarDesde(0, text)
   }
 
   return (
@@ -378,6 +414,11 @@ function OtpStep({
             type="text"
             inputMode="numeric"
             pattern="\d*"
+            // Solo en el primero: es lo que hace que iOS y Android ofrezcan el código del
+            // mail arriba del teclado. Ponerlo en los seis hace que el navegador intente
+            // autocompletar cada casillero por separado.
+            autoComplete={i === 0 ? "one-time-code" : "off"}
+            name={i === 0 ? "otp" : undefined}
             maxLength={2}
             value={digit}
             onChange={(e) => onOtpChange(i, e.target.value)}

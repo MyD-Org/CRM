@@ -15,7 +15,9 @@ export async function GET(req: Request) {
       status === "paid"
         ? facturas.filter((f) => f.estado === "pagada")
         : status === "pending"
-          ? facturas.filter((f) => f.estado !== "pagada")
+          // Una anulada no es impaga: sin excluirla, el bot le diría al cliente que debe
+          // una factura que la empresa anuló.
+          ? facturas.filter((f) => f.estado !== "pagada" && f.estado !== "anulada")
           : facturas
 
     return Response.json(

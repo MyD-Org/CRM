@@ -12,7 +12,7 @@ export interface Cliente {
   saldoavencer: number
 }
 
-export type FacturaEstado = "pendiente" | "vencida" | "pagada"
+export type FacturaEstado = "pendiente" | "vencida" | "pagada" | "anulada"
 
 export interface Factura {
   id: string
@@ -23,6 +23,12 @@ export interface Factura {
   estado: FacturaEstado
   /** Monto ya pagado — si es > 0 y < importe, la factura tiene pago parcial */
   pagado?: number
+  /**
+   * Id del documento en Alegra. El `id` de arriba es el número legible (FV-1-000128),
+   * que no sirve para pedirle nada a la API. Opcional porque los fixtures del modo
+   * mock no lo tienen: sin esto, la UI deshabilita ver/descargar el PDF.
+   */
+  alegraId?: string
 }
 
 export interface PagoImputacion {
@@ -37,6 +43,12 @@ export interface Pago {
   facturas: PagoImputacion[]
   medio: string
   monto: number
+  /**
+   * Id del documento en Alegra. El `id` de arriba es el número legible (FV-1-000128),
+   * que no sirve para pedirle nada a la API. Opcional porque los fixtures del modo
+   * mock no lo tienen: sin esto, la UI deshabilita ver/descargar el PDF.
+   */
+  alegraId?: string
 }
 
 export type PresupuestoEstado = "vigente" | "vencido" | "aceptado"
@@ -47,6 +59,12 @@ export interface Presupuesto {
   validoHasta: string
   total: number
   estado: PresupuestoEstado
+  /**
+   * Id del documento en Alegra. El `id` de arriba es el número legible (FV-1-000128),
+   * que no sirve para pedirle nada a la API. Opcional porque los fixtures del modo
+   * mock no lo tienen: sin esto, la UI deshabilita ver/descargar el PDF.
+   */
+  alegraId?: string
 }
 
 export interface CondicionesComerciales {

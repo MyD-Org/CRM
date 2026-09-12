@@ -3,9 +3,11 @@ import type { TenantConfig } from "./tenants"
 import type { AlegraContact, AlegraEstimate, AlegraInvoice, AlegraPayment } from "./alegra"
 import {
   getContact,
-  searchContacts,
+  findContactByIdentifier,
   listAllContacts,
   listInvoicesByContact,
+  listInvoicesPageByContact,
+  type AlegraInvoiceFilters,
   listPaymentsByContact,
   listEstimatesByContact,
   getContactBalance,
@@ -33,6 +35,9 @@ function today(): Date {
 }
 
 function facturaEstado(inv: AlegraInvoice, hoy: Date): FacturaEstado {
+  // Primero que nada: una anulada no es ni pagada ni adeudada, aunque Alegra le deje
+  // saldo. Si se evaluara después, una anulada con balance 0 se mostraría como "pagada".
+  if (inv.status === "void") return "anulada"
   if (inv.status === "closed" || inv.balance <= 0) return "pagada"
   if (inv.dueDate && new Date(`${inv.dueDate}T00:00:00`) < hoy) return "vencida"
   return "pendiente"
@@ -41,6 +46,7 @@ function facturaEstado(inv: AlegraInvoice, hoy: Date): FacturaEstado {
 function mapInvoice(inv: AlegraInvoice, hoy: Date): Factura {
   return {
     id: inv.number ?? inv.alegraId,
+    alegraId: inv.alegraId,
     // Alegra no expone el tipo fiscal (A/B/C) de forma estándar en la factura de venta.
     tipo: "Factura",
     emision: isoToDMY(inv.date),
@@ -54,6 +60,7 @@ function mapInvoice(inv: AlegraInvoice, hoy: Date): Factura {
 function mapPayment(p: AlegraPayment): Pago {
   return {
     id: p.number ?? p.alegraId,
+    alegraId: p.alegraId,
     fecha: isoToDMY(p.date),
     medio: p.method,
     monto: p.amount,
@@ -74,6 +81,7 @@ function presupuestoEstado(e: AlegraEstimate, hoy: Date): PresupuestoEstado {
 function mapEstimate(e: AlegraEstimate, hoy: Date): Presupuesto {
   return {
     id: e.number ?? e.alegraId,
+    alegraId: e.alegraId,
     fecha: isoToDMY(e.date),
     validoHasta: e.dueDate ? isoToDMY(e.dueDate) : "",
     total: e.total,
@@ -112,8 +120,7 @@ export async function getCliente(config: TenantConfig, codigocliente: string): P
 /** Resuelve el cliente por email o CUIT/identificación (usado por el login OTP). */
 export async function getClienteByIdentifier(config: TenantConfig, identifier: string): Promise<Cliente | null> {
   if (config.alegraMock) return mockCliente
-  const matches = await searchContacts(config, identifier, 1)
-  const contact = matches[0]
+  const contact = await findContactByIdentifier(config, identifier)
   if (!contact) return null
   const balance = await getContactBalance(config, contact.alegraId)
   return mapContactToCliente(contact, balance)
@@ -127,11 +134,47 @@ export async function getClientes(config: TenantConfig): Promise<Cliente[]> {
   return contacts.filter((c) => c.status === "active").map((c) => mapContactToCliente(c))
 }
 
+/** Tamaño de página de las facturas del portal. 30 es el máximo real de Alegra: pedir más
+ *  no falla, devuelve basura (con limit=100 vuelven 2 filas). */
+export const FACTURAS_PAGE_SIZE = 30
+
+export interface FacturasPage {
+  facturas: Factura[]
+  /** Total del contacto en Alegra: cuántas hay en total, para saber si quedan más. */
+  total: number
+}
+
+/**
+ * Una página de facturas, de la más reciente a la más vieja.
+ *
+ * El portal no baja el historial completo: para un cliente con 1282 facturas eran 43
+ * páginas y ~7 s de espera antes de ver nada.
+ */
+export async function getFacturasPage(
+  config: TenantConfig,
+  codigocliente: string,
+  start = 0,
+  limit = FACTURAS_PAGE_SIZE,
+  filters: AlegraInvoiceFilters = {},
+): Promise<FacturasPage> {
+  if (config.alegraMock) {
+    return { facturas: mockFacturas.slice(start, start + limit), total: mockFacturas.length }
+  }
+  const hoy = today()
+  const { items, total } = await listInvoicesPageByContact(config, codigocliente, { start, limit, filters })
+  // Los borradores se esconden (no son documentos emitidos), así que una página puede
+  // traer menos de `limit` filas sin que eso signifique que se terminaron.
+  return { facturas: items.filter((i) => i.status !== "draft").map((i) => mapInvoice(i, hoy)), total }
+}
+
 export async function getFacturas(config: TenantConfig, codigocliente: string): Promise<Factura[]> {
   if (config.alegraMock) return mockFacturas
   const hoy = today()
   const invoices = await listInvoicesByContact(config, codigocliente)
-  return invoices.filter((i) => i.status !== "draft" && i.status !== "void").map((i) => mapInvoice(i, hoy))
+  // Las anuladas SÍ se muestran, marcadas como tales: si el cliente vio la factura en su
+  // cuenta y después desaparece sin rastro, parece un error del portal. Los borradores no:
+  // no son documentos emitidos y el cliente no tiene por qué enterarse de que existen.
+  return invoices.filter((i) => i.status !== "draft").map((i) => mapInvoice(i, hoy))
 }
 
 export async function getPagos(config: TenantConfig, codigocliente: string): Promise<Pago[]> {

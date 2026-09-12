@@ -4,6 +4,7 @@ const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
   pendiente: "Pendiente",
   vencida: "Vencida",
   pagada: "Pagada",
+  anulada: "Anulada",
 }
 
 export type WhatsAppFacturaIntent = "pagar" | "consulta"
