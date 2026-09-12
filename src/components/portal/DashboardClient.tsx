@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
 import {
   Table,
@@ -31,6 +31,60 @@ import {
 import { CreditCard, Search, Plus, X, Upload, FileText, Eye, Download, Info, Calendar, ChevronDown } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
+
+// ── PDF de documentos ────────────────────────────────────────────────────────
+// El PDF lo genera Alegra y lo sirve /api/portal/documentos/[kind]/[id], que valida
+// que el documento sea del cliente logueado. Acá se baja con fetch (en vez de apuntar
+// un <a> a la URL) para poder mostrar el error del server: si el endpoint responde
+// JSON de error, un link directo le dejaría al cliente un PDF roto o un JSON en
+// pantalla. `alegraId` falta en los fixtures del modo mock → botón deshabilitado.
+
+type DocKind = "factura" | "pago" | "presupuesto"
+
+interface DocumentoRef {
+  id: string
+  alegraId?: string
+}
+
+async function fetchDocumento(kind: DocKind, alegraId: string, download: boolean): Promise<Blob> {
+  const res = await fetch(`/api/portal/documentos/${kind}/${alegraId}${download ? "?download=1" : ""}`)
+  if (!res.ok) {
+    const msg = await res.json().then((d) => d.error).catch(() => null)
+    throw new Error(msg ?? "No pudimos obtener el documento")
+  }
+  return res.blob()
+}
+
+/** Baja el PDF como archivo. */
+async function descargarDocumento(kind: DocKind, doc: DocumentoRef) {
+  if (!doc.alegraId) return
+  try {
+    const blob = await fetchDocumento(kind, doc.alegraId, true)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${kind}-${doc.id.replace(/[^\w.-]+/g, "-")}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Sin esto el blob queda en memoria hasta que se cierre la pestaña.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+  } catch (err) {
+    alert(err instanceof Error ? err.message : "No pudimos descargar el documento")
+  }
+}
+
+/** URL del PDF para embeberlo o abrirlo. El navegador la pide con la cookie de sesión. */
+function documentoUrl(kind: DocKind, alegraId: string) {
+  return `/api/portal/documentos/${kind}/${alegraId}`
+}
+
+/** Descarga varios, de a uno: el navegador bloquea una ráfaga de descargas simultáneas. */
+async function descargarVarios(kind: DocKind, docs: DocumentoRef[]) {
+  for (const doc of docs) {
+    await descargarDocumento(kind, doc)
+  }
+}
 
 function Tooltip({ text, white = false }: { text: string; white?: boolean }) {
   return (
@@ -96,6 +150,10 @@ interface Props {
   initialQuery?: string
   openFacturaId?: string
   shopUrl?: string
+  /** Secciones que Alegra no pudo devolver en esta carga. Se avisan en vez de mostrarlas vacías. */
+  seccionesCaidas?: readonly Tab[]
+  /** Cuántas facturas tiene el contacto en total. `facturas` es solo la primera página. */
+  facturasTotal?: number
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -108,7 +166,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl }: Props) {
+export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl, seccionesCaidas = [] }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -250,9 +308,22 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
           />
 
           <div className="p-4">
+            {/* Una sección caída y una vacía se ven igual: sin este aviso, el cliente lee
+                "No hay pagos para mostrar" y cree que el portal le perdió los pagos. */}
+            {seccionesCaidas.includes(activeTab) && (
+              <div
+                className="mb-3 flex items-center gap-2 p-3 rounded-[var(--radius)] text-sm"
+                style={{ background: "#fef3c7", border: "1px solid #fcd34d", color: "#92400e" }}
+                role="status"
+              >
+                <Info size={16} strokeWidth={1.6} color="currentColor" />
+                <span>No pudimos cargar esta sección en este momento. Actualizá la página en unos minutos.</span>
+              </div>
+            )}
             {activeTab === "facturas" && (
               <FacturasTable
                 facturas={facturas}
+                total={facturasTotal}
                 razonsocial={razonsocial}
                 cuentaCorriente={cliente.numerocuentacorriente}
                 tenantName={tenantName}
@@ -350,12 +421,16 @@ const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
   pendiente: "Pendiente",
   vencida: "Vencida",
   pagada: "Pagada",
+  anulada: "Anulada",
 }
 
-const FACTURA_TONE: Record<FacturaEstado, "warning" | "danger" | "success"> = {
+const FACTURA_TONE: Record<FacturaEstado, "warning" | "danger" | "success" | "neutral"> = {
   pendiente: "warning",
   vencida: "danger",
   pagada: "success",
+  // Neutral y no "danger": una anulada no es un problema del cliente, es un documento
+  // sin efecto. En rojo se confundiría con una vencida.
+  anulada: "neutral",
 }
 
 function FacturaBadge({ estado }: { estado: FacturaEstado }) {
@@ -366,8 +441,12 @@ function initialToSet(f: FacturaEstado | "todos"): Set<FacturaEstado> {
   return f === "todos" ? new Set() : new Set([f])
 }
 
+/** A partir de acá vale la pena decir cuántas se están mostrando; con menos, es ruido. */
+const FACTURAS_VISIBLES_SIN_PAGINAR = 30
+
 function FacturasTable({
-  facturas,
+  facturas: primeraPagina,
+  total,
   razonsocial,
   cuentaCorriente,
   tenantName,
@@ -380,6 +459,7 @@ function FacturasTable({
   openFacturaId,
 }: {
   facturas: Factura[]
+  total: number
   razonsocial: string
   cuentaCorriente: number
   tenantName: string
@@ -391,6 +471,50 @@ function FacturasTable({
   onSearchChange?: (v: string) => void
   openFacturaId?: string
 }) {
+  // Las páginas siguientes se acumulan acá. `primeraPagina` viene del server y cambia si
+  // el server component se vuelve a renderizar: en ese caso se descarta lo acumulado, que
+  // podría estar desactualizado.
+  const [extra, setExtra] = useState<Factura[]>([])
+  const [prevPrimera, setPrevPrimera] = useState(primeraPagina)
+  if (prevPrimera !== primeraPagina) {
+    setPrevPrimera(primeraPagina)
+    setExtra([])
+  }
+  const [cargando, setCargando] = useState(false)
+  const [errorCarga, setErrorCarga] = useState("")
+  // Resultado de una consulta filtrada al server. `null` = sin filtros, se usa lo que vino
+  // del server component.
+  const [filtrado, setFiltrado] = useState<{ facturas: Factura[]; total: number } | null>(null)
+
+  const facturas = useMemo(
+    () => (filtrado ? filtrado.facturas : [...primeraPagina, ...extra]),
+    [filtrado, primeraPagina, extra],
+  )
+  const totalActual = filtrado ? filtrado.total : total
+  const hayMas = facturas.length < totalActual
+
+  async function pedirPagina(start: number, params: URLSearchParams): Promise<{ facturas: Factura[]; total: number }> {
+    params.set("start", String(start))
+    const res = await fetch(`/api/portal/facturas?${params}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "No pudimos cargar las facturas")
+    return data as { facturas: Factura[]; total: number }
+  }
+
+  async function cargarMas() {
+    setCargando(true)
+    setErrorCarga("")
+    try {
+      const page = await pedirPagina(facturas.length, queryFiltros())
+      if (filtrado) setFiltrado({ facturas: [...filtrado.facturas, ...page.facturas], total: page.total })
+      else setExtra((prev) => [...prev, ...page.facturas])
+    } catch (err) {
+      setErrorCarga(err instanceof Error ? err.message : "No pudimos cargar más facturas")
+    } finally {
+      setCargando(false)
+    }
+  }
+
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState(initialSearch)
   const [searchOpen, setSearchOpen] = useState(!!initialSearch)
@@ -412,6 +536,7 @@ function FacturasTable({
     setSearchOpen(!!initialSearch)
   }
   const [modalFactura, setModalFactura] = useState<Factura | null>(null)
+  const [pdfFactura, setPdfFactura] = useState<Factura | null>(null)
   const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -429,27 +554,97 @@ function FacturasTable({
       const next = new Set(prev)
       if (next.has(estado)) next.delete(estado)
       else next.add(estado)
+      void refiltrar(queryFiltros(next))
       return next
     })
   }
 
+  /**
+   * Traduce los filtros de la UI a lo que Alegra sabe resolver.
+   *
+   * Solo un `status` por consulta, así que la traducción aplica cuando la selección cae
+   * entera dentro de uno: {pendiente, vencida} → open, {pagada} → closed, {anulada} → void.
+   * Una selección mezclada (p. ej. vencida + pagada) no se puede expresar y se resuelve
+   * con las filas cargadas.
+   *
+   * Las fechas solo van al server cuando se filtra por EMISIÓN: el vencimiento Alegra no
+   * lo filtra (probado, ignora dueDate_afterOrNow).
+   */
+  function queryFiltros(
+    estadosSet: Set<FacturaEstado> = filterEstados,
+    campo: "emision" | "vencimiento" = dateFilterField,
+    desde: string = fromDate,
+    hasta: string = toDate,
+  ): URLSearchParams {
+    const params = new URLSearchParams()
+    const estados = Array.from(estadosSet)
+    const abiertos = estados.every((e) => e === "pendiente" || e === "vencida")
+    if (estados.length > 0) {
+      if (abiertos) params.set("estado", "pendiente")
+      else if (estados.length === 1) params.set("estado", estados[0])
+    }
+    if (campo === "emision") {
+      if (desde) params.set("desde", desde)
+      if (hasta) params.set("hasta", hasta)
+    }
+    return params
+  }
+
+  /** ¿Quedan filtros que el server NO resolvió y hay que aplicar acá? */
+  const filtroSoloLocal =
+    Boolean(search) ||
+    (dateFilterField === "vencimiento" && Boolean(fromDate || toDate)) ||
+    (filterEstados.size > 1 && !Array.from(filterEstados).every((e) => e === "pendiente" || e === "vencida"))
+
+  // Cada cambio de estado o fecha vuelve a consultar desde la página 0. Antes esto filtraba
+  // las 30 filas cargadas y "Pagadas" no encontraba nada si las pagadas eran viejas.
+  //
+  // Se dispara desde los handlers y no desde un useEffect a propósito: el refetch es la
+  // consecuencia de que alguien tocó un filtro, no de que el componente se haya renderizado.
+  // Un efecto acá además setea estado en forma sincrónica y encadena renders.
+  const consultaRef = useRef(0)
+  async function refiltrar(params: URLSearchParams) {
+    if ([...params.keys()].length === 0) {
+      setFiltrado(null) // sin filtros server-side: vuelve a lo que trajo el server component
+      return
+    }
+    // Descarta respuestas viejas: tocar tres chips rápido puede resolverse desordenado.
+    const consulta = ++consultaRef.current
+    setCargando(true)
+    setErrorCarga("")
+    try {
+      const page = await pedirPagina(0, params)
+      if (consultaRef.current === consulta) setFiltrado(page)
+    } catch (err) {
+      if (consultaRef.current === consulta) {
+        setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar")
+      }
+    } finally {
+      if (consultaRef.current === consulta) setCargando(false)
+    }
+  }
+
+  // Lo que el server ya filtró no se vuelve a filtrar acá: se aplica solo lo que no sabe
+  // resolver (la búsqueda por número, el vencimiento y las selecciones mezcladas).
   const filtered = useMemo(() => {
+    const porServer = filtrado !== null
     const desde = fromDate ? isoToLocal(fromDate) : null
     const hasta = toDate ? isoToLocal(toDate) : null
     return facturas.filter((f) => {
       const matchSearch = !search || f.id.toLowerCase().includes(search.toLowerCase()) || f.tipo.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(f.estado)
+      const aplicaFechaLocal = !porServer || dateFilterField === "vencimiento"
       const fecha = parseLocalDate(dateFilterField === "emision" ? f.emision : f.vencimiento)
-      const matchFrom = !desde || !fecha || fecha >= desde
-      const matchTo = !hasta || !fecha || fecha <= hasta
+      const matchFrom = !aplicaFechaLocal || !desde || !fecha || fecha >= desde
+      const matchTo = !aplicaFechaLocal || !hasta || !fecha || fecha <= hasta
       return matchSearch && matchEstado && matchFrom && matchTo
     })
-  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField])
+  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField, filtrado])
 
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
 
-  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2 }
+  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2, anulada: 3 }
 
   const facturaColumns: TableColumn<Factura>[] = [
     {
@@ -532,10 +727,18 @@ function FacturasTable({
       headerClassName: "text-xs",
       render: (f) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalFactura(f)} label="Ver">
+          <ActionBtn
+            onClick={() => setPdfFactura(f)}
+            label={f.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!f.alegraId}
+          >
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => descargarDocumento("factura", f)}
+            label={f.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!f.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -557,18 +760,19 @@ function FacturasTable({
         setSearch={setSearch}
         fromDate={fromDate}
         toDate={toDate}
-        onFromDateChange={setFromDate}
-        onToDateChange={setToDate}
+        onFromDateChange={(v) => { setFromDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, v, toDate)) }}
+        onToDateChange={(v) => { setToDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, fromDate, v)) }}
         dateFilterField={dateFilterField}
-        onDateFilterFieldChange={setDateFilterField}
+        onDateFilterFieldChange={(v) => { setDateFilterField(v); void refiltrar(queryFiltros(filterEstados, v, fromDate, toDate)) }}
         multiFilterOptions={[
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
           { value: "pagada", label: "Pagadas" },
+          { value: "anulada", label: "Anuladas" },
         ]}
         activeFilters={filterEstados}
         onToggleFilter={(v) => toggleEstado(v as FacturaEstado)}
-        onClearFilters={() => setFilterEstados(new Set())}
+        onClearFilters={() => { setFilterEstados(new Set()); void refiltrar(queryFiltros(new Set(), dateFilterField, fromDate, toDate)) }}
       />
 
       {(
@@ -576,7 +780,7 @@ function FacturasTable({
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga de facturas: próximamente")}
+          onDownload={() => descargarVarios("factura", selectedFacturas)}
           onWhatsapp={() => openWhatsAppModal("pagar")}
           itemLabel="factura"
         />
@@ -593,6 +797,45 @@ function FacturasTable({
         defaultSort={{ key: "emision", dir: "desc" }}
         empty="No hay facturas para mostrar"
       />
+
+      {total > 0 && (
+        <div className="flex flex-col items-center gap-2 pt-4">
+          {/* Alegra no filtra por fecha ni busca por número (probado), así que los filtros y
+              la lupa trabajan sobre lo ya cargado. Decirlo evita que el cliente concluya que
+              una factura vieja no existe cuando en realidad no se bajó todavía. */}
+          {hayMas && filtroSoloLocal && (
+            <p className="text-xs text-center" style={{ color: "var(--ink-soft)" }}>
+              La búsqueda por número mira las {facturas.length} facturas cargadas — Alegra no
+              sabe buscar por número. Si no aparece la que buscás, cargá más resultados.
+            </p>
+          )}
+
+          {errorCarga && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>{errorCarga}</p>
+          )}
+
+          {hayMas ? (
+            <>
+              <Button variant="ghost" onClick={cargarMas} disabled={cargando}>
+                {cargando ? "Cargando…" : "Cargar más"}
+              </Button>
+              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                Mostrando {facturas.length} de {total}
+              </p>
+            </>
+          ) : (
+            facturas.length > FACTURAS_VISIBLES_SIN_PAGINAR && (
+              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                Mostrando las {facturas.length} facturas
+              </p>
+            )
+          )}
+        </div>
+      )}
+
+      {pdfFactura?.alegraId && (
+        <PdfModal kind="factura" doc={pdfFactura} titulo={`Factura ${pdfFactura.id}`} onClose={() => setPdfFactura(null)} />
+      )}
 
       {modalFactura && (
         <FacturaModal
@@ -632,6 +875,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     setSearchOpen(!!initialSearch)
   }
   const [modalPago, setModalPago] = useState<Pago | null>(null)
+  const [pdfPago, setPdfPago] = useState<Pago | null>(null)
   const [showAdjuntar, setShowAdjuntar] = useState(false)
   const [wspModal, setWspModal] = useState(false)
   const [fromDate, setFromDate] = useState("")
@@ -721,10 +965,18 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalPago(p)} label="Ver">
+          <ActionBtn
+            onClick={() => setPdfPago(p)}
+            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => descargarDocumento("pago", p)}
+            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -769,7 +1021,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga de recibos: próximamente")}
+          onDownload={() => descargarVarios("pago", selectedPagos)}
           onWhatsapp={() => setWspModal(true)}
           itemLabel="recibo"
         />
@@ -791,12 +1043,17 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
         columns={pagoColumns}
         rows={filtered}
         rowKey={(p) => p.id}
+        onRowClick={(p) => setModalPago(p)}
         selectable
         selectedKeys={Array.from(selected)}
         onSelectionChange={(keys) => setSelected(new Set(keys))}
         defaultSort={{ key: "fecha", dir: "desc" }}
         empty="No hay pagos para mostrar"
       />
+
+      {pdfPago?.alegraId && (
+        <PdfModal kind="pago" doc={pdfPago} titulo={`Recibo ${pdfPago.id}`} onClose={() => setPdfPago(null)} />
+      )}
 
       {modalPago && (
         <PagoModal pago={modalPago} facturas={facturas} onClose={() => setModalPago(null)} />
@@ -838,6 +1095,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
   }
   const [filterEstados, setFilterEstados] = useState<Set<PresupuestoEstado>>(new Set())
   const [modalPresupuesto, setModalPresupuesto] = useState<Presupuesto | null>(null)
+  const [pdfPresupuesto, setPdfPresupuesto] = useState<Presupuesto | null>(null)
   const [wspModal, setWspModal] = useState<WhatsAppPresupuestoIntent | null>(null)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
@@ -923,10 +1181,18 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalPresupuesto(p)} label="Ver">
+          <ActionBtn
+            onClick={() => setPdfPresupuesto(p)}
+            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn onClick={() => alert("Descarga: próximamente")} label="Descargar">
+          <ActionBtn
+            onClick={() => descargarDocumento("presupuesto", p)}
+            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
+            disabled={!p.alegraId}
+          >
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -963,7 +1229,7 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
           count={selected.size}
           total={selectedTotal}
           onClear={() => setSelected(new Set())}
-          onDownload={() => alert("Descarga: próximamente")}
+          onDownload={() => descargarVarios("presupuesto", selectedPresupuestos)}
           onWhatsapp={() => setWspModal("avanzar")}
           itemLabel="presupuesto"
         />
@@ -992,6 +1258,10 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
         defaultSort={{ key: "fecha", dir: "desc" }}
         empty="No hay presupuestos para mostrar"
       />
+
+      {pdfPresupuesto?.alegraId && (
+        <PdfModal kind="presupuesto" doc={pdfPresupuesto} titulo={`Presupuesto ${pdfPresupuesto.id}`} onClose={() => setPdfPresupuesto(null)} />
+      )}
 
       {modalPresupuesto && (
         <PresupuestoModal presupuesto={modalPresupuesto} tenantName={tenantName} whatsappNumber={whatsappNumber} onClose={() => setModalPresupuesto(null)} />
@@ -1812,7 +2082,8 @@ function FacturaModal({
         {/* Acciones */}
         <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("factura", factura)}
+            disabled={!factura.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
@@ -1828,6 +2099,41 @@ function FacturaModal({
 }
 
 // ── Pago Modal ────────────────────────────────────────────────────────────────
+
+
+/**
+ * Visor del PDF dentro de la página.
+ *
+ * `<iframe>` y no fetch + blob: el endpoint ya sirve el PDF inline y el navegador lo
+ * renderiza con su propio visor, que trae zoom, búsqueda e impresión gratis.
+ *
+ * El botón de abrir en pestaña no es decorativo: el visor embebido de Safari en iPhone
+ * muestra solo la primera página, así que ahí hace falta la salida.
+ */
+function PdfModal({ kind, doc, titulo, onClose }: { kind: DocKind; doc: DocumentoRef; titulo: string; onClose: () => void }) {
+  const url = documentoUrl(kind, doc.alegraId!)
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }} title={titulo} size="lg" className="max-w-4xl">
+      <div className="flex flex-col gap-3">
+        <iframe
+          src={url}
+          title={titulo}
+          className="w-full rounded-[var(--radius)]"
+          style={{ height: "min(70vh, 780px)", border: "1px solid var(--border)", background: "var(--bg)" }}
+        />
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" onClick={() => window.open(url, "_blank", "noopener")}>
+            Abrir en pestaña nueva
+          </Button>
+          <Button onClick={() => descargarDocumento(kind, doc)}>
+            <DownloadIcon />
+            Descargar PDF
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
 
 function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[]; onClose: () => void }) {
   return (
@@ -1868,7 +2174,8 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
 
         <div className="flex justify-end">
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("pago", pago)}
+            disabled={!pago.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ background: "var(--blue)", color: "white" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue-hover)" }}
@@ -1944,7 +2251,8 @@ function PresupuestoModal({ presupuesto, tenantName, whatsappNumber, onClose }: 
 
         <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
           <button
-            onClick={() => alert("Descarga: próximamente")}
+            onClick={() => descargarDocumento("presupuesto", presupuesto)}
+            disabled={!presupuesto.alegraId}
             className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
             style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
@@ -2124,27 +2432,28 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-function ActionBtn({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+function ActionBtn({ onClick, label, children, disabled = false }: { onClick: () => void; label: string; children: React.ReactNode; disabled?: boolean }) {
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="h-7 w-7 rounded-[6px] border border-border text-muted hover:bg-bg hover:text-text"
+      className="h-7 w-7 rounded-[6px] border border-border text-muted hover:bg-bg hover:text-text disabled:opacity-40 disabled:cursor-not-allowed"
     >
       {children}
     </Button>
   )
 }
 
-function EyeIcon() {
-  return <Eye size={14} strokeWidth={1.3} color="currentColor" />
-}
-
 function DownloadIcon() {
   return <Download size={14} strokeWidth={1.4} color="currentColor" />
+}
+
+function EyeIcon() {
+  return <Eye size={14} strokeWidth={1.3} color="currentColor" />
 }
 
 // ── WhatsApp Pagos Modal ──────────────────────────────────────────────────────
