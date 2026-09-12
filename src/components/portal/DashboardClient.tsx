@@ -404,12 +404,16 @@ const FACTURA_ESTADO_LABELS: Record<FacturaEstado, string> = {
   pendiente: "Pendiente",
   vencida: "Vencida",
   pagada: "Pagada",
+  anulada: "Anulada",
 }
 
-const FACTURA_TONE: Record<FacturaEstado, "warning" | "danger" | "success"> = {
+const FACTURA_TONE: Record<FacturaEstado, "warning" | "danger" | "success" | "neutral"> = {
   pendiente: "warning",
   vencida: "danger",
   pagada: "success",
+  // Neutral y no "danger": una anulada no es un problema del cliente, es un documento
+  // sin efecto. En rojo se confundiría con una vencida.
+  anulada: "neutral",
 }
 
 function FacturaBadge({ estado }: { estado: FacturaEstado }) {
@@ -504,7 +508,7 @@ function FacturasTable({
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
 
-  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2 }
+  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2, anulada: 3 }
 
   const facturaColumns: TableColumn<Factura>[] = [
     {
@@ -628,6 +632,7 @@ function FacturasTable({
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
           { value: "pagada", label: "Pagadas" },
+          { value: "anulada", label: "Anuladas" },
         ]}
         activeFilters={filterEstados}
         onToggleFilter={(v) => toggleEstado(v as FacturaEstado)}

@@ -12,7 +12,7 @@ export interface Cliente {
   saldoavencer: number
 }
 
-export type FacturaEstado = "pendiente" | "vencida" | "pagada"
+export type FacturaEstado = "pendiente" | "vencida" | "pagada" | "anulada"
 
 export interface Factura {
   id: string

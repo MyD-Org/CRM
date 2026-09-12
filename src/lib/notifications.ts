@@ -144,7 +144,9 @@ export async function runNotifications(filter?: {
       const pendientes: PendingNotification[] = []
 
       for (const factura of facturas) {
-        if (factura.estado === "pagada") continue
+        // Una anulada no se reclama: mandarle un recordatorio de pago al cliente por una
+        // factura que la empresa dio de baja es peor que no mandar nada.
+        if (factura.estado === "pagada" || factura.estado === "anulada") continue
         const diff = diasDesdeVencimiento(factura, hoy)
 
         let type: string | null = null

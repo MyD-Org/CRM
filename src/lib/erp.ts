@@ -33,6 +33,9 @@ function today(): Date {
 }
 
 function facturaEstado(inv: AlegraInvoice, hoy: Date): FacturaEstado {
+  // Primero que nada: una anulada no es ni pagada ni adeudada, aunque Alegra le deje
+  // saldo. Si se evaluara después, una anulada con balance 0 se mostraría como "pagada".
+  if (inv.status === "void") return "anulada"
   if (inv.status === "closed" || inv.balance <= 0) return "pagada"
   if (inv.dueDate && new Date(`${inv.dueDate}T00:00:00`) < hoy) return "vencida"
   return "pendiente"
@@ -133,7 +136,10 @@ export async function getFacturas(config: TenantConfig, codigocliente: string): 
   if (config.alegraMock) return mockFacturas
   const hoy = today()
   const invoices = await listInvoicesByContact(config, codigocliente)
-  return invoices.filter((i) => i.status !== "draft" && i.status !== "void").map((i) => mapInvoice(i, hoy))
+  // Las anuladas SÍ se muestran, marcadas como tales: si el cliente vio la factura en su
+  // cuenta y después desaparece sin rastro, parece un error del portal. Los borradores no:
+  // no son documentos emitidos y el cliente no tiene por qué enterarse de que existen.
+  return invoices.filter((i) => i.status !== "draft").map((i) => mapInvoice(i, hoy))
 }
 
 export async function getPagos(config: TenantConfig, codigocliente: string): Promise<Pago[]> {
