@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import Link from "next/link"
 import {
   Table,
@@ -554,6 +554,7 @@ function FacturasTable({
       const next = new Set(prev)
       if (next.has(estado)) next.delete(estado)
       else next.add(estado)
+      void refiltrar(queryFiltros(next))
       return next
     })
   }
@@ -569,17 +570,22 @@ function FacturasTable({
    * Las fechas solo van al server cuando se filtra por EMISIÓN: el vencimiento Alegra no
    * lo filtra (probado, ignora dueDate_afterOrNow).
    */
-  function queryFiltros(): URLSearchParams {
+  function queryFiltros(
+    estadosSet: Set<FacturaEstado> = filterEstados,
+    campo: "emision" | "vencimiento" = dateFilterField,
+    desde: string = fromDate,
+    hasta: string = toDate,
+  ): URLSearchParams {
     const params = new URLSearchParams()
-    const estados = Array.from(filterEstados)
+    const estados = Array.from(estadosSet)
     const abiertos = estados.every((e) => e === "pendiente" || e === "vencida")
     if (estados.length > 0) {
       if (abiertos) params.set("estado", "pendiente")
       else if (estados.length === 1) params.set("estado", estados[0])
     }
-    if (dateFilterField === "emision") {
-      if (fromDate) params.set("desde", fromDate)
-      if (toDate) params.set("hasta", toDate)
+    if (campo === "emision") {
+      if (desde) params.set("desde", desde)
+      if (hasta) params.set("hasta", hasta)
     }
     return params
   }
@@ -592,25 +598,31 @@ function FacturasTable({
 
   // Cada cambio de estado o fecha vuelve a consultar desde la página 0. Antes esto filtraba
   // las 30 filas cargadas y "Pagadas" no encontraba nada si las pagadas eran viejas.
-  const claveFiltros = `${Array.from(filterEstados).sort().join(",")}|${dateFilterField}|${fromDate}|${toDate}`
-  const [prevClave, setPrevClave] = useState(claveFiltros)
-  useEffect(() => {
-    if (prevClave === claveFiltros) return
-    setPrevClave(claveFiltros)
-    const params = queryFiltros()
+  //
+  // Se dispara desde los handlers y no desde un useEffect a propósito: el refetch es la
+  // consecuencia de que alguien tocó un filtro, no de que el componente se haya renderizado.
+  // Un efecto acá además setea estado en forma sincrónica y encadena renders.
+  const consultaRef = useRef(0)
+  async function refiltrar(params: URLSearchParams) {
     if ([...params.keys()].length === 0) {
       setFiltrado(null) // sin filtros server-side: vuelve a lo que trajo el server component
       return
     }
-    let cancelado = false
+    // Descarta respuestas viejas: tocar tres chips rápido puede resolverse desordenado.
+    const consulta = ++consultaRef.current
     setCargando(true)
     setErrorCarga("")
-    pedirPagina(0, params)
-      .then((page) => { if (!cancelado) setFiltrado(page) })
-      .catch((err) => { if (!cancelado) setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar") })
-      .finally(() => { if (!cancelado) setCargando(false) })
-    return () => { cancelado = true }
-  }, [claveFiltros, prevClave])
+    try {
+      const page = await pedirPagina(0, params)
+      if (consultaRef.current === consulta) setFiltrado(page)
+    } catch (err) {
+      if (consultaRef.current === consulta) {
+        setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar")
+      }
+    } finally {
+      if (consultaRef.current === consulta) setCargando(false)
+    }
+  }
 
   // Lo que el server ya filtró no se vuelve a filtrar acá: se aplica solo lo que no sabe
   // resolver (la búsqueda por número, el vencimiento y las selecciones mezcladas).
@@ -748,10 +760,10 @@ function FacturasTable({
         setSearch={setSearch}
         fromDate={fromDate}
         toDate={toDate}
-        onFromDateChange={setFromDate}
-        onToDateChange={setToDate}
+        onFromDateChange={(v) => { setFromDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, v, toDate)) }}
+        onToDateChange={(v) => { setToDate(v); void refiltrar(queryFiltros(filterEstados, dateFilterField, fromDate, v)) }}
         dateFilterField={dateFilterField}
-        onDateFilterFieldChange={setDateFilterField}
+        onDateFilterFieldChange={(v) => { setDateFilterField(v); void refiltrar(queryFiltros(filterEstados, v, fromDate, toDate)) }}
         multiFilterOptions={[
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
@@ -760,7 +772,7 @@ function FacturasTable({
         ]}
         activeFilters={filterEstados}
         onToggleFilter={(v) => toggleEstado(v as FacturaEstado)}
-        onClearFilters={() => setFilterEstados(new Set())}
+        onClearFilters={() => { setFilterEstados(new Set()); void refiltrar(queryFiltros(new Set(), dateFilterField, fromDate, toDate)) }}
       />
 
       {(
