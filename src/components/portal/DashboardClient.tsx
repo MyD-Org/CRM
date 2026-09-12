@@ -595,15 +595,12 @@ function FacturasTable({
       headerClassName: "text-xs",
       render: (f) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalFactura(f)} label="Ver">
-            <EyeIcon />
-          </ActionBtn>
           <ActionBtn
             onClick={() => verDocumento("factura", f)}
             label={f.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!f.alegraId}
           >
-            <FileIcon />
+            <EyeIcon />
           </ActionBtn>
           <ActionBtn
             onClick={() => descargarDocumento("factura", f)}
@@ -795,15 +792,12 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalPago(p)} label="Ver">
-            <EyeIcon />
-          </ActionBtn>
           <ActionBtn
             onClick={() => verDocumento("pago", p)}
             label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!p.alegraId}
           >
-            <FileIcon />
+            <EyeIcon />
           </ActionBtn>
           <ActionBtn
             onClick={() => descargarDocumento("pago", p)}
@@ -876,6 +870,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
         columns={pagoColumns}
         rows={filtered}
         rowKey={(p) => p.id}
+        onRowClick={(p) => setModalPago(p)}
         selectable
         selectedKeys={Array.from(selected)}
         onSelectionChange={(keys) => setSelected(new Set(keys))}
@@ -1008,15 +1003,12 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn onClick={() => setModalPresupuesto(p)} label="Ver">
-            <EyeIcon />
-          </ActionBtn>
           <ActionBtn
             onClick={() => verDocumento("presupuesto", p)}
             label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
             disabled={!p.alegraId}
           >
-            <FileIcon />
+            <EyeIcon />
           </ActionBtn>
           <ActionBtn
             onClick={() => descargarDocumento("presupuesto", p)}
@@ -2239,16 +2231,12 @@ function ActionBtn({ onClick, label, children, disabled = false }: { onClick: ()
   )
 }
 
-function EyeIcon() {
-  return <Eye size={14} strokeWidth={1.3} color="currentColor" />
-}
-
 function DownloadIcon() {
   return <Download size={14} strokeWidth={1.4} color="currentColor" />
 }
 
-function FileIcon() {
-  return <FileText size={14} strokeWidth={1.4} color="currentColor" />
+function EyeIcon() {
+  return <Eye size={14} strokeWidth={1.3} color="currentColor" />
 }
 
 // ── WhatsApp Pagos Modal ──────────────────────────────────────────────────────
