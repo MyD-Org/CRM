@@ -5,7 +5,7 @@ import { otpSessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { getClienteByIdentifier } from "@/lib/erp"
 import { sendEmail, maskEmail } from "@/lib/email"
-import type { TenantConfig } from "@/lib/tenants"
+import { buildOtpEmail } from "@/lib/otp-email"
 import type { OtpSessionData } from "@/types"
 
 // Código de acceso al portal del cliente. El identificador (CUIT o email) se resuelve
@@ -44,33 +44,6 @@ function takeSendSlot(key: string, now: number): boolean {
   b.count += 1
   sendAttempts.set(key, b)
   return true
-}
-
-// Formato pensado para que el celular ofrezca "Copiar código" desde la notificación,
-// sin abrir el mail. No hay estándar para email (el `@dominio #código` es solo de SMS):
-// iOS y Gmail lo detectan por heurística, así que el mail cumple lo que esa heurística
-// busca — el código en el asunto, la frase "código de verificación" pegada al número,
-// los 6 dígitos SIN separadores ni espaciado que los parta, y una parte en texto plano
-// (`text`), que es la que suelen parsear. Si se cambia la redacción, mantener la frase
-// "Tu código de verificación es NNNNNN" literal en ambas partes.
-function buildOtpEmail(tenant: TenantConfig, razonsocial: string, otp: string) {
-  return {
-    subject: `${otp} es tu código de verificación de ${tenant.name}`,
-    text:
-      `Tu código de verificación es ${otp}\n\n` +
-      `Hola ${razonsocial}: usá este código para entrar al portal de clientes de ${tenant.name}. ` +
-      `Vence en 10 minutos y sirve una sola vez.\n\n` +
-      `Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.`,
-    html: `
-  <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#111827">
-    <h2 style="font-size:18px">${tenant.name}</h2>
-    <p>Hola ${razonsocial},</p>
-    <p>Tu código de verificación es <strong>${otp}</strong>:</p>
-    <p style="font-size:32px;font-weight:700;margin:24px 0">${otp}</p>
-    <p style="color:#6b7280;font-size:14px">Vence en 10 minutos y sirve una sola vez.</p>
-    <p style="color:#6b7280;font-size:12px">Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.</p>
-  </div>`,
-  }
 }
 
 export async function POST(request: Request) {
