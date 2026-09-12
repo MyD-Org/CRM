@@ -165,8 +165,9 @@ interface NotifMeta {
   target?: NotifTarget // si existe, se muestra el botón para navegar
 }
 
-// URL del dashboard apuntando a un comprobante. Para facturas abre el detalle
-// directamente (?factura=ID); para el resto filtra la tab por comprobante.
+// URL del dashboard apuntando a un comprobante. Para facturas abre el PDF directamente
+// (?factura=ID); para el resto lleva a la pestaña. Ya no filtra por número (?q=): esa
+// búsqueda miraba solo la página cargada y se sacó.
 function dashboardHref(kind: EntityKind, id: string, alegraId?: string | null) {
   if (kind === "factura") {
     // Con el id de Alegra, el dashboard abre el PDF directo aunque la factura sea vieja y no
@@ -174,7 +175,7 @@ function dashboardHref(kind: EntityKind, id: string, alegraId?: string | null) {
     const alegra = alegraId ? `&alegra=${encodeURIComponent(alegraId)}` : ""
     return `/portal/dashboard?factura=${encodeURIComponent(id)}${alegra}`
   }
-  return `/portal/dashboard?tab=${kind}s&q=${encodeURIComponent(id)}`
+  return `/portal/dashboard?tab=${kind}s`
 }
 
 // Deriva mensaje + severidad + destino navegable del type.

@@ -3,7 +3,7 @@ import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
 import { sessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
-import { getCliente, getFacturasPage, getPagos, getPresupuestos } from "@/lib/erp"
+import { getCuenta, getFacturasPage, getPagosPage, getPresupuestosPage } from "@/lib/erp"
 import { DashboardClient } from "@/components/portal/DashboardClient"
 import { AiChat } from "@/components/portal/AiChat"
 import { aiChatEnabled, shopEnabled } from "@/lib/flags"
@@ -12,7 +12,7 @@ import type { SessionData } from "@/types"
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string; factura?: string; alegra?: string }>
+  searchParams: Promise<{ tab?: string; factura?: string; alegra?: string }>
 }) {
   const [tenant, cookieStore, sp] = await Promise.all([getTenantConfig(), cookies(), searchParams])
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions)
@@ -21,15 +21,17 @@ export default async function DashboardPage({
     redirect("/portal")
   }
 
-  // allSettled y no all: son cuatro llamadas a Alegra y con `all` una sola caída dejaba al
-  // cliente sin dashboard. Pasó de verdad — /payments devolvió 500 para un contacto y la
-  // página entera murió, con las facturas ya traídas. Ahora cada sección falla por su cuenta
-  // y la UI avisa cuál no cargó.
+  // Todo se pide paginado: bajar el historial entero rompía el dashboard. Un cliente con 387
+  // pagos eran ~13 páginas de 9 s cada una (cada pago trae sus facturas embebidas).
+  //
+  // allSettled y no all: con `all` una sola caída de Alegra dejaba al cliente sin dashboard.
+  // Cada sección falla por su cuenta y la UI avisa cuál no cargó.
   const [clienteRes, facturasRes, pagosRes, presupuestosRes] = await Promise.allSettled([
-    getCliente(tenant, session.codigocliente),
+    // La cuenta trae las facturas abiertas completas: saldo, contadores y chips Pendientes/Vencidas.
+    getCuenta(tenant, session.codigocliente),
     getFacturasPage(tenant, session.codigocliente),
-    getPagos(tenant, session.codigocliente),
-    getPresupuestos(tenant, session.codigocliente),
+    getPagosPage(tenant, session.codigocliente),
+    getPresupuestosPage(tenant, session.codigocliente),
   ])
 
   for (const [nombre, res] of [
@@ -45,12 +47,14 @@ export default async function DashboardPage({
   // mostrar. Ahí sí no hay dashboard posible y conviene el error.
   if (clienteRes.status === "rejected") throw clienteRes.reason
 
-  const cliente = clienteRes.value
+  const { cliente, abiertas } = clienteRes.value
   // Primera página nomás: el resto lo pide el cliente con "Cargar más".
   const facturas = facturasRes.status === "fulfilled" ? facturasRes.value.facturas : []
   const facturasTotal = facturasRes.status === "fulfilled" ? facturasRes.value.total : 0
-  const pagos = pagosRes.status === "fulfilled" ? pagosRes.value : []
-  const presupuestos = presupuestosRes.status === "fulfilled" ? presupuestosRes.value : []
+  const pagos = pagosRes.status === "fulfilled" ? pagosRes.value.pagos : []
+  const pagosTotal = pagosRes.status === "fulfilled" ? pagosRes.value.total : 0
+  const presupuestos = presupuestosRes.status === "fulfilled" ? presupuestosRes.value.presupuestos : []
+  const presupuestosTotal = presupuestosRes.status === "fulfilled" ? presupuestosRes.value.total : 0
   const seccionesCaidas = [
     facturasRes.status === "rejected" ? ("facturas" as const) : null,
     pagosRes.status === "rejected" ? ("pagos" as const) : null,
@@ -65,15 +69,17 @@ export default async function DashboardPage({
       cliente={cliente}
       facturas={facturas}
       facturasTotal={facturasTotal}
+      abiertas={abiertas}
       pagos={pagos}
+      pagosTotal={pagosTotal}
       presupuestos={presupuestos}
+      presupuestosTotal={presupuestosTotal}
       razonsocial={session.razonsocial ?? cliente.razonsocial}
       tenantName={tenant.name}
       whatsappNumber={tenant.whatsappNumber}
       logoSrc={tenant.logoPath}
       logoSubtitle={tenant.subtitle}
       initialTab={sp.factura ? "facturas" : sp.tab}
-      initialQuery={sp.q}
       openFacturaId={sp.factura}
       openFacturaAlegraId={sp.alegra}
       shopUrl={shopActive ? process.env.NEXT_PUBLIC_SHOP_URL : undefined}

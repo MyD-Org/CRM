@@ -4,7 +4,6 @@ export interface Cliente {
   cuit: string
   /** Email de contacto — destino de las notificaciones de cobranza */
   email?: string
-  numerocuentacorriente: number
   tipoCuenta: "corriente" | "contado"
   /** Límite de crédito de Alegra. `null` = no cargado: la UI no muestra barra de crédito,
    *  porque con 0 de límite toda deuda aparece como "crédito excedido". */

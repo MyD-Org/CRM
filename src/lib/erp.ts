@@ -9,7 +9,12 @@ import {
   listInvoicesPageByContact,
   type AlegraInvoiceFilters,
   listPaymentsByContact,
+  listPaymentsPageByContact,
   listEstimatesByContact,
+  listEstimatesPageByContact,
+  type AlegraEstimateFilters,
+  listOpenInvoicesByContact,
+  computeBalance,
   getContactBalance,
 } from "./alegra"
 import { mockCliente, mockCondiciones, mockFacturas, mockPagos, mockPresupuestos } from "./mock-data"
@@ -73,7 +78,11 @@ function mapPayment(p: AlegraPayment): Pago {
 
 function presupuestoEstado(e: AlegraEstimate, hoy: Date): PresupuestoEstado {
   const s = e.status.toLowerCase()
-  if (s.includes("accept") || s.includes("acept") || s.includes("invoic")) return "aceptado"
+  // Alegra marca los presupuestos como `billed` (ya facturado = aceptado) o `unbilled`
+  // (probado contra la cuenta real). Esto buscaba "accept"/"invoic", que Alegra nunca
+  // devuelve, así que el chip "Aceptados" no mostraba nada nunca. Se conservan esas variantes
+  // por si llegan de otra cuenta.
+  if (s === "billed" || s.includes("accept") || s.includes("acept") || s.includes("invoic")) return "aceptado"
   if (e.dueDate && new Date(`${e.dueDate}T00:00:00`) < hoy) return "vencido"
   return "vigente"
 }
@@ -95,7 +104,6 @@ function mapContactToCliente(c: AlegraContact, balance?: { total: number; overdu
     razonsocial: c.name,
     cuit: c.identification ?? "",
     email: c.email ?? undefined,
-    numerocuentacorriente: Number(c.alegraId) || 0,
     tipoCuenta: "corriente",
     // Alegra SÍ lo expone (`creditLimit` del contacto). El comentario que había acá decía
     // lo contrario y por eso se hardcodeaba en 0.
@@ -126,6 +134,37 @@ export async function getClienteByIdentifier(config: TenantConfig, identifier: s
   if (!contact) return null
   const balance = await getContactBalance(config, contact.alegraId)
   return mapContactToCliente(contact, balance)
+}
+
+export interface Cuenta {
+  cliente: Cliente
+  /** Facturas impagas (pendientes y vencidas), COMPLETAS. De acá salen los contadores y los
+   *  chips Pendientes/Vencidas, que no se pueden calcular sobre una página. */
+  abiertas: Factura[]
+}
+
+/**
+ * Cliente con su saldo y sus facturas abiertas, en un solo pedido de abiertas: el saldo y los
+ * contadores salen del mismo set, así que no se puede dar que la tarjeta diga una deuda y la
+ * lista de vencidas no la explique.
+ */
+export async function getCuenta(config: TenantConfig, codigocliente: string): Promise<Cuenta> {
+  if (config.alegraMock) {
+    return { cliente: mockCliente, abiertas: mockFacturas.filter((f) => f.estado === "pendiente" || f.estado === "vencida") }
+  }
+  const hoy = today()
+  const [contact, abiertas] = await Promise.all([
+    getContact(config, codigocliente),
+    listOpenInvoicesByContact(config, codigocliente),
+  ])
+  if (!contact) throw new Error(`Contacto ${codigocliente} no encontrado en Alegra`)
+  return {
+    cliente: mapContactToCliente(contact, computeBalance(abiertas)),
+    // `open` con saldo 0 se mapea como "pagada": no es deuda y no va a estos chips.
+    abiertas: abiertas
+      .map((i) => mapInvoice(i, hoy))
+      .filter((f) => f.estado === "pendiente" || f.estado === "vencida"),
+  }
 }
 
 /** Todos los clientes del tenant — usado por el gestor de cobranza. */
@@ -190,6 +229,37 @@ export async function getPresupuestos(config: TenantConfig, codigocliente: strin
   const hoy = today()
   const estimates = await listEstimatesByContact(config, codigocliente)
   return estimates.map((e) => mapEstimate(e, hoy))
+}
+
+/** Pagos por página. 10 y no 30: cada pago trae embebidas sus facturas y 30 tardan ~9 s. */
+export const PAGOS_PAGE_SIZE = 10
+/** Presupuestos por página: el máximo de Alegra, son livianos. */
+export const PRESUPUESTOS_PAGE_SIZE = 30
+
+export async function getPagosPage(
+  config: TenantConfig,
+  codigocliente: string,
+  start = 0,
+  limit = PAGOS_PAGE_SIZE,
+): Promise<{ pagos: Pago[]; total: number }> {
+  if (config.alegraMock) return { pagos: mockPagos.slice(start, start + limit), total: mockPagos.length }
+  const { items, total } = await listPaymentsPageByContact(config, codigocliente, { start, limit })
+  return { pagos: items.map(mapPayment), total }
+}
+
+export async function getPresupuestosPage(
+  config: TenantConfig,
+  codigocliente: string,
+  start = 0,
+  limit = PRESUPUESTOS_PAGE_SIZE,
+  filters: AlegraEstimateFilters = {},
+): Promise<{ presupuestos: Presupuesto[]; total: number }> {
+  if (config.alegraMock) {
+    return { presupuestos: mockPresupuestos.slice(start, start + limit), total: mockPresupuestos.length }
+  }
+  const hoy = today()
+  const { items, total } = await listEstimatesPageByContact(config, codigocliente, { start, limit, filters })
+  return { presupuestos: items.map((e) => mapEstimate(e, hoy)), total }
 }
 
 // Condiciones comerciales: lo que Alegra ya tiene en la ficha del contacto (plazo, lista de

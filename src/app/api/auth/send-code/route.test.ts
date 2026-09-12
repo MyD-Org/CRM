@@ -50,7 +50,6 @@ const baseCliente: Cliente = {
   razonsocial: "ACME SRL",
   cuit: "20-12345678-9",
   email: "compras@acme.com",
-  numerocuentacorriente: 42,
   tipoCuenta: "corriente",
   limitecredito: 0,
   deudatotal: 0,

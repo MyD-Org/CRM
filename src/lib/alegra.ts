@@ -689,21 +689,26 @@ export async function listPaymentsByContact(config: TenantConfig, contactAlegraI
 }
 
 /**
- * Saldo de cuenta corriente derivado de las facturas abiertas (vencido vs. a vencer).
+ * Todas las facturas ABIERTAS (impagas) del contacto.
  *
- * Pide SOLO las abiertas (`status=open`) en vez de escanear el historial entero. Alegra no
- * tiene endpoint de saldo —probados /statement, /balance, /account-statement (404) y
- * fields=balance (null)—, pero este filtro sí funciona y deja el mismo número: para un
- * cliente con 1282 facturas son 10 filas y una request en lugar de 43 páginas, verificado
- * contra el total que mostraba el cálculo viejo.
+ * Es un set chico (para un cliente con 1282 facturas son 10) y se trae entero: de acá salen el
+ * saldo, los contadores de vencidas/pendientes y los chips Pendientes/Vencidas. Alegra filtra
+ * por `status=open` pero no por vencimiento, así que el corte vencida/pendiente se hace sobre
+ * este set completo, no sobre una página.
+ *
+ * Límite conocido: no está paginado. Un cliente con cientos de facturas impagas haría varios
+ * pedidos. No hay alternativa: Alegra no tiene endpoint de saldo (probados /statement,
+ * /balance, /account-statement → 404, fields=balance → null).
  */
-export async function getContactBalance(config: TenantConfig, contactAlegraId: string): Promise<AlegraContactBalance> {
-  const invoices = config.alegraMock
-    ? await listInvoicesByContact(config, contactAlegraId)
-    : await fetchAllPages(config, "/invoices", mapRawInvoice, {
-        client_id: contactAlegraId,
-        status: "open",
-      })
+export async function listOpenInvoicesByContact(config: TenantConfig, contactAlegraId: string): Promise<AlegraInvoice[]> {
+  if (config.alegraMock) {
+    return (await listInvoicesByContact(config, contactAlegraId)).filter((i) => i.status === "open")
+  }
+  return fetchAllPages(config, "/invoices", mapRawInvoice, { client_id: contactAlegraId, status: "open" })
+}
+
+/** Saldo de cuenta corriente a partir de las facturas abiertas: vencido vs. a vencer. */
+export function computeBalance(invoices: AlegraInvoice[]): AlegraContactBalance {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   let total = 0
@@ -715,6 +720,10 @@ export async function getContactBalance(config: TenantConfig, contactAlegraId: s
     if (due && due < today) overdue += inv.balance
   }
   return { total, overdue, toFallDue: total - overdue }
+}
+
+export async function getContactBalance(config: TenantConfig, contactAlegraId: string): Promise<AlegraContactBalance> {
+  return computeBalance(await listOpenInvoicesByContact(config, contactAlegraId))
 }
 
 // ── PDF de documentos (facturas, recibos de pago, cotizaciones) ──────────────
@@ -858,6 +867,49 @@ export interface AlegraInvoiceFilters {
   dateTo?: string
 }
 
+/**
+ * Una ventana [start, start+limit) de un listado de Alegra, con el total.
+ *
+ * `pageSize` es el tamaño de cada request. Alegra topea en 30, pero pedir más no falla:
+ * devuelve basura (con limit=100 vuelven 2 filas). Una ventana más grande se arma con varias
+ * requests en paralelo. Para pagos conviene bajarlo: cada pago trae embebidas sus facturas
+ * imputadas y 30 tardan ~9 s.
+ */
+async function fetchWindow<T>(
+  config: TenantConfig,
+  path: string,
+  map: (raw: Record<string, unknown>) => T,
+  params: Record<string, string>,
+  { start, limit, pageSize = PAGE_SIZE }: { start: number; limit: number; pageSize?: number },
+): Promise<{ items: T[]; total: number }> {
+  const size = Math.min(pageSize, PAGE_SIZE)
+  const chunks = Math.max(1, Math.ceil(limit / size))
+  const responses = await Promise.all(
+    Array.from({ length: chunks }, (_, i) =>
+      alegraFetch(config, path, {
+        ...params,
+        start: String(start + i * size),
+        limit: String(Math.min(size, limit - i * size)),
+        // Solo la primera pide el total: viene igual en todas.
+        ...(i === 0 ? { metadata: "true" } : {}),
+      }),
+    ),
+  )
+  let total = 0
+  const items: T[] = []
+  responses.forEach((res, i) => {
+    // Con metadata=true la respuesta es { metadata, data }; sin él, el array pelado.
+    const rows = Array.isArray(res)
+      ? res
+      : ((res as { data?: unknown }).data as Record<string, unknown>[] | undefined) ?? []
+    if (i === 0 && !Array.isArray(res)) {
+      total = Number((res as { metadata?: { total?: unknown } }).metadata?.total ?? 0)
+    }
+    for (const row of rows) items.push(map(row))
+  })
+  return { items, total }
+}
+
 export async function listInvoicesPageByContact(
   config: TenantConfig,
   contactAlegraId: string,
@@ -867,37 +919,70 @@ export async function listInvoicesPageByContact(
     const all = await listInvoicesByContact(config, contactAlegraId)
     return { items: all.slice(start, start + limit), total: all.length }
   }
+  return fetchWindow(config, "/invoices", mapRawInvoice, {
+    client_id: contactAlegraId,
+    order_field: "date",
+    order_direction: "DESC",
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.dateFrom ? { date_afterOrNow: filters.dateFrom } : {}),
+    ...(filters.dateTo ? { date_beforeOrNow: filters.dateTo } : {}),
+  }, { start, limit })
+}
 
+/**
+ * Pagos (recibos) del contacto, del más reciente al más viejo.
+ *
+ * Probado contra la cuenta real: hay total con metadata, pero `date_afterOrNow` y
+ * `date_beforeOrNow` se IGNORAN en pagos (a diferencia de facturas), así que no se ofrece
+ * filtro de fecha. Y son pesados: 30 pagos tardan ~9 s, 10 tardan ~3,7 s.
+ */
+export async function listPaymentsPageByContact(
+  config: TenantConfig,
+  contactAlegraId: string,
+  { start, limit }: { start: number; limit: number },
+): Promise<{ items: AlegraPayment[]; total: number }> {
+  if (config.alegraMock) {
+    const all = await listPaymentsByContact(config, contactAlegraId)
+    return { items: all.slice(start, start + limit), total: all.length }
+  }
+  return fetchWindow(config, "/payments", mapRawPayment, {
+    client_id: contactAlegraId,
+    type: "in",
+    order_field: "date",
+    order_direction: "DESC",
+  }, { start, limit, pageSize: limit })
+}
 
-  const chunks = Math.max(1, Math.ceil(limit / PAGE_SIZE))
-  const requests = Array.from({ length: chunks }, (_, i) =>
-    alegraFetch(config, "/invoices", {
-      client_id: contactAlegraId,
-      order_field: "date",
-      order_direction: "DESC",
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.dateFrom ? { date_afterOrNow: filters.dateFrom } : {}),
-      ...(filters.dateTo ? { date_beforeOrNow: filters.dateTo } : {}),
-      start: String(start + i * PAGE_SIZE),
-      limit: String(Math.min(PAGE_SIZE, limit - i * PAGE_SIZE)),
-      // Solo la primera pide el total: viene igual en todas y no hace falta repetirlo.
-      ...(i === 0 ? { metadata: "true" } : {}),
-    }),
-  )
+export interface AlegraEstimateFilters {
+  /** `billed` (facturado = aceptado) | `unbilled`. Probado: sí filtra (126 + 78 de 205). */
+  status?: "billed" | "unbilled"
+  /** Fecha de emisión desde/hasta, "YYYY-MM-DD". Probado: date_afterOrNow sí filtra. */
+  dateFrom?: string
+  dateTo?: string
+}
 
-  const responses = await Promise.all(requests)
-  let total = 0
-  const items: AlegraInvoice[] = []
-  responses.forEach((res, i) => {
-    // Con metadata=true la respuesta es { metadata, data }; sin él, el array pelado.
-    const rows = Array.isArray(res)
-      ? res
-      : ((res as { data?: unknown }).data as Record<string, unknown>[] | undefined) ?? []
-    if (i === 0 && !Array.isArray(res)) {
-      total = Number((res as { metadata?: { total?: unknown } }).metadata?.total ?? 0)
-    }
-    for (const row of rows) items.push(mapRawInvoice(row))
-  })
-
-  return { items, total }
+/**
+ * Presupuestos del contacto, del más reciente al más viejo.
+ *
+ * El orden explícito no es decorativo: sin `order_direction` Alegra devuelve del más VIEJO
+ * al más nuevo (probado: 2018 → 2022). Y antes esto pedía una sola página de 30 sin total,
+ * así que un cliente con 205 presupuestos veía 30 sin ningún aviso.
+ */
+export async function listEstimatesPageByContact(
+  config: TenantConfig,
+  contactAlegraId: string,
+  { start, limit, filters = {} }: { start: number; limit: number; filters?: AlegraEstimateFilters },
+): Promise<{ items: AlegraEstimate[]; total: number }> {
+  if (config.alegraMock) {
+    const all = await listEstimatesByContact(config, contactAlegraId)
+    return { items: all.slice(start, start + limit), total: all.length }
+  }
+  return fetchWindow(config, "/estimates", mapRawEstimate, {
+    client_id: contactAlegraId,
+    order_field: "date",
+    order_direction: "DESC",
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.dateFrom ? { date_afterOrNow: filters.dateFrom } : {}),
+    ...(filters.dateTo ? { date_beforeOrNow: filters.dateTo } : {}),
+  }, { start, limit })
 }
