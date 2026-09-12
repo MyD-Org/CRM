@@ -6,6 +6,8 @@ import {
   findContactByIdentifier,
   listAllContacts,
   listInvoicesByContact,
+  listInvoicesPageByContact,
+  type AlegraInvoiceFilters,
   listPaymentsByContact,
   listEstimatesByContact,
   getContactBalance,
@@ -130,6 +132,39 @@ export async function getClientes(config: TenantConfig): Promise<Cliente[]> {
   const contacts = await listAllContacts(config)
   // Sin saldo por contacto acá (sería N+1 de facturas): la cobranza recorre las facturas igual.
   return contacts.filter((c) => c.status === "active").map((c) => mapContactToCliente(c))
+}
+
+/** Tamaño de página de las facturas del portal. 30 es el máximo real de Alegra: pedir más
+ *  no falla, devuelve basura (con limit=100 vuelven 2 filas). */
+export const FACTURAS_PAGE_SIZE = 30
+
+export interface FacturasPage {
+  facturas: Factura[]
+  /** Total del contacto en Alegra: cuántas hay en total, para saber si quedan más. */
+  total: number
+}
+
+/**
+ * Una página de facturas, de la más reciente a la más vieja.
+ *
+ * El portal no baja el historial completo: para un cliente con 1282 facturas eran 43
+ * páginas y ~7 s de espera antes de ver nada.
+ */
+export async function getFacturasPage(
+  config: TenantConfig,
+  codigocliente: string,
+  start = 0,
+  limit = FACTURAS_PAGE_SIZE,
+  filters: AlegraInvoiceFilters = {},
+): Promise<FacturasPage> {
+  if (config.alegraMock) {
+    return { facturas: mockFacturas.slice(start, start + limit), total: mockFacturas.length }
+  }
+  const hoy = today()
+  const { items, total } = await listInvoicesPageByContact(config, codigocliente, { start, limit, filters })
+  // Los borradores se esconden (no son documentos emitidos), así que una página puede
+  // traer menos de `limit` filas sin que eso signifique que se terminaron.
+  return { facturas: items.filter((i) => i.status !== "draft").map((i) => mapInvoice(i, hoy)), total }
 }
 
 export async function getFacturas(config: TenantConfig, codigocliente: string): Promise<Factura[]> {

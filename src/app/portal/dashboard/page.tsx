@@ -3,7 +3,7 @@ import { getIronSession } from "iron-session"
 import { redirect } from "next/navigation"
 import { sessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
-import { getCliente, getFacturas, getPagos, getPresupuestos } from "@/lib/erp"
+import { getCliente, getFacturasPage, getPagos, getPresupuestos } from "@/lib/erp"
 import { DashboardClient } from "@/components/portal/DashboardClient"
 import { AiChat } from "@/components/portal/AiChat"
 import { aiChatEnabled, shopEnabled } from "@/lib/flags"
@@ -27,7 +27,7 @@ export default async function DashboardPage({
   // y la UI avisa cuál no cargó.
   const [clienteRes, facturasRes, pagosRes, presupuestosRes] = await Promise.allSettled([
     getCliente(tenant, session.codigocliente),
-    getFacturas(tenant, session.codigocliente),
+    getFacturasPage(tenant, session.codigocliente),
     getPagos(tenant, session.codigocliente),
     getPresupuestos(tenant, session.codigocliente),
   ])
@@ -46,7 +46,9 @@ export default async function DashboardPage({
   if (clienteRes.status === "rejected") throw clienteRes.reason
 
   const cliente = clienteRes.value
-  const facturas = facturasRes.status === "fulfilled" ? facturasRes.value : []
+  // Primera página nomás: el resto lo pide el cliente con "Cargar más".
+  const facturas = facturasRes.status === "fulfilled" ? facturasRes.value.facturas : []
+  const facturasTotal = facturasRes.status === "fulfilled" ? facturasRes.value.total : 0
   const pagos = pagosRes.status === "fulfilled" ? pagosRes.value : []
   const presupuestos = presupuestosRes.status === "fulfilled" ? presupuestosRes.value : []
   const seccionesCaidas = [
@@ -62,6 +64,7 @@ export default async function DashboardPage({
       <DashboardClient
       cliente={cliente}
       facturas={facturas}
+      facturasTotal={facturasTotal}
       pagos={pagos}
       presupuestos={presupuestos}
       razonsocial={session.razonsocial ?? cliente.razonsocial}

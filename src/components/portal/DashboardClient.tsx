@@ -152,6 +152,8 @@ interface Props {
   shopUrl?: string
   /** Secciones que Alegra no pudo devolver en esta carga. Se avisan en vez de mostrarlas vacías. */
   seccionesCaidas?: readonly Tab[]
+  /** Cuántas facturas tiene el contacto en total. `facturas` es solo la primera página. */
+  facturasTotal?: number
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -164,7 +166,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl, seccionesCaidas = [] }: Props) {
+export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, shopUrl, seccionesCaidas = [] }: Props) {
   const startTab = toTab(initialTab)
   const startQuery = initialQuery ?? ""
 
@@ -321,6 +323,7 @@ export function DashboardClient({ cliente, facturas, pagos, presupuestos, razons
             {activeTab === "facturas" && (
               <FacturasTable
                 facturas={facturas}
+                total={facturasTotal}
                 razonsocial={razonsocial}
                 cuentaCorriente={cliente.numerocuentacorriente}
                 tenantName={tenantName}
@@ -438,8 +441,12 @@ function initialToSet(f: FacturaEstado | "todos"): Set<FacturaEstado> {
   return f === "todos" ? new Set() : new Set([f])
 }
 
+/** A partir de acá vale la pena decir cuántas se están mostrando; con menos, es ruido. */
+const FACTURAS_VISIBLES_SIN_PAGINAR = 30
+
 function FacturasTable({
-  facturas,
+  facturas: primeraPagina,
+  total,
   razonsocial,
   cuentaCorriente,
   tenantName,
@@ -452,6 +459,7 @@ function FacturasTable({
   openFacturaId,
 }: {
   facturas: Factura[]
+  total: number
   razonsocial: string
   cuentaCorriente: number
   tenantName: string
@@ -463,6 +471,50 @@ function FacturasTable({
   onSearchChange?: (v: string) => void
   openFacturaId?: string
 }) {
+  // Las páginas siguientes se acumulan acá. `primeraPagina` viene del server y cambia si
+  // el server component se vuelve a renderizar: en ese caso se descarta lo acumulado, que
+  // podría estar desactualizado.
+  const [extra, setExtra] = useState<Factura[]>([])
+  const [prevPrimera, setPrevPrimera] = useState(primeraPagina)
+  if (prevPrimera !== primeraPagina) {
+    setPrevPrimera(primeraPagina)
+    setExtra([])
+  }
+  const [cargando, setCargando] = useState(false)
+  const [errorCarga, setErrorCarga] = useState("")
+  // Resultado de una consulta filtrada al server. `null` = sin filtros, se usa lo que vino
+  // del server component.
+  const [filtrado, setFiltrado] = useState<{ facturas: Factura[]; total: number } | null>(null)
+
+  const facturas = useMemo(
+    () => (filtrado ? filtrado.facturas : [...primeraPagina, ...extra]),
+    [filtrado, primeraPagina, extra],
+  )
+  const totalActual = filtrado ? filtrado.total : total
+  const hayMas = facturas.length < totalActual
+
+  async function pedirPagina(start: number, params: URLSearchParams): Promise<{ facturas: Factura[]; total: number }> {
+    params.set("start", String(start))
+    const res = await fetch(`/api/portal/facturas?${params}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "No pudimos cargar las facturas")
+    return data as { facturas: Factura[]; total: number }
+  }
+
+  async function cargarMas() {
+    setCargando(true)
+    setErrorCarga("")
+    try {
+      const page = await pedirPagina(facturas.length, queryFiltros())
+      if (filtrado) setFiltrado({ facturas: [...filtrado.facturas, ...page.facturas], total: page.total })
+      else setExtra((prev) => [...prev, ...page.facturas])
+    } catch (err) {
+      setErrorCarga(err instanceof Error ? err.message : "No pudimos cargar más facturas")
+    } finally {
+      setCargando(false)
+    }
+  }
+
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState(initialSearch)
   const [searchOpen, setSearchOpen] = useState(!!initialSearch)
@@ -506,18 +558,76 @@ function FacturasTable({
     })
   }
 
+  /**
+   * Traduce los filtros de la UI a lo que Alegra sabe resolver.
+   *
+   * Solo un `status` por consulta, así que la traducción aplica cuando la selección cae
+   * entera dentro de uno: {pendiente, vencida} → open, {pagada} → closed, {anulada} → void.
+   * Una selección mezclada (p. ej. vencida + pagada) no se puede expresar y se resuelve
+   * con las filas cargadas.
+   *
+   * Las fechas solo van al server cuando se filtra por EMISIÓN: el vencimiento Alegra no
+   * lo filtra (probado, ignora dueDate_afterOrNow).
+   */
+  function queryFiltros(): URLSearchParams {
+    const params = new URLSearchParams()
+    const estados = Array.from(filterEstados)
+    const abiertos = estados.every((e) => e === "pendiente" || e === "vencida")
+    if (estados.length > 0) {
+      if (abiertos) params.set("estado", "pendiente")
+      else if (estados.length === 1) params.set("estado", estados[0])
+    }
+    if (dateFilterField === "emision") {
+      if (fromDate) params.set("desde", fromDate)
+      if (toDate) params.set("hasta", toDate)
+    }
+    return params
+  }
+
+  /** ¿Quedan filtros que el server NO resolvió y hay que aplicar acá? */
+  const filtroSoloLocal =
+    Boolean(search) ||
+    (dateFilterField === "vencimiento" && Boolean(fromDate || toDate)) ||
+    (filterEstados.size > 1 && !Array.from(filterEstados).every((e) => e === "pendiente" || e === "vencida"))
+
+  // Cada cambio de estado o fecha vuelve a consultar desde la página 0. Antes esto filtraba
+  // las 30 filas cargadas y "Pagadas" no encontraba nada si las pagadas eran viejas.
+  const claveFiltros = `${Array.from(filterEstados).sort().join(",")}|${dateFilterField}|${fromDate}|${toDate}`
+  const [prevClave, setPrevClave] = useState(claveFiltros)
+  useEffect(() => {
+    if (prevClave === claveFiltros) return
+    setPrevClave(claveFiltros)
+    const params = queryFiltros()
+    if ([...params.keys()].length === 0) {
+      setFiltrado(null) // sin filtros server-side: vuelve a lo que trajo el server component
+      return
+    }
+    let cancelado = false
+    setCargando(true)
+    setErrorCarga("")
+    pedirPagina(0, params)
+      .then((page) => { if (!cancelado) setFiltrado(page) })
+      .catch((err) => { if (!cancelado) setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar") })
+      .finally(() => { if (!cancelado) setCargando(false) })
+    return () => { cancelado = true }
+  }, [claveFiltros, prevClave])
+
+  // Lo que el server ya filtró no se vuelve a filtrar acá: se aplica solo lo que no sabe
+  // resolver (la búsqueda por número, el vencimiento y las selecciones mezcladas).
   const filtered = useMemo(() => {
+    const porServer = filtrado !== null
     const desde = fromDate ? isoToLocal(fromDate) : null
     const hasta = toDate ? isoToLocal(toDate) : null
     return facturas.filter((f) => {
       const matchSearch = !search || f.id.toLowerCase().includes(search.toLowerCase()) || f.tipo.toLowerCase().includes(search.toLowerCase())
       const matchEstado = filterEstados.size === 0 || filterEstados.has(f.estado)
+      const aplicaFechaLocal = !porServer || dateFilterField === "vencimiento"
       const fecha = parseLocalDate(dateFilterField === "emision" ? f.emision : f.vencimiento)
-      const matchFrom = !desde || !fecha || fecha >= desde
-      const matchTo = !hasta || !fecha || fecha <= hasta
+      const matchFrom = !aplicaFechaLocal || !desde || !fecha || fecha >= desde
+      const matchTo = !aplicaFechaLocal || !hasta || !fecha || fecha <= hasta
       return matchSearch && matchEstado && matchFrom && matchTo
     })
-  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField])
+  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField, filtrado])
 
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
@@ -675,6 +785,41 @@ function FacturasTable({
         defaultSort={{ key: "emision", dir: "desc" }}
         empty="No hay facturas para mostrar"
       />
+
+      {total > 0 && (
+        <div className="flex flex-col items-center gap-2 pt-4">
+          {/* Alegra no filtra por fecha ni busca por número (probado), así que los filtros y
+              la lupa trabajan sobre lo ya cargado. Decirlo evita que el cliente concluya que
+              una factura vieja no existe cuando en realidad no se bajó todavía. */}
+          {hayMas && filtroSoloLocal && (
+            <p className="text-xs text-center" style={{ color: "var(--ink-soft)" }}>
+              La búsqueda por número mira las {facturas.length} facturas cargadas — Alegra no
+              sabe buscar por número. Si no aparece la que buscás, cargá más resultados.
+            </p>
+          )}
+
+          {errorCarga && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>{errorCarga}</p>
+          )}
+
+          {hayMas ? (
+            <>
+              <Button variant="ghost" onClick={cargarMas} disabled={cargando}>
+                {cargando ? "Cargando…" : "Cargar más"}
+              </Button>
+              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                Mostrando {facturas.length} de {total}
+              </p>
+            </>
+          ) : (
+            facturas.length > FACTURAS_VISIBLES_SIN_PAGINAR && (
+              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                Mostrando las {facturas.length} facturas
+              </p>
+            )
+          )}
+        </div>
+      )}
 
       {pdfFactura?.alegraId && (
         <PdfModal kind="factura" doc={pdfFactura} titulo={`Factura ${pdfFactura.id}`} onClose={() => setPdfFactura(null)} />
