@@ -124,3 +124,44 @@ dominio ni certificado propio.
 - [ ] Login del backoffice (`/admin`) con `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - [ ] Si se usa email: dominio de `RESEND_FROM` verificado en Resend.
 - [ ] Si se usa el chat: `ai-api` deployado y `ai-chat-enabled` activo.
+
+## 5. Comprobantes de pago (storage en R2)
+
+La feature de comprobantes de pago guarda los archivos en un bucket **R2** (Cloudflare),
+fuera de la DB. Checklist para prenderla y mantenerla en prod:
+
+### Variables de entorno (Production **y** Preview)
+| Var | Nota |
+|---|---|
+| `R2_ACCOUNT_ID` | Id de la cuenta Cloudflare |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Token de API **scopeado al bucket** (Object Read & Write sobre el bucket del portal, sin tocar otros buckets) |
+| `R2_BUCKET` | Nombre del bucket |
+| `RECEIPTS_EMAIL_FROM` | Remitente del aviso (dominio verificado en Resend) |
+
+Cargarlas en **Production y en Preview** y redeployar: sin el set completo la feature se
+apaga sola (el botón no aparece y las rutas nuevas responden 503), así que cargarlas antes
+del merge no rompe nada.
+
+### Bucket (Cloudflare R2)
+- **CORS**: `AllowedMethods: ["PUT"]`, `AllowedHeaders: ["content-type"]`,
+  `AllowedOrigins` con la lista explícita de orígenes del portal — **sin `*` ni comodines**.
+  Cada alta de empresa con dominio propio (u origen nuevo) ⇒ agregarlo acá. Para el preview
+  temporal de un PR, agregar el origen exacto del preview y **sacarlo al mergear**.
+- **Lifecycle rule**: prefijo `tmp/` → borrado a 1 día (el confirm borra el tmp al
+  publicar; esto cubre los abandonados). Nada sobre `receipts/`.
+- Los objetos son privados: se leen con URLs firmadas (PUT 10 min al informar, GET 5 min
+  para ver/descargar en el admin).
+
+### Orden de la entrega (IMPORTANTE)
+1. **Antes de mergear**: aplicar la migración `drizzle/0023_payment_receipts.sql` en prod
+   a mano (`DATABASE_URL=… npm run db:migrate`). Es aditiva y el código viejo no la lee,
+   pero el código nuevo sí necesita `tenants.receipts_email` (sin la columna, se cae el
+   portal y el backoffice de todos los tenants). Verificar el hash en `__drizzle_migrations`.
+2. Mergear → la integración GitHub↔Vercel redeploya sola (las env vars ya están cargadas).
+3. **Después del merge**: cargar el mail destino en Configuración → Comprobantes de cada tenant.
+
+### Rollback
+- **Código**: revertir el PR. La migración `0023` **no se revierte** (es aditiva; el
+  código viejo no la toca).
+- **Apagar la feature sin revertir**: quitar las env vars `R2_*` y redeployar — el portal
+  deja de mostrar el botón y las rutas responden 503; el resto no cambia.

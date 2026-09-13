@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { MessageSquare, Clock, Bot, User, MessageCircleWarning, AlertTriangle } from "lucide-react"
 import { Tabs, Badge, EmptyState } from "@myd-org/ui"
@@ -30,8 +30,13 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
   // despues del mount para evitar mismatch server/cliente: el SSR corre en Vercel (UTC) y
   // el navegador en -03, ademas de que Date.now() difiere entre ambos. Un mismatch acá
   // rompe la soft-navigation del App Router (los clicks a Link no cambian la URL).
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
+  // "mounted" como useSyncExternalStore (patrón "hydrated" de React): SSR = false y cliente
+  // = true tras hidratar, sin setState sincrónico en un effect (re-render en cascada).
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  )
 
   // null = todavía no reconciliamos desde el cliente. El reloj arranca en el primer poll
   // porque el server ya reconcilió al rendear la página (no hace falta repetirlo enseguida).

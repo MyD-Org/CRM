@@ -9,6 +9,20 @@ import type { TenantConfig } from "@/lib/tenants"
 // error y acá se propaga como excepción.
 
 /**
+ * Opciones extra del envío. Todas opcionales: sin `opts` el payload es idéntico al de
+ * siempre (from = tenant.resendFrom, sin adjuntos ni tags). `idempotencyKey` va como
+ * 2º argumento del SDK de Resend: claves de deduplicación del lado del proveedor.
+ */
+export interface SendEmailOptions {
+  /** Default tenant.resendFrom. El mail de comprobantes pasa RECEIPTS_EMAIL_FROM acá. */
+  from?: string
+  replyTo?: string
+  attachments?: { filename: string; content: Buffer; contentType: string }[]
+  tags?: { name: string; value: string }[]
+  idempotencyKey?: string
+}
+
+/**
  * Manda un mail. Sin `RESEND_API_KEY` es dry-run: loguea y no envía, para que dev/local
  * funcione sin credenciales.
  *
@@ -25,6 +39,7 @@ export async function sendEmail(
   subject: string,
   html: string,
   text?: string,
+  opts?: SendEmailOptions,
 ): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
@@ -32,13 +47,19 @@ export async function sendEmail(
     return false
   }
   const resend = new Resend(apiKey)
-  const { error } = await resend.emails.send({
-    from: tenant.resendFrom,
-    to,
-    subject,
-    html,
-    ...(text ? { text } : {}),
-  })
+  const { error } = await resend.emails.send(
+    {
+      from: opts?.from ?? tenant.resendFrom,
+      to,
+      subject,
+      html,
+      ...(text ? { text } : {}),
+      ...(opts?.replyTo ? { replyTo: opts.replyTo } : {}),
+      ...(opts?.attachments ? { attachments: opts.attachments } : {}),
+      ...(opts?.tags ? { tags: opts.tags } : {}),
+    },
+    ...(opts?.idempotencyKey ? [{ idempotencyKey: opts.idempotencyKey } as const] : []),
+  )
   if (error) throw new Error(error.message)
   return true
 }

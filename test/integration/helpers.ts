@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
 import { getDb } from "@/db"
-import { tenants, adminUsers } from "@/db/schema"
+import { tenants, adminUsers, paymentReceipts } from "@/db/schema"
 import { assertLocalTestDb } from "./db-url"
 
 // Helpers compartidos por los tests de integración: siembran datos mínimos (tenant, operador)
@@ -17,11 +17,14 @@ function guard() {
 export async function truncateAll(): Promise<void> {
   guard()
   await getDb().execute(
-    sql`truncate table ${tenants}, ${adminUsers}, conversation_assignments, push_subscriptions restart identity cascade`,
+    sql`truncate table ${tenants}, ${adminUsers}, ${paymentReceipts}, conversation_assignments, push_subscriptions restart identity cascade`,
   )
 }
 
-export async function seedTenant(id = "test-tenant"): Promise<string> {
+export async function seedTenant(
+  id = "test-tenant",
+  opts: { receiptsEmail?: string } = {},
+): Promise<string> {
   guard()
   await getDb()
     .insert(tenants)
@@ -30,6 +33,7 @@ export async function seedTenant(id = "test-tenant"): Promise<string> {
       name: "Tenant de Test",
       logoPath: "/logos/test.svg",
       resendFrom: "test@example.com",
+      receiptsEmail: opts.receiptsEmail ?? "",
       // aiTenantId + aiApiUrl: las rutas que hablan con la ai-api cortan con 503 si falta
       // alguno, así que el tenant de test se siembra "configurado". La URL no se usa de
       // verdad: los tests que llegan hasta ahí mockean el cliente de inbox-api.

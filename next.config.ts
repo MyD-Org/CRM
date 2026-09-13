@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // sharp ya está en la lista automática de Next; heic-decode/libheif-js no: se excluyen del
+  // bundling de Server Components para que carguen su wasm/binario con require nativo.
+  serverExternalPackages: ["heic-decode", "libheif-js"],
   experimental: {
     // Client Cache: desde Next 15 el default de `dynamic` es 0s, o sea que entrar y salir de
     // un chat vuelve a pedirle TODO el inbox al server cada vez. Con 30s el "volver" sale de

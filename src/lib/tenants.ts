@@ -8,6 +8,8 @@ export interface TenantConfig {
   alegraMock: boolean
   whatsappNumber: string
   resendFrom: string
+  // Mail de la empresa para avisar comprobantes de pago del portal ("" = sin destino).
+  receiptsEmail: string
   aiApiBaseUrl: string
   aiApiKey: string
   aiAgentId: string
@@ -34,6 +36,7 @@ function buildTenantConfig(id: string): TenantConfig | null {
     alegraMock: process.env[`${prefix}_ALEGRA_MOCK`] === "true" || (isMock && !hasAlegra),
     whatsappNumber: process.env[`${prefix}_WHATSAPP`] ?? "",
     resendFrom: process.env[`${prefix}_RESEND_FROM`] ?? "portal@example.com",
+    receiptsEmail: "",
     aiApiBaseUrl: process.env[`${prefix}_AI_API_URL`] ?? "",
     aiApiKey: process.env[`${prefix}_AI_API_KEY`] ?? "",
     aiAgentId: process.env[`${prefix}_AI_AGENT_ID`] ?? "",
@@ -224,6 +227,7 @@ export async function getTenantByIdFromDb(id: string): Promise<TenantConfig | nu
       alegraMock: row.alegraMock,
       whatsappNumber: row.whatsappNumber,
       resendFrom: row.resendFrom,
+      receiptsEmail: row.receiptsEmail,
       aiApiBaseUrl: row.aiApiUrl,
       aiApiKey: row.aiApiKey,
       aiAgentId: row.aiAgentId,
