@@ -9,14 +9,15 @@
 2. [Multitenant](#multitenant)
 3. [Autenticación (OTP)](#autenticación-otp)
 4. [Portal del cliente](#portal-del-cliente)
-5. [Notificaciones](#notificaciones)
-6. [Chat de soporte con IA](#chat-de-soporte-con-ia)
-7. [Integración con Alegra (ERP)](#integración-con-alegra-erp)
-8. [Base de datos](#base-de-datos)
-9. [Feature flags](#feature-flags)
-10. [Referencia de endpoints](#referencia-de-endpoints)
-11. [Variables de entorno](#variables-de-entorno)
-12. [Comandos](#comandos)
+5. [Comprobantes de pago](#comprobantes-de-pago)
+6. [Notificaciones](#notificaciones)
+7. [Chat de soporte con IA](#chat-de-soporte-con-ia)
+8. [Integración con Alegra (ERP)](#integración-con-alegra-erp)
+9. [Base de datos](#base-de-datos)
+10. [Feature flags](#feature-flags)
+11. [Referencia de endpoints](#referencia-de-endpoints)
+12. [Variables de entorno](#variables-de-entorno)
+13. [Comandos](#comandos)
 
 ---
 
@@ -144,6 +145,50 @@ notificaciones** y menú de usuario (condiciones comerciales, salir).
 
 ---
 
+## Comprobantes de pago
+
+El cliente informa un pago desde **Pagos → "Informar pago"** (`InformarPagoModal.tsx`):
+monto, fecha, medio (transferencia/cheque/efectivo/otro), notas y el archivo (PDF, JPG,
+PNG o WebP, máx. **20 MB**; un HEIC de iPhone que se cuela por Mac/Files/AirDrop se
+**convierte a JPEG en el server**, con resize a 2560 px y tope de 50 MP antes de
+decodificar). El archivo sube **directo a un bucket R2** con URL prefirmada (PUT firmado
+10 min, con Content-Type y tamaño firmados): los bytes nunca pasan por el servidor del
+CRM. El `POST …/comprobantes/{id}/confirm` verifica leyendo desde R2 (magic bytes,
+tamaño declarado, sha256 de los bytes publicados) y publica; metadatos y estado viven en
+`payment_receipts`, el archivo queda en `receipts/{tenant}/AAAA-MM/…` del bucket. Las
+imágenes (JPG/PNG/WebP/HEIC) se publican **sin EXIF/GPS** y con la orientación ya
+aplicada; los PDF no se modifican.
+
+**Estados** (máquina de estados con UPDATEs condicionales, sin read-then-write):
+`uploading` (subiendo, invisible) → `processing` (verificando, invisible) → `pending`
+(aviso en casilla, espera carga en el ERP) → `loaded` (cargado; se puede deshacer).
+`rejected` (invisible) guarda el motivo (tipo inválido, tamaño, mismatch) y no se
+resucita. Límites anti-abuso: **20 informes por día** (filas no-`uploading` en 24 h) y
+**10 inits por hora**; los `uploading` huérfanos (>24 h) se limpian al informar.
+
+**Mail de aviso** al backoffice: sale a la casilla configurada en Configuración →
+Comprobantes del tenant (`tenants.receipts_email`), con remitente de plataforma
+(`RECEIPTS_EMAIL_FROM`) y asunto `[Comprobante de pago] …`. Hasta **10 MB** el archivo
+va adjunto; más grande va con link al backoffice. El envío es best-effort: nunca cambia
+el resultado del informe y se puede reenviar desde el admin (lease de 60 s, idempotency
+key por intento).
+
+**Backoffice** (`/admin/comprobantes`, rol admin+): tabs Pendientes/Cargados con
+paginación, detalle, ver/descargar el archivo (redirect 302 a URL firmada de 5 min,
+sin bytes en el body), **Marcar cargado** / deshacer (idempotente, `loaded_by_name` de
+la DB + log de auditoría) y reenviar el aviso. El item del nav lo ve solo admin+.
+
+**Historial del cliente**: en Pagos, arriba de la tabla del ERP, una sección
+"Comprobantes que informaste" con estado (Pendiente/Cargado) y paginación
+(`GET /api/portal/comprobantes`). Si el cliente sube un archivo que ya había informado
+(mismo sha256), el informe se recibe igual pero se avisa: banner en el modal y
+*"Posible duplicado…"* en el mail al backoffice.
+
+Requiere el set completo de env vars `R2_*`; sin ellas el botón no aparece en el
+portal (degradación) y las rutas nuevas responden 503 — el resto del portal sigue igual.
+
+---
+
 ## Notificaciones
 
 ### Gestor de cobranza (generación automática)
@@ -254,6 +299,7 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | `client_commercial_conditions` | Condiciones comerciales por cliente (unique en tenant+cliente) |
 | `notification_rules` | Reglas de notificación por tenant (días antes/después, canales) |
 | `notification_log` | Historial de notificaciones; dedup por unique index; columna `read_at` |
+| `payment_receipts` | Comprobantes de pago informados desde el portal: metadatos, máquina de estados y resultado del mail (el archivo vive en R2) |
 
 - **`src/db/index.ts`** — singleton de conexión (`prepare: false` para Neon/pgbouncer).
 - **`src/db/migrate.ts`** — aplica migraciones de `drizzle/`.
@@ -289,6 +335,13 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | POST | `/api/agent/quotes` | agent token | Crea una cotización en Alegra |
 | GET | `/api/agent/quotes` | agent token | Cotizaciones de un contacto (`?contact_id=`) |
 | GET | `/api/agent/sales-config` | agent token | Listas de precio, condiciones de pago, vendedores, impuestos, monedas + link del shop |
+| POST | `/api/portal/comprobantes` | sesión portal | Informar pago: valida, rate limit y URL PUT prefirmada para R2 |
+| POST | `/api/portal/comprobantes/{id}/confirm` | sesión portal | Verifica el archivo en R2 (tipo/tamaño/sha256) y publica el comprobante |
+| GET | `/api/admin/comprobantes` | admin | Lista de comprobantes (status, paginado; sin URLs firmadas) |
+| GET/PATCH | `/api/admin/comprobantes/{id}` | admin | Detalle / marcar cargado en el ERP o deshacer (idempotente) |
+| GET | `/api/admin/comprobantes/{id}/file` | admin | Redirect 302 a URL firmada del archivo (sin bytes en el body) |
+| POST | `/api/admin/comprobantes/{id}/resend-email` | admin | Reenvía el mail de aviso (lease 60 s, no toca el status) |
+| GET/PUT | `/api/admin/settings/receipts` | admin | Casilla de avisos de comprobantes del tenant |
 
 ---
 
@@ -306,6 +359,8 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | `{PREFIX}_ALEGRA_MOCK` | Fuerza el mock de Alegra aunque haya token |
 | `NEXT_PUBLIC_SHOP_URL` | Link de la tienda que comparte el agente (`sales-config`) |
 | `DATABASE_URL` | Conexión Postgres |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Storage de comprobantes (Cloudflare R2); sin el set completo la feature se apaga |
+| `RECEIPTS_EMAIL_FROM` | Remitente del mail de aviso de comprobantes |
 | `CRON_SECRET` | Protege los endpoints de notificaciones |
 | `AI_CHAT_ENABLED` | Activa el chat en dev |
 

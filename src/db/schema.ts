@@ -7,6 +7,7 @@ import {
   integer,
   boolean,
   numeric,
+  date,
   index,
   uniqueIndex,
   customType,
@@ -31,6 +32,10 @@ export const tenants = pgTable("tenants", {
   alegraMock: boolean("alegra_mock").notNull().default(false),
   whatsappNumber: text("whatsapp_number").notNull().default(""),
   resendFrom: text("resend_from").notNull(),
+  // Mail de la empresa donde el portal avisa los comprobantes de pago informados por los
+  // clientes. Vacío = la feature queda sin destino (el mail queda "skipped"). Se edita desde
+  // Configuración del backoffice; el valor real vive en la DB, nunca en el repo.
+  receiptsEmail: text("receipts_email").notNull().default(""),
   // Hosts COMPLETOS donde vive este tenant, coma-separados (ej. "crm.centralled.com.ar").
   // Solo hace falta para dominios propios: el caso normal es el subdominio de la plataforma
   // ("avantec.tevro.com.ar"), que resuelve por el primer label = este `id` sin configurar nada.
@@ -361,5 +366,73 @@ export const pushSubscriptions = pgTable(
   (t) => [
     uniqueIndex("ps_endpoint").on(t.endpoint),
     index("ps_tenant_operator").on(t.tenantId, t.operatorId),
+  ],
+)
+
+// Comprobantes de pago informados por el cliente desde el portal (botón "Informar pago").
+// El ARCHIVO no vive acá: está en R2 (bucket del portal). Esta tabla guarda los metadatos,
+// la máquina de estados (uploading → processing → pending → loaded; rejected = interno,
+// nunca visible) y el resultado del mail a la empresa. Ver migración 0023 y el design de
+// comprobantes de pago. Los CHECKs viven solo en el SQL (drizzle no los necesita para leer).
+export const paymentReceipts = pgTable(
+  "payment_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    // Id de contacto en Alegra, de la SESIÓN del portal (nunca del body).
+    codigocliente: text("codigocliente").notNull(),
+    // Snapshot al informar: el backoffice no le pega a Alegra para listar.
+    razonsocial: text("razonsocial").notNull(),
+    cuit: text("cuit").notNull().default(""),
+    clientEmail: text("client_email"),
+    // amount llega como string decimal ("12345.67") y se formatea en la UI.
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("ARS"),
+    paidOn: date("paid_on").notNull(),
+    // 'transferencia' | 'cheque' | 'efectivo' | 'otro' (el CHECK está en la migración).
+    method: text("method").notNull(),
+    methodOther: text("method_other"),
+    notes: text("notes"),
+    // 'uploading' | 'processing' | 'pending' | 'loaded' | 'rejected' (CHECK en la migración).
+    status: text("status").notNull().default("uploading"),
+    // Lease del processing: el confirm lo toma con UPDATE condicional; NULL = libre.
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+    rejectReason: text("reject_reason"),
+    // Lo que el cliente DECLARÓ en el init (firma de la URL PUT). El confirm lo contrasta con R2.
+    declaredContentType: text("declared_content_type").notNull(),
+    declaredSize: integer("declared_size").notNull(),
+    // Lo VERIFICADO en el confirm. fileMime es siempre el sniffeado/convertido, nunca el declarado.
+    fileKey: text("file_key"),
+    fileMime: text("file_mime"),
+    fileSize: integer("file_size"),
+    fileOriginalName: text("file_original_name"),
+    fileSha256: text("file_sha256"),
+    convertedFrom: text("converted_from"),
+    // 'pending' | 'sent' | 'failed' | 'skipped' (CHECK en la migración).
+    emailStatus: text("email_status").notNull().default("pending"),
+    emailError: text("email_error"),
+    emailSentAt: timestamp("email_sent_at", { withTimezone: true }),
+    emailAttempts: integer("email_attempts").notNull().default(0),
+    emailLastAttemptAt: timestamp("email_last_attempt_at", { withTimezone: true }),
+    loadedAt: timestamp("loaded_at", { withTimezone: true }),
+    // Sin FK de tenant: la escritura siempre usa el user.id del guard, que ya es del mismo tenant.
+    loadedBy: uuid("loaded_by").references(() => adminUsers.id, { onDelete: "set null" }),
+    // Snapshot del nombre al marcar: sobrevive al borrado del usuario.
+    loadedByName: text("loaded_by_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("payment_receipts_tenant_status_submitted_idx").on(
+      t.tenantId,
+      t.status,
+      sql`${t.submittedAt} desc`,
+    ),
+    index("payment_receipts_tenant_cliente_created_idx").on(
+      t.tenantId,
+      t.codigocliente,
+      sql`${t.createdAt} desc`,
+    ),
   ],
 )

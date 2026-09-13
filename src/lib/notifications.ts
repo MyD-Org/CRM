@@ -54,6 +54,7 @@ function tenantConfigFromRow(row: typeof tenantsTable.$inferSelect): TenantConfi
     alegraMock: row.alegraMock,
     whatsappNumber: row.whatsappNumber,
     resendFrom: row.resendFrom,
+    receiptsEmail: row.receiptsEmail,
     aiApiBaseUrl: row.aiApiUrl,
     aiApiKey: row.aiApiKey,
     aiAgentId: row.aiAgentId,

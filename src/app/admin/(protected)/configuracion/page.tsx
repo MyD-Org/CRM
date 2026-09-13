@@ -59,6 +59,7 @@ export default async function ConfiguracionPage() {
         paymentConditions: tenants.paymentConditions,
         schedule: tenants.schedule,
         scheduleExceptions: tenants.scheduleExceptions,
+        receiptsEmail: tenants.receiptsEmail,
       })
       .from(tenants)
       .where(eq(tenants.id, session.tenantId)),
@@ -90,9 +91,11 @@ export default async function ConfiguracionPage() {
       </div>
       <ConfiguracionShell
         showCatalog={isSuperadmin}
+        showReceipts={roleRank(session.role) >= 1}
         initialLists={initialLists}
         initialPaymentConditions={initialPaymentConditions}
         initialSchedule={initialSchedule}
+        initialReceiptsEmail={tenant?.receiptsEmail ?? ""}
       />
     </div>
   )
