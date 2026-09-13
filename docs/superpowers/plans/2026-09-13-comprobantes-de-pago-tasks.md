@@ -21,7 +21,7 @@ REPO PÚBLICO: fixtures con `@example.com`/`ejemplo.com`, tenants `tenant-a`/`te
 - [x] A0.1 [ops] Token R2 re-scopeado a `crm-portal` (Object R&W). VERIFICADO: 403 sobre `crm-adjuntos`. (ST bucket)
 - [ ] A0.2 [ops] CORS del bucket `crm-portal`: `AllowedMethods:["PUT"]`, `AllowedHeaders:["content-type"]`, orígenes explícitos del portal (sin `*` ni comodín) + origen exacto del preview temporal. (ST bucket, D13)
 - [ ] A0.3 [ops] Lifecycle `tmp/` → borrar a 1 día; nada sobre `receipts/`. (ST bucket, PS huérfanos)
-- [ ] A0.4 [ops] Aplicar `0023` en PROD ANTES DE MERGEAR (`db:migrate` a mano; verificar hash en `__drizzle_migrations`, ver memoria drizzle-desync). (DM 0023, DM TenantConfig)
+- [x] A0.4 [ops] Aplicar `0023` en PROD ANTES DE MERGEAR (`db:migrate` a mano; verificar hash en `__drizzle_migrations`, ver memoria drizzle-desync). (DM 0023, DM TenantConfig) — ✅ 2026-09-13: aplicada contra Neon vía `.env.prod`, hash == sha256 del SQL, `payment_receipts` + `tenants.receipts_email` + 15 constraints verificados en prod (24 migraciones en `drizzle.__drizzle_migrations`).
 - [ ] A0.5 [ops] Vercel Production + Preview: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `RECEIPTS_EMAIL_FROM` → redeploy. (ST config, EM contenido)
 - [ ] A0.6 [manual-preview] Checklist en preview: PDF 15–20 MB sube+confirma sin 413, sha256 igual, mail sin adjunto con link, admin abre por 302; archivo <10 MB con adjunto; PUT con Content-Type distinto ⇒ 403; PUT con tamaño distinto (registrar si R2 da 403); `response-content-disposition` honrado; operator sin nav. Sacar el origen del preview del CORS al terminar. (ST bytes, EM adjunto, TH manual)
 - [ ] A0.7 [ops] Post-merge: cargar el mail destino desde Configuración → Comprobantes del tenant. (TS)
@@ -94,12 +94,14 @@ REPO PÚBLICO: fixtures con `@example.com`/`ejemplo.com`, tenants `tenant-a`/`te
 - [x] B7 lint 0 err · unit 209 ✓ · integration 140 ✓ · `tsc --noEmit` 0 (fix de yapa: tupla `CASES[]` en el test admin de A). `git status --short drizzle/` = solo 0023 (de A). Falta la validación manual en preview (refresco tras informar, mobile "Cargar más") — va junto con A0.6.
 
 ## ENTREGA C — HEIC→JPG + strip EXIF (sin migraciones; mergear solo si la medición pasa)
-- [ ] C1 `npm i sharp@0.34.5 heic-decode@<exacta>`; `next.config.ts` `serverExternalPackages` para heic-decode/libheif-js si hace falta.
-- [ ] C2 `src/lib/receipt-image.ts` `normalizeImage`: dimensiones antes de decodificar (>50 MP ⇒ 415 "La imagen es demasiado grande"; si heic-decode no las da, parsear caja `ispe`), resize 2560 sin agrandar, JPEG q82, `rotate()` sin metadata, semáforo por proceso; fallo ⇒ 422. (FV HEIC [C], FV EXIF [C])
-- [ ] C3 `receipt-file.ts`: import dinámico para imágenes, `convertedFrom`; quitar `heic_unsupported` de init y confirm; `accept` del modal queda igual. (FV HEIC [C])
-- [ ] C4 [unit] `receipt-image.test.ts` con fixture sintética `test/fixtures/receipts/solid.heic` (color liso, sin EXIF) y JPEG con GPS generado en el test: sin EXIF, orientación aplicada, ≤2560 px, 50 MP con decoder mockeado no decodifica, corrupto ⇒ 422. (TH #18)
-- [ ] C5 [manual-preview] 3–4 HEIC reales (12 y 48 MP) y 2–3 concurrentes: tiempo < 60 s, memoria pico y tamaño de bundle aceptables. Si falla, C no se mergea. (FV HEIC [C] criterio)
-- [ ] C6 `docs/FUNCIONALIDADES.md`: HEIC convertido.
+- [x] C1 `npm i sharp@0.34.5 heic-decode@2.1.0`; `next.config.ts` `serverExternalPackages` para heic-decode/libheif-js (sharp ya es externo automático).
+- [x] C2 `src/lib/receipt-image.ts` `normalizeImage`: dimensiones antes de decodificar (>50 MP ⇒ 415 "La imagen es demasiado grande"; heic-decode no expone dimensiones ⇒ se parsea la caja `ispe`), resize 2560 sin agrandar, JPEG q82, `rotate()` sin metadata, semáforo por proceso; fallo ⇒ 422.
+- [x] C3 `receipt-file.ts`: import dinámico para imágenes, `convertedFrom`; `heic_unsupported` fuera de init y confirm (errores nuevos: `image_too_large` 415 / `processing_failed` 422); modal acepta HEIC (el `accept` quedó igual).
+- [x] C4 [unit] `receipt-image.test.ts` con fixture sintética `test/fixtures/receipts/solid.heic` (color liso generado con sips, sin EXIF) y JPEG con EXIF Orientation=6 + GPS generado en el test: orientación aplicada, sin EXIF, ≤2560 px, 50 MP con decoder espiado (no decodifica), corrupto ⇒ 422. (TH #18). Hallazgo: la API real de heic-decode 2.x es `decode({ buffer })`, no `decode(buffer)` — tipos propios en `src/types/heic-decode.d.ts`.
+- [ ] C5 [manual-preview] 3–4 HEIC reales (12 y 48 MP) y 2–3 concurrentes: tiempo < 60 s, memoria pico y tamaño de bundle aceptables. **Bloquea el merge de C** (revertir los commits de C deja A+B intactos); va en el checklist del PR #113.
+- [x] C6 `docs/FUNCIONALIDADES.md`: HEIC convertido + strip EXIF.
+- [x] C7 Gates: lint 0 err · unit 218 ✓ · integration 140 ✓ · `tsc --noEmit` 0.
+- PR: https://github.com/MyD-Org/CRM/pull/113 (incluye A+B+C; commit `eb236df`).
 
 ## Orden
 A0.1–A0.3 en paralelo con A1–A3 → A4 → A5 → A6 → A7 → A0.4 + A0.5 → A0.6 → merge A → A0.7. Luego B; C independiente de B.
