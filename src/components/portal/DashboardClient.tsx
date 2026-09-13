@@ -13,7 +13,6 @@ import {
   Tabs,
   Tooltip as DSTooltip,
   TooltipProvider,
-  SearchInput,
   Field,
   Select,
 } from "@myd-org/ui"
@@ -27,7 +26,7 @@ import {
   type WhatsAppFacturaIntent,
   type WhatsAppPresupuestoIntent,
 } from "@/lib/whatsapp"
-import { CreditCard, Search, Plus, X, Upload, FileText, Eye, Download, Info, Calendar, ChevronDown } from "lucide-react"
+import { CreditCard, X, Eye, Download, Info, Calendar } from "lucide-react"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -146,7 +145,6 @@ interface Props {
   logoSrc: string
   logoSubtitle: string
   initialTab?: string
-  initialQuery?: string
   openFacturaId?: string
   /** Id de Alegra de `openFacturaId`, cuando lo trae el link (notificaciones desde 0022). */
   openFacturaAlegraId?: string
@@ -155,6 +153,10 @@ interface Props {
   seccionesCaidas?: readonly Tab[]
   /** Cuántas facturas tiene el contacto en total. `facturas` es solo la primera página. */
   facturasTotal?: number
+  /** Facturas impagas completas: contadores del resumen y chips Pendientes/Vencidas. */
+  abiertas: Factura[]
+  pagosTotal?: number
+  presupuestosTotal?: number
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -167,34 +169,35 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, pagos, presupuestos, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, initialQuery, openFacturaId, openFacturaAlegraId, shopUrl, seccionesCaidas = [] }: Props) {
+export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, abiertas, pagos, pagosTotal = pagos.length, presupuestos, presupuestosTotal = presupuestos.length, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, openFacturaId, openFacturaAlegraId, shopUrl, seccionesCaidas = [] }: Props) {
   const startTab = toTab(initialTab)
-  const startQuery = initialQuery ?? ""
 
   const [activeTab, setActiveTab] = useState<Tab>(startTab)
   const [facturasFilter, setFacturasFilter] = useState<FacturaEstado | "todos">("todos")
-  const [facturasSearch, setFacturasSearch] = useState(startTab === "facturas" ? startQuery : "")
-  const [pagosSearch, setPagosSearch] = useState(startTab === "pagos" ? startQuery : "")
-  const [presupuestosSearch, setPresupuestosSearch] = useState(startTab === "presupuestos" ? startQuery : "")
 
-  // Sincroniza con los query params (?tab=&q=) cuando cambian — p.ej. al tocar
-  // una notificación estando ya en el dashboard.
-  const [prevNav, setPrevNav] = useState(`${startTab}|${startQuery}`)
-  const navKey = `${toTab(initialTab)}|${initialQuery ?? ""}`
-  if (prevNav !== navKey) {
-    setPrevNav(navKey)
-    const t = toTab(initialTab)
-    const q = initialQuery ?? ""
-    setActiveTab(t)
-    if (t === "facturas") { setFacturasFilter("todos"); setFacturasSearch(q) }
-    else if (t === "pagos") setPagosSearch(q)
-    else setPresupuestosSearch(q)
+  // Sincroniza con ?tab= cuando cambia — p.ej. al tocar una notificación estando ya en el
+  // dashboard. Ya no hay ?q=: la búsqueda se sacó porque miraba solo la página cargada.
+  const [prevNav, setPrevNav] = useState(startTab)
+  const navTab = toTab(initialTab)
+  if (prevNav !== navTab) {
+    setPrevNav(navTab)
+    setActiveTab(navTab)
+    if (navTab === "facturas") setFacturasFilter("todos")
   }
 
-  const vencidasCount = facturas.filter((f) => f.estado === "vencida").length
-  const pendientesCount = facturas.filter((f) => f.estado === "pendiente").length
-  const topVencidas = facturas.filter((f) => f.estado === "vencida").slice(0, 2)
-  const topPendientes = facturas.filter((f) => f.estado === "pendiente").slice(0, 2)
+  /** Lleva a la tabla de facturas con el filtro de esa tarjeta. */
+  function irAFacturas(estado: "vencida" | "pendiente") {
+    setActiveTab("facturas")
+    setFacturasFilter(estado)
+  }
+
+  // Sobre las abiertas COMPLETAS. Contarlas sobre `facturas` (la primera página) daba mal apenas
+  // la tabla empezó a paginar: un cliente con vencidas viejas veía "0 facturas vencidas" al lado
+  // de un saldo vencido mayor a cero.
+  const vencidasCount = abiertas.filter((f) => f.estado === "vencida").length
+  const pendientesCount = abiertas.filter((f) => f.estado === "pendiente").length
+  const topVencidas = abiertas.filter((f) => f.estado === "vencida").slice(0, 2)
+  const topPendientes = abiertas.filter((f) => f.estado === "pendiente").slice(0, 2)
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
@@ -215,7 +218,7 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
               Bienvenido, {razonsocial}
             </h1>
             <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-              CUIT {cliente.cuit} · Cuenta corriente N° {cliente.numerocuentacorriente}
+              {cliente.cuit && `CUIT ${cliente.cuit}`}
             </p>
           </div>
           {cliente.tipoCuenta === "corriente" && (
@@ -278,8 +281,8 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
               count={vencidasCount}
               countLabel="facturas vencidas"
               rows={topVencidas}
-              onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("vencida"); setFacturasSearch("") }}
-              onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
+              onVerMas={() => irAFacturas("vencida")}
+              onRowClick={() => irAFacturas("vencida")}
             />
 
             {/* Saldo a vencer */}
@@ -290,8 +293,8 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
               count={pendientesCount}
               countLabel="facturas pendientes"
               rows={topPendientes}
-              onVerMas={() => { setActiveTab("facturas"); setFacturasFilter("pendiente"); setFacturasSearch("") }}
-              onRowClick={(id) => { setActiveTab("facturas"); setFacturasFilter("todos"); setFacturasSearch(id) }}
+              onVerMas={() => irAFacturas("pendiente")}
+              onRowClick={() => irAFacturas("pendiente")}
             />
           </div>
         )}
@@ -330,20 +333,18 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
               <FacturasTable
                 facturas={facturas}
                 total={facturasTotal}
+                abiertas={abiertas}
                 razonsocial={razonsocial}
-                cuentaCorriente={cliente.numerocuentacorriente}
+                cuit={cliente.cuit}
                 tenantName={tenantName}
                 whatsappNumber={whatsappNumber}
                 initialFilter={facturasFilter}
-                onFilterChange={setFacturasFilter}
-                initialSearch={facturasSearch}
-                onSearchChange={setFacturasSearch}
                 openFacturaId={openFacturaId}
                 openFacturaAlegraId={openFacturaAlegraId}
               />
             )}
-            {activeTab === "pagos" && <PagosTable pagos={pagos} facturas={facturas} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={pagosSearch} />}
-            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} razonsocial={razonsocial} cuentaCorriente={cliente.numerocuentacorriente} tenantName={tenantName} whatsappNumber={whatsappNumber} initialSearch={presupuestosSearch} />}
+            {activeTab === "pagos" && <PagosTable pagos={pagos} total={pagosTotal} razonsocial={razonsocial} cuit={cliente.cuit} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
+            {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} total={presupuestosTotal} razonsocial={razonsocial} cuit={cliente.cuit} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
 
           </div>
         </div>
@@ -447,18 +448,174 @@ function initialToSet(f: FacturaEstado | "todos"): Set<FacturaEstado> {
   return f === "todos" ? new Set() : new Set([f])
 }
 
-/** A partir de acá vale la pena decir cuántas se están mostrando; con menos, es ruido. */
-const FACTURAS_VISIBLES_SIN_PAGINAR = 30
+// ── Paginación contra Alegra (común a las tres tablas) ─────────────────────────
+//
+// Nada se trae entero: un cliente con 1282 facturas o 387 pagos rompía el dashboard. Cada tabla
+// pide una ventana al server y el server se la pide a Alegra. Los filtros que Alegra sabe
+// resolver viajan como parámetros; lo que no sabe resolver, directamente no se ofrece — un
+// filtro, una búsqueda o un orden que solo mira la página cargada le hace creer al cliente que
+// algo no existe.
 
-/** Tamaño de página del portal. Igual a FACTURAS_PAGE_SIZE del server (máximo de Alegra). */
-const PAGINA = 30
-
-interface Vista {
+interface Ventana<T> {
   /** Índice de la primera fila mostrada dentro del total. En celular siempre 0: se acumula. */
   start: number
-  facturas: Factura[]
+  items: T[]
   total: number
 }
+
+function usePaginado<T>({
+  url,
+  pick,
+  inicial,
+  totalInicial,
+  pageSize,
+}: {
+  /** Endpoint del portal, ej. "/api/portal/pagos". */
+  url: string
+  /** Cómo sacar las filas de la respuesta: { pagos, total }, { presupuestos, total }… */
+  pick: (data: Record<string, unknown>) => T[]
+  /** Primera página, la que trajo el server component. */
+  inicial: T[]
+  totalInicial: number
+  pageSize: number
+}) {
+  // `null` = la primera página tal como vino del server, sin filtros ni navegación.
+  const [vista, setVista] = useState<Ventana<T> | null>(null)
+  const [prevInicial, setPrevInicial] = useState(inicial)
+  if (prevInicial !== inicial) {
+    // El server component volvió a renderizar: lo cargado puede estar viejo.
+    setPrevInicial(inicial)
+    setVista(null)
+  }
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState("")
+  const consultaRef = useRef(0)
+  const paramsRef = useRef(new URLSearchParams())
+
+  const items = vista ? vista.items : inicial
+  const total = vista ? vista.total : totalInicial
+  const desde = vista ? vista.start : 0
+  const hayMas = desde + items.length < total
+
+  async function pedir(start: number, params: URLSearchParams) {
+    const q = new URLSearchParams(params)
+    q.set("start", String(start))
+    const res = await fetch(`${url}?${q}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "No pudimos cargar los datos")
+    return { items: pick(data), total: Number(data.total ?? 0) }
+  }
+
+  async function correr(fn: (consulta: number) => Promise<void>) {
+    // Toda consulta nueva invalida las anteriores: tocar dos filtros o dos páginas seguidas
+    // puede resolverse desordenado y dejar en pantalla un resultado viejo.
+    const consulta = ++consultaRef.current
+    setCargando(true)
+    setError("")
+    try {
+      await fn(consulta)
+    } catch (err) {
+      if (consultaRef.current === consulta) setError(err instanceof Error ? err.message : "No pudimos cargar los datos")
+    } finally {
+      if (consultaRef.current === consulta) setCargando(false)
+    }
+  }
+
+  /** Aplica filtros nuevos y vuelve a la primera página. Sin parámetros, vuelve a lo inicial. */
+  function filtrar(params: URLSearchParams) {
+    paramsRef.current = params
+    if ([...params.keys()].length === 0) {
+      ++consultaRef.current // invalida lo que esté en vuelo
+      setVista(null)
+      setCargando(false)
+      setError("")
+      return
+    }
+    return correr(async (consulta) => {
+      const page = await pedir(0, params)
+      if (consultaRef.current === consulta) setVista({ start: 0, ...page })
+    })
+  }
+
+  /** Desktop: reemplaza por la página pedida. */
+  function irAPagina(start: number) {
+    return correr(async (consulta) => {
+      const page = await pedir(start, paramsRef.current)
+      if (consultaRef.current === consulta) setVista({ start, ...page })
+    })
+  }
+
+  /** Celular: suma la tanda siguiente. */
+  function cargarMas() {
+    const actuales = items
+    return correr(async (consulta) => {
+      const page = await pedir(desde + actuales.length, paramsRef.current)
+      if (consultaRef.current === consulta) setVista({ start: desde, items: [...actuales, ...page.items], total: page.total })
+    })
+  }
+
+  return { items, total, desde, hayMas, cargando, error, filtrar, irAPagina, cargarMas, pageSize, setVista }
+}
+
+/** Controles de página: flechas en desktop, "Cargar más" en celular. */
+function Paginacion({
+  desde,
+  cantidad,
+  total,
+  hayMas,
+  cargando,
+  error,
+  pageSize,
+  onIrAPagina,
+  onCargarMas,
+}: {
+  desde: number
+  cantidad: number
+  total: number
+  hayMas: boolean
+  cargando: boolean
+  error: string
+  pageSize: number
+  onIrAPagina: (start: number) => void
+  onCargarMas: () => void
+}) {
+  const esDesktop = useEsDesktop()
+  if (total === 0 && !error) return null
+  return (
+    <div className="flex flex-col items-center gap-2 pt-4">
+      {error && <p className="text-xs" style={{ color: "var(--red)" }}>{error}</p>}
+      {esDesktop ? (
+        (hayMas || desde > 0) && (
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" onClick={() => onIrAPagina(Math.max(0, desde - pageSize))} disabled={cargando || desde === 0}>
+              Anterior
+            </Button>
+            <p className="text-xs tabular-nums" style={{ color: "var(--ink-faint)" }}>
+              {cargando ? "Cargando…" : `${desde + 1}–${desde + cantidad} de ${total}`}
+            </p>
+            <Button variant="ghost" onClick={() => onIrAPagina(desde + pageSize)} disabled={cargando || !hayMas}>
+              Siguiente
+            </Button>
+          </div>
+        )
+      ) : hayMas ? (
+        <>
+          <Button variant="ghost" onClick={onCargarMas} disabled={cargando}>
+            {cargando ? "Cargando…" : "Cargar más"}
+          </Button>
+          <p className="text-xs" style={{ color: "var(--ink-faint)" }}>Mostrando {cantidad} de {total}</p>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+/** Tamaños de página del portal. Iguales a los *_PAGE_SIZE del server (lib/erp.ts). */
+const PAGINA = 30
+/** Pagos de a 10: cada pago trae sus facturas embebidas y 30 tardan ~9 s en Alegra. */
+const PAGINA_PAGOS = 10
+const PAGINA_PRESUPUESTOS = 30
+
 
 /**
  * Desktop o celular, para elegir cómo se recorre el historial: flechas de página en
@@ -483,252 +640,129 @@ function useEsDesktop() {
 
 function FacturasTable({
   facturas: primeraPagina,
-  total,
+  total: totalInicial,
+  abiertas,
   razonsocial,
-  cuentaCorriente,
+  cuit,
   tenantName,
   whatsappNumber,
   initialFilter = "todos",
-  onFilterChange,
-  initialSearch = "",
-  onSearchChange,
   openFacturaId,
   openFacturaAlegraId,
 }: {
   facturas: Factura[]
   total: number
+  /** Facturas impagas COMPLETAS (no una página). Resuelven Pendientes/Vencidas sin pedir nada. */
+  abiertas: Factura[]
   razonsocial: string
-  cuentaCorriente: number
+  cuit: string
   tenantName: string
   whatsappNumber: string
   initialFilter?: FacturaEstado | "todos"
-  onFilterChange?: (v: FacturaEstado | "todos") => void
-  initialSearch?: string
-  onSearchChange?: (v: string) => void
   openFacturaId?: string
   openFacturaAlegraId?: string
 }) {
-  // Lo que se está mostrando. `null` = la primera página tal como la trajo el server
-  // component, sin filtros ni navegación todavía.
-  const [vista, setVista] = useState<Vista | null>(null)
-  const [prevPrimera, setPrevPrimera] = useState(primeraPagina)
-  if (prevPrimera !== primeraPagina) {
-    // El server component volvió a renderizar: lo que teníamos cargado puede estar viejo.
-    setPrevPrimera(primeraPagina)
-    setVista(null)
-  }
-  const [cargando, setCargando] = useState(false)
-  const [errorCarga, setErrorCarga] = useState("")
-  const esDesktop = useEsDesktop()
-
-  const facturas = vista ? vista.facturas : primeraPagina
-  const totalActual = vista ? vista.total : total
-  const desde = vista ? vista.start : 0
-  const hayMas = desde + facturas.length < totalActual
-
-  async function pedirPagina(start: number, params: URLSearchParams): Promise<{ facturas: Factura[]; total: number }> {
-    params.set("start", String(start))
-    const res = await fetch(`/api/portal/facturas?${params}`)
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? "No pudimos cargar las facturas")
-    return data as { facturas: Factura[]; total: number }
-  }
-
-  async function navegar(accion: () => Promise<void>) {
-    setCargando(true)
-    setErrorCarga("")
-    try {
-      await accion()
-    } catch (err) {
-      setErrorCarga(err instanceof Error ? err.message : "No pudimos cargar las facturas")
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  /** Celular: suma la siguiente tanda a lo que ya está en pantalla. */
-  function cargarMas() {
-    return navegar(async () => {
-      const page = await pedirPagina(desde + facturas.length, queryFiltros())
-      setVista({ start: desde, facturas: [...facturas, ...page.facturas], total: page.total })
-    })
-  }
-
-  /** Desktop: reemplaza por la página pedida. */
-  function irAPagina(start: number) {
-    return navegar(async () => {
-      const page = await pedirPagina(start, queryFiltros())
-      setVista({ start, facturas: page.facturas, total: page.total })
-      setSelected(new Set()) // la selección era de la página anterior
-    })
-  }
+  // Qué resuelve Alegra (probado) y cómo se usa acá:
+  //   Pagadas / Anuladas / Todos → se piden paginados: status=closed|void y fecha de emisión.
+  //   Pendientes / Vencidas      → las dos son status=open y Alegra no filtra por vencimiento,
+  //                                así que salen del set de abiertas, que está COMPLETO. Nada de
+  //                                recortar una página.
+  // Un chip por vez: Alegra acepta un solo status por consulta, así que "pagadas + anuladas" no
+  // se puede pedir. Sin búsqueda ni orden por columna: los dos mirarían solo la página cargada.
+  const pag = usePaginado<Factura>({
+    url: "/api/portal/facturas",
+    pick: (d) => (d.facturas as Factura[]) ?? [],
+    inicial: primeraPagina,
+    totalInicial,
+    pageSize: PAGINA,
+  })
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState(initialSearch)
-  const [searchOpen, setSearchOpen] = useState(!!initialSearch)
   const [filterEstados, setFilterEstados] = useState<Set<FacturaEstado>>(initialToSet(initialFilter))
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
-  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
+  const [pdfFactura, setPdfFactura] = useState<Factura | null>(null)
+  const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
+
+  // Fechas vigentes en el acto: "Limpiar" cambia desde y hasta en el mismo click, y armar la
+  // consulta con el estado del render hacía que cada cambio viera el valor viejo del otro.
+  // Los chips no lo necesitan: se tocan de a uno, así que el estado del render está al día.
+  const fechasRef = useRef({ desde: fromDate, hasta: toDate })
 
   const [prevInitial, setPrevInitial] = useState(initialFilter)
   if (prevInitial !== initialFilter) {
+    // Viene de tocar una factura en las tarjetas de resumen: siempre Pendientes o Vencidas,
+    // que se resuelven con las abiertas. No hace falta pedir nada.
     setPrevInitial(initialFilter)
     setFilterEstados(initialToSet(initialFilter))
   }
 
-  const [prevSearch, setPrevSearch] = useState(initialSearch)
-  if (prevSearch !== initialSearch) {
-    setPrevSearch(initialSearch)
-    setSearch(initialSearch)
-    setSearchOpen(!!initialSearch)
-  }
-  const [pdfFactura, setPdfFactura] = useState<Factura | null>(null)
-  const [whatsappModal, setWhatsappModal] = useState<{ facturas: Factura[]; intent: WhatsAppFacturaIntent } | null>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
+  const estadoSel = [...filterEstados][0] as FacturaEstado | undefined
+  const modoAbiertas = estadoSel === "pendiente" || estadoSel === "vencida"
 
-  // Abre la factura indicada por URL (?factura=NUMERO) — usado al tocar una notificación.
-  // Abre el PDF de Alegra, que es el comprobante de verdad: el modal que había acá lo
-  // fabricaba (ítems inventados, CAE fijo, receptor de los fixtures) y se borró.
-  //
-  // Con el id de Alegra en el link (notificaciones desde la migración 0022) se abre directo,
-  // esté o no entre las facturas cargadas. El endpoint del PDF igual valida que la factura
-  // sea del cliente logueado: un id ajeno en la URL da 404 y no filtra nada.
-  //
-  // Sin el id (notificaciones viejas) se busca entre las cargadas, y si no está, el número
-  // queda en la búsqueda: Alegra no permite encontrar una factura por su número.
-  const [prevOpen, setPrevOpen] = useState<string | undefined>(undefined)
-  if (openFacturaId && prevOpen !== openFacturaId) {
-    setPrevOpen(openFacturaId)
-    const target = facturas.find((f) => f.id === openFacturaId)
-    if (openFacturaAlegraId) {
-      // El visor usa solo `id` (título) y `alegraId`: si la factura no está cargada, alcanza.
-      setPdfFactura({ ...(target ?? ({} as Factura)), id: openFacturaId, alegraId: openFacturaAlegraId })
-    } else if (target?.alegraId) {
-      setPdfFactura(target)
-    } else {
-      setSearch(openFacturaId)
-    }
+  /** Filas de Pendientes/Vencidas: del set completo, con el rango de emisión aplicado acá. */
+  const filasAbiertas = useMemo(() => {
+    if (!modoAbiertas) return []
+    const d = fromDate ? isoToLocal(fromDate) : null
+    const h = toDate ? isoToLocal(toDate) : null
+    return abiertas.filter((f) => {
+      if (f.estado !== estadoSel) return false
+      const fecha = parseLocalDate(f.emision)
+      return (!d || !fecha || fecha >= d) && (!h || !fecha || fecha <= h)
+    })
+  }, [modoAbiertas, abiertas, estadoSel, fromDate, toDate])
+
+  const facturas = modoAbiertas ? filasAbiertas : pag.items
+
+  function aplicar(estados: Set<FacturaEstado>, fechas: { desde: string; hasta: string }) {
+    setSelected(new Set())
+    const sel = [...estados][0]
+    // Pendientes/Vencidas no consultan: se recalculan en pantalla sobre las abiertas.
+    if (sel === "pendiente" || sel === "vencida") return
+    const params = new URLSearchParams()
+    if (sel) params.set("estado", sel) // la ruta traduce pagada→closed, anulada→void
+    if (fechas.desde) params.set("desde", fechas.desde)
+    if (fechas.hasta) params.set("hasta", fechas.hasta)
+    void pag.filtrar(params)
   }
 
   function toggleEstado(estado: FacturaEstado) {
-    // Se calcula desde el ref y fuera del updater de setState: React corre los updaters dos
-    // veces en desarrollo, y la consulta al server no puede ser parte de uno.
-    const next = new Set(filtrosRef.current.estados)
-    if (next.has(estado)) next.delete(estado)
-    else next.add(estado)
+    // Un chip por vez. Tocar el que ya está activo lo apaga (vuelve a Todos).
+    const next = filterEstados.has(estado) ? new Set<FacturaEstado>() : new Set([estado])
     setFilterEstados(next)
-    cambiarFiltros({ estados: next })
+    aplicar(next, fechasRef.current)
   }
 
-  /**
-   * Traduce los filtros de la UI a lo que Alegra sabe resolver.
-   *
-   * Solo un `status` por consulta, así que la traducción aplica cuando la selección cae
-   * entera dentro de uno: {pendiente, vencida} → open, {pagada} → closed, {anulada} → void.
-   * Una selección mezclada (p. ej. vencida + pagada) no se puede expresar y se resuelve
-   * con las filas cargadas.
-   *
-   * Las fechas solo van al server cuando se filtra por EMISIÓN: el vencimiento Alegra no
-   * lo filtra (probado, ignora dueDate_afterOrNow).
-   */
-  function queryFiltros(
-    estadosSet: Set<FacturaEstado> = filterEstados,
-    campo: "emision" | "vencimiento" = dateFilterField,
-    desde: string = fromDate,
-    hasta: string = toDate,
-  ): URLSearchParams {
-    const params = new URLSearchParams()
-    const estados = Array.from(estadosSet)
-    const abiertos = estados.every((e) => e === "pendiente" || e === "vencida")
-    if (estados.length > 0) {
-      if (abiertos) params.set("estado", "pendiente")
-      else if (estados.length === 1) params.set("estado", estados[0])
-    }
-    if (campo === "emision") {
-      if (desde) params.set("desde", desde)
-      if (hasta) params.set("hasta", hasta)
-    }
-    return params
+  function cambiarFecha(patch: Partial<typeof fechasRef.current>) {
+    fechasRef.current = { ...fechasRef.current, ...patch }
+    aplicar(filterEstados, fechasRef.current)
   }
 
-  /** ¿Quedan filtros que el server NO resolvió y hay que aplicar acá? */
-  const filtroSoloLocal =
-    Boolean(search) ||
-    (dateFilterField === "vencimiento" && Boolean(fromDate || toDate)) ||
-    (filterEstados.size > 1 && !Array.from(filterEstados).every((e) => e === "pendiente" || e === "vencida"))
-
-  // Cada cambio de estado o fecha vuelve a consultar desde la página 0. Antes esto filtraba
-  // las 30 filas cargadas y "Pagadas" no encontraba nada si las pagadas eran viejas.
-  //
-  // Se dispara desde los handlers y no desde un useEffect a propósito: el refetch es la
-  // consecuencia de que alguien tocó un filtro, no de que el componente se haya renderizado.
-  // Un efecto acá además setea estado en forma sincrónica y encadena renders.
-  const consultaRef = useRef(0)
-
-  // Últimos valores de los filtros, actualizados en el acto. "Limpiar" del filtro de fecha
-  // llama a onFromDateChange("") y onToDateChange("") en el mismo click: armando la consulta
-  // con el estado del render, cada uno veía el valor VIEJO del otro, y la última consulta
-  // que salía todavía traía fecha. El ref siempre tiene lo último.
-  const filtrosRef = useRef({ estados: filterEstados, campo: dateFilterField, desde: fromDate, hasta: toDate })
-
-  function cambiarFiltros(patch: Partial<typeof filtrosRef.current>) {
-    const f = { ...filtrosRef.current, ...patch }
-    filtrosRef.current = f
-    void refiltrar(queryFiltros(f.estados, f.campo, f.desde, f.hasta))
-  }
-  async function refiltrar(params: URLSearchParams) {
-    // Se incrementa ANTES de cualquier return: volver a "sin filtros" también tiene que
-    // invalidar la consulta que esté en vuelo. Si no, esa respuesta llega después y pisa la
-    // vista limpia con el resultado filtrado.
-    const consulta = ++consultaRef.current
-    if ([...params.keys()].length === 0) {
-      setVista(null) // sin filtros server-side: vuelve a lo que trajo el server component
-      setCargando(false)
-      setErrorCarga("")
-      return
-    }
-    setCargando(true)
-    setErrorCarga("")
-    try {
-      const page = await pedirPagina(0, params)
-      if (consultaRef.current === consulta) setVista({ start: 0, ...page })
-    } catch (err) {
-      if (consultaRef.current === consulta) {
-        setErrorCarga(err instanceof Error ? err.message : "No pudimos filtrar")
-      }
-    } finally {
-      if (consultaRef.current === consulta) setCargando(false)
+  // Abre la factura indicada por URL (?factura=NUMERO[&alegra=ID]) — lo usan las notificaciones.
+  // 1. Con el id de Alegra en el link se abre directo (el endpoint del PDF valida que sea del
+  //    cliente: un id ajeno da 404).
+  // 2. Sin él (notificaciones anteriores a 0022) se busca por número en la página cargada y en
+  //    las abiertas COMPLETAS: las notificaciones son por facturas impagas, así que ahí está
+  //    aunque sea vieja. Antes caía en la búsqueda, que ya no existe.
+  const [prevOpen, setPrevOpen] = useState<string | undefined>(undefined)
+  if (openFacturaId && prevOpen !== openFacturaId) {
+    setPrevOpen(openFacturaId)
+    const target = primeraPagina.find((f) => f.id === openFacturaId) ?? abiertas.find((f) => f.id === openFacturaId)
+    if (openFacturaAlegraId) {
+      // El visor usa solo `id` (título) y `alegraId`.
+      setPdfFactura({ ...(target ?? ({} as Factura)), id: openFacturaId, alegraId: openFacturaAlegraId })
+    } else if (target?.alegraId) {
+      setPdfFactura(target)
     }
   }
-
-  // Lo que el server ya filtró no se vuelve a filtrar acá: se aplica solo lo que no sabe
-  // resolver (la búsqueda por número, el vencimiento y las selecciones mezcladas).
-  const filtered = useMemo(() => {
-    const porServer = vista !== null
-    const desde = fromDate ? isoToLocal(fromDate) : null
-    const hasta = toDate ? isoToLocal(toDate) : null
-    return facturas.filter((f) => {
-      const matchSearch = !search || f.id.toLowerCase().includes(search.toLowerCase()) || f.tipo.toLowerCase().includes(search.toLowerCase())
-      const matchEstado = filterEstados.size === 0 || filterEstados.has(f.estado)
-      const aplicaFechaLocal = !porServer || dateFilterField === "vencimiento"
-      const fecha = parseLocalDate(dateFilterField === "emision" ? f.emision : f.vencimiento)
-      const matchFrom = !aplicaFechaLocal || !desde || !fecha || fecha >= desde
-      const matchTo = !aplicaFechaLocal || !hasta || !fecha || fecha <= hasta
-      return matchSearch && matchEstado && matchFrom && matchTo
-    })
-  }, [facturas, search, filterEstados, fromDate, toDate, dateFilterField, vista])
 
   const selectedFacturas = facturas.filter((f) => selected.has(f.id))
   const selectedTotal = selectedFacturas.reduce((s, f) => s + saldoDe(f), 0)
-
-  const estadoOrder: Record<FacturaEstado, number> = { vencida: 0, pendiente: 1, pagada: 2, anulada: 3 }
 
   const facturaColumns: TableColumn<Factura>[] = [
     {
       key: "id",
       header: "Comprobante",
-      sortable: true,
       render: (f) => (
         <>
           <div className="font-medium" style={{ color: "var(--ink)" }}>{f.id}</div>
@@ -739,10 +773,7 @@ function FacturasTable({
     {
       key: "emision",
       header: "Emisión",
-      sortable: true,
       hideBelow: "sm",
-      defaultSortDir: "desc",
-      sortValue: (f) => parseLocalDate(f.emision)?.valueOf() ?? 0,
       className: "text-xs",
       headerClassName: "text-xs",
       render: (f) => <span style={{ color: "var(--ink-soft)" }}>{f.emision}</span>,
@@ -750,19 +781,13 @@ function FacturasTable({
     {
       key: "vencimiento",
       header: "Vencimiento",
-      sortable: true,
-      defaultSortDir: "desc",
-      sortValue: (f) => parseLocalDate(f.vencimiento)?.valueOf() ?? 0,
       className: "text-xs",
       render: (f) => <span style={{ color: "var(--ink-soft)" }}>{f.vencimiento}</span>,
     },
     {
       key: "importe",
       header: "Importe",
-      sortable: true,
       align: "right",
-      defaultSortDir: "desc",
-      sortValue: (f) => f.importe,
       className: "font-medium tabular-nums",
       render: (f) =>
         esPagoParcial(f) ? (
@@ -783,9 +808,7 @@ function FacturasTable({
     {
       key: "estado",
       header: "Estado",
-      sortable: true,
       hideBelow: "md",
-      sortValue: (f) => estadoOrder[f.estado],
       render: (f) => (
         <div className="inline-flex flex-col items-start gap-1">
           <FacturaBadge estado={f.estado} />
@@ -831,17 +854,10 @@ function FacturasTable({
   return (
     <>
       <Toolbar
-        searchOpen={searchOpen}
-        setSearchOpen={(v) => { setSearchOpen(v); if (v) setTimeout(() => searchRef.current?.focus(), 50) }}
-        searchRef={searchRef}
-        search={search}
-        setSearch={setSearch}
         fromDate={fromDate}
         toDate={toDate}
-        onFromDateChange={(v) => { setFromDate(v); cambiarFiltros({ desde: v }) }}
-        onToDateChange={(v) => { setToDate(v); cambiarFiltros({ hasta: v }) }}
-        dateFilterField={dateFilterField}
-        onDateFilterFieldChange={(v) => { setDateFilterField(v); cambiarFiltros({ campo: v }) }}
+        onFromDateChange={(v) => { setFromDate(v); cambiarFecha({ desde: v }) }}
+        onToDateChange={(v) => { setToDate(v); cambiarFecha({ hasta: v }) }}
         multiFilterOptions={[
           { value: "pendiente", label: "Pendientes" },
           { value: "vencida", label: "Vencidas" },
@@ -850,7 +866,7 @@ function FacturasTable({
         ]}
         activeFilters={filterEstados}
         onToggleFilter={(v) => toggleEstado(v as FacturaEstado)}
-        onClearFilters={() => { setFilterEstados(new Set()); cambiarFiltros({ estados: new Set() }) }}
+        onClearFilters={() => { setFilterEstados(new Set()); aplicar(new Set(), fechasRef.current) }}
       />
 
       {(
@@ -867,66 +883,27 @@ function FacturasTable({
       <Table<Factura>
         className="mt-2"
         columns={facturaColumns}
-        rows={filtered}
+        rows={facturas}
         rowKey={(f) => f.id}
         selectable
         selectedKeys={Array.from(selected)}
         onSelectionChange={(keys) => setSelected(new Set(keys))}
-        defaultSort={{ key: "emision", dir: "desc" }}
         empty="No hay facturas para mostrar"
       />
 
-      {total > 0 && (
-        <div className="flex flex-col items-center gap-2 pt-4">
-          {/* Alegra no filtra por fecha ni busca por número (probado), así que los filtros y
-              la lupa trabajan sobre lo ya cargado. Decirlo evita que el cliente concluya que
-              una factura vieja no existe cuando en realidad no se bajó todavía. */}
-          {hayMas && filtroSoloLocal && (
-            <p className="text-xs text-center" style={{ color: "var(--ink-soft)" }}>
-              La búsqueda por número mira las {facturas.length} facturas cargadas — Alegra no
-              sabe buscar por número. Si no aparece la que buscás, cargá más resultados.
-            </p>
-          )}
-
-          {errorCarga && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>{errorCarga}</p>
-          )}
-
-          {esDesktop ? (
-            // Pantalla grande: flechas de página. Llegar a una factura de hace años no
-            // puede costar 40 clicks en "Cargar más".
-            (hayMas || desde > 0) && (
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" onClick={() => irAPagina(Math.max(0, desde - PAGINA))} disabled={cargando || desde === 0}>
-                  Anterior
-                </Button>
-                <p className="text-xs tabular-nums" style={{ color: "var(--ink-faint)" }}>
-                  {cargando ? "Cargando…" : `${desde + 1}–${desde + facturas.length} de ${totalActual}`}
-                </p>
-                <Button variant="ghost" onClick={() => irAPagina(desde + PAGINA)} disabled={cargando || !hayMas}>
-                  Siguiente
-                </Button>
-              </div>
-            )
-          ) : hayMas ? (
-            // Celular: acumular. Además le da más material a la búsqueda por número, que
-            // trabaja sobre lo cargado.
-            <>
-              <Button variant="ghost" onClick={cargarMas} disabled={cargando}>
-                {cargando ? "Cargando…" : "Cargar más"}
-              </Button>
-              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                Mostrando {facturas.length} de {totalActual}
-              </p>
-            </>
-          ) : (
-            facturas.length > FACTURAS_VISIBLES_SIN_PAGINAR && (
-              <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                Mostrando las {facturas.length} facturas
-              </p>
-            )
-          )}
-        </div>
+      {/* Pendientes/Vencidas vienen completas: no hay páginas que recorrer. */}
+      {!modoAbiertas && (
+        <Paginacion
+          desde={pag.desde}
+          cantidad={pag.items.length}
+          total={pag.total}
+          hayMas={pag.hayMas}
+          cargando={pag.cargando}
+          error={pag.error}
+          pageSize={PAGINA}
+          onIrAPagina={(start) => { setSelected(new Set()); void pag.irAPagina(start) }}
+          onCargarMas={() => void pag.cargarMas()}
+        />
       )}
 
       {pdfFactura?.alegraId && (
@@ -937,7 +914,7 @@ function FacturasTable({
         <WhatsAppFacturasModal
           facturas={whatsappModal.facturas}
           razonsocial={razonsocial}
-          cuentaCorriente={cuentaCorriente}
+          cuit={cuit}
           tenantName={tenantName}
           whatsappNumber={whatsappNumber}
           initialIntent={whatsappModal.intent}
@@ -950,36 +927,37 @@ function FacturasTable({
 
 // ── Pagos Table ───────────────────────────────────────────────────────────────
 
-function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialSearch = "" }: { pagos: Pago[]; facturas: Factura[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string; initialSearch?: string }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState(initialSearch)
-  const [searchOpen, setSearchOpen] = useState(!!initialSearch)
+function PagosTable({
+  pagos: primeraPagina,
+  total: totalInicial,
+  razonsocial,
+  cuit,
+  tenantName,
+  whatsappNumber,
+}: {
+  pagos: Pago[]
+  total: number
+  razonsocial: string
+  cuit: string
+  tenantName: string
+  whatsappNumber: string
+}) {
+  // Sin filtros, sin búsqueda y sin orden por columna: Alegra no filtra pagos por fecha
+  // (date_afterOrNow se ignora, probado) ni busca por número, y ordenar por columna ordenaría
+  // solo la página cargada. Lo que se muestra es exactamente lo que Alegra devuelve.
+  const pag = usePaginado<Pago>({
+    url: "/api/portal/pagos",
+    pick: (d) => (d.pagos as Pago[]) ?? [],
+    inicial: primeraPagina,
+    totalInicial,
+    pageSize: PAGINA_PAGOS,
+  })
+  const pagos = pag.items
 
-  const [prevSearch, setPrevSearch] = useState(initialSearch)
-  if (prevSearch !== initialSearch) {
-    setPrevSearch(initialSearch)
-    setSearch(initialSearch)
-    setSearchOpen(!!initialSearch)
-  }
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [modalPago, setModalPago] = useState<Pago | null>(null)
   const [pdfPago, setPdfPago] = useState<Pago | null>(null)
-  const [showAdjuntar, setShowAdjuntar] = useState(false)
   const [wspModal, setWspModal] = useState(false)
-  const [fromDate, setFromDate] = useState("")
-  const [toDate, setToDate] = useState("")
-  const searchRef = useRef<HTMLInputElement>(null)
-
-  const filtered = useMemo(() => {
-    const desde = fromDate ? isoToLocal(fromDate) : null
-    const hasta = toDate ? isoToLocal(toDate) : null
-    return pagos.filter((p) => {
-      const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase()) || p.facturas.some((imp) => imp.factura.toLowerCase().includes(search.toLowerCase()))
-      const fecha = parseLocalDate(p.fecha)
-      const matchFrom = !desde || !fecha || fecha >= desde
-      const matchTo = !hasta || !fecha || fecha <= hasta
-      return matchSearch && matchFrom && matchTo
-    })
-  }, [pagos, search, fromDate, toDate])
 
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
@@ -988,7 +966,6 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     {
       key: "id",
       header: "Recibo",
-      sortable: true,
       render: (p) => (
         <>
           <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>
@@ -999,18 +976,13 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     {
       key: "fecha",
       header: "Fecha",
-      sortable: true,
-      defaultSortDir: "desc",
-      sortValue: (p) => parseLocalDate(p.fecha)?.valueOf() ?? 0,
       className: "text-xs",
       render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.fecha}</span>,
     },
     {
       key: "facturaAsociada",
       header: "Facturas asociadas",
-      sortable: true,
       hideBelow: "md",
-      sortValue: (p) => p.facturas[0]?.factura ?? "",
       className: "text-xs",
       render: (p) => (
         <span className="inline-flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
@@ -1030,7 +1002,6 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     {
       key: "medio",
       header: "Medio",
-      sortable: true,
       hideBelow: "sm",
       className: "text-xs",
       render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.medio}</span>,
@@ -1038,10 +1009,7 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
     {
       key: "monto",
       header: "Monto pagado",
-      sortable: true,
       align: "right",
-      defaultSortDir: "desc",
-      sortValue: (p) => p.monto,
       className: "font-medium tabular-nums",
       render: (p) => <span style={{ color: "var(--green)" }}>{fmt(p.monto)}</span>,
     },
@@ -1052,18 +1020,10 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn
-            onClick={() => setPdfPago(p)}
-            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
-            disabled={!p.alegraId}
-          >
+          <ActionBtn onClick={() => setPdfPago(p)} label={p.alegraId ? "Ver PDF" : "PDF no disponible"} disabled={!p.alegraId}>
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn
-            onClick={() => descargarDocumento("pago", p)}
-            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
-            disabled={!p.alegraId}
-          >
+          <ActionBtn onClick={() => descargarDocumento("pago", p)} label={p.alegraId ? "Descargar PDF" : "PDF no disponible"} disabled={!p.alegraId}>
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -1073,52 +1033,20 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
 
   return (
     <>
-      <div className="mb-2">
-        <Toolbar
-          searchOpen={searchOpen}
-          setSearchOpen={(v) => { setSearchOpen(v); if (v) setTimeout(() => searchRef.current?.focus(), 50) }}
-          searchRef={searchRef}
-          search={search}
-          setSearch={setSearch}
-          fromDate={fromDate}
-          toDate={toDate}
-          onFromDateChange={setFromDate}
-          onToDateChange={setToDate}
-          filterOptions={[]}
-          filterValue="todos"
-          setFilterValue={() => {}}
-          hideFilter
-          extraActions={
-            <button
-              onClick={() => setShowAdjuntar(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-medium transition-all shrink-0"
-              style={{ background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue-soft)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--blue)"; e.currentTarget.style.color = "white" }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--blue-soft)"; e.currentTarget.style.color = "var(--blue)" }}
-            >
-              <Plus size={14} strokeWidth={1.6} color="currentColor" />
-              Adjuntar comprobante
-            </button>
-          }
-        />
-      </div>
-
-      {(
-        <SelectionBar
-          count={selected.size}
-          total={selectedTotal}
-          onClear={() => setSelected(new Set())}
-          onDownload={() => descargarVarios("pago", selectedPagos)}
-          onWhatsapp={() => setWspModal(true)}
-          itemLabel="recibo"
-        />
-      )}
+      <SelectionBar
+        count={selected.size}
+        total={selectedTotal}
+        onClear={() => setSelected(new Set())}
+        onDownload={() => descargarVarios("pago", selectedPagos)}
+        onWhatsapp={() => setWspModal(true)}
+        itemLabel="recibo"
+      />
 
       {wspModal && (
         <WhatsAppPagosModal
           pagos={selectedPagos}
           razonsocial={razonsocial}
-          cuentaCorriente={cuentaCorriente}
+          cuit={cuit}
           tenantName={tenantName}
           whatsappNumber={whatsappNumber}
           onClose={() => setWspModal(false)}
@@ -1128,27 +1056,32 @@ function PagosTable({ pagos, facturas, razonsocial, cuentaCorriente, tenantName,
       <Table<Pago>
         className="mt-2"
         columns={pagoColumns}
-        rows={filtered}
+        rows={pagos}
         rowKey={(p) => p.id}
         onRowClick={(p) => setModalPago(p)}
         selectable
         selectedKeys={Array.from(selected)}
         onSelectionChange={(keys) => setSelected(new Set(keys))}
-        defaultSort={{ key: "fecha", dir: "desc" }}
         empty="No hay pagos para mostrar"
+      />
+
+      <Paginacion
+        desde={pag.desde}
+        cantidad={pagos.length}
+        total={pag.total}
+        hayMas={pag.hayMas}
+        cargando={pag.cargando}
+        error={pag.error}
+        pageSize={PAGINA_PAGOS}
+        onIrAPagina={(start) => { setSelected(new Set()); void pag.irAPagina(start) }}
+        onCargarMas={() => void pag.cargarMas()}
       />
 
       {pdfPago?.alegraId && (
         <PdfModal kind="pago" doc={pdfPago} titulo={`Recibo ${pdfPago.id}`} onClose={() => setPdfPago(null)} />
       )}
 
-      {modalPago && (
-        <PagoModal pago={modalPago} facturas={facturas} onClose={() => setModalPago(null)} />
-      )}
-
-      {showAdjuntar && (
-        <AdjuntarModal onClose={() => setShowAdjuntar(false)} facturas={facturas} />
-      )}
+      {modalPago && <PagoModal pago={modalPago} onClose={() => setModalPago(null)} />}
     </>
   )
 }
@@ -1169,96 +1102,99 @@ function PresupuestoBadge({ estado }: { estado: PresupuestoEstado }) {
   )
 }
 
-function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialSearch = "" }: { presupuestos: Presupuesto[]; razonsocial: string; cuentaCorriente: number; tenantName: string; whatsappNumber: string; initialSearch?: string }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState(initialSearch)
-  const [searchOpen, setSearchOpen] = useState(!!initialSearch)
+/** Estados de presupuesto que Alegra sabe filtrar: `billed` y `unbilled`. */
+type FiltroPresupuesto = "aceptado" | "sin-aceptar"
 
-  const [prevSearch, setPrevSearch] = useState(initialSearch)
-  if (prevSearch !== initialSearch) {
-    setPrevSearch(initialSearch)
-    setSearch(initialSearch)
-    setSearchOpen(!!initialSearch)
-  }
-  const [filterEstados, setFilterEstados] = useState<Set<PresupuestoEstado>>(new Set())
-  const [modalPresupuesto, setModalPresupuesto] = useState<Presupuesto | null>(null)
+function PresupuestosTable({
+  presupuestos: primeraPagina,
+  total: totalInicial,
+  razonsocial,
+  cuit,
+  tenantName,
+  whatsappNumber,
+}: {
+  presupuestos: Presupuesto[]
+  total: number
+  razonsocial: string
+  cuit: string
+  tenantName: string
+  whatsappNumber: string
+}) {
+  // Filtros que resuelve Alegra (probado): estado → status=billed|unbilled, y fecha de emisión.
+  // "Vigentes" y "Vencidos" ya no son chips separados: los dos son `unbilled` y los separa el
+  // vencimiento, que Alegra no filtra. Se juntan en "Sin aceptar" y el vencido se ve en el badge.
+  const pag = usePaginado<Presupuesto>({
+    url: "/api/portal/presupuestos",
+    pick: (d) => (d.presupuestos as Presupuesto[]) ?? [],
+    inicial: primeraPagina,
+    totalInicial,
+    pageSize: PAGINA_PRESUPUESTOS,
+  })
+  const presupuestos = pag.items
+
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pdfPresupuesto, setPdfPresupuesto] = useState<Presupuesto | null>(null)
   const [wspModal, setWspModal] = useState<WhatsAppPresupuestoIntent | null>(null)
+  const [filtro, setFiltro] = useState<Set<FiltroPresupuesto>>(new Set())
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
-  const [dateFilterField, setDateFilterField] = useState<"emision" | "vencimiento">("emision")
-  const searchRef = useRef<HTMLInputElement>(null)
+  // Últimos valores en el acto: "Limpiar" cambia desde y hasta en el mismo click.
+  const filtrosRef = useRef({ filtro, desde: fromDate, hasta: toDate })
 
-  function toggleEstado(estado: PresupuestoEstado) {
-    setFilterEstados(prev => {
-      const next = new Set(prev)
-      if (next.has(estado)) next.delete(estado)
-      else next.add(estado)
-      return next
-    })
+  function aplicar(patch: Partial<typeof filtrosRef.current>) {
+    const f = { ...filtrosRef.current, ...patch }
+    filtrosRef.current = f
+    const params = new URLSearchParams()
+    // Alegra acepta un solo status: con los dos chips (o ninguno) no se filtra por estado.
+    if (f.filtro.size === 1) params.set("estado", [...f.filtro][0])
+    if (f.desde) params.set("desde", f.desde)
+    if (f.hasta) params.set("hasta", f.hasta)
+    setSelected(new Set())
+    void pag.filtrar(params)
   }
 
-  const filtered = useMemo(() => {
-    const desde = fromDate ? isoToLocal(fromDate) : null
-    const hasta = toDate ? isoToLocal(toDate) : null
-    return presupuestos.filter((p) => {
-      const matchSearch = !search || p.id.toLowerCase().includes(search.toLowerCase())
-      const matchEstado = filterEstados.size === 0 || filterEstados.has(p.estado)
-      const fecha = parseLocalDate(dateFilterField === "emision" ? p.fecha : p.validoHasta)
-      const matchFrom = !desde || !fecha || fecha >= desde
-      const matchTo = !hasta || !fecha || fecha <= hasta
-      return matchSearch && matchEstado && matchFrom && matchTo
-    })
-  }, [presupuestos, search, filterEstados, fromDate, toDate, dateFilterField])
+  function toggleFiltro(v: FiltroPresupuesto) {
+    const next = new Set(filtrosRef.current.filtro)
+    if (next.has(v)) next.delete(v)
+    else next.add(v)
+    setFiltro(next)
+    aplicar({ filtro: next })
+  }
 
   const selectedPresupuestos = presupuestos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPresupuestos.reduce((s, p) => s + p.total, 0)
-
-  const presupuestoEstadoOrder: Record<PresupuestoEstado, number> = { vencido: 0, vigente: 1, aceptado: 2 }
 
   const presupuestoColumns: TableColumn<Presupuesto>[] = [
     {
       key: "id",
       header: "Presupuesto",
-      sortable: true,
       render: (p) => <div className="font-medium" style={{ color: "var(--ink)" }}>{p.id}</div>,
     },
     {
       key: "fecha",
       header: "Emisión",
-      sortable: true,
       hideBelow: "sm",
-      defaultSortDir: "desc",
-      sortValue: (p) => parseLocalDate(p.fecha)?.valueOf() ?? 0,
       className: "text-xs",
       render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.fecha}</span>,
     },
     {
       key: "validoHasta",
       header: "Válido hasta",
-      sortable: true,
       hideBelow: "md",
-      defaultSortDir: "desc",
-      sortValue: (p) => parseLocalDate(p.validoHasta)?.valueOf() ?? 0,
       className: "text-xs",
       render: (p) => <span style={{ color: "var(--ink-soft)" }}>{p.validoHasta}</span>,
     },
     {
       key: "total",
       header: "Total",
-      sortable: true,
       align: "right",
-      defaultSortDir: "desc",
-      sortValue: (p) => p.total,
       className: "font-medium tabular-nums",
       render: (p) => <span style={{ color: "var(--ink)" }}>{fmt(p.total)}</span>,
     },
     {
       key: "estado",
       header: "Estado",
-      sortable: true,
       hideBelow: "md",
-      sortValue: (p) => presupuestoEstadoOrder[p.estado],
       render: (p) => <PresupuestoBadge estado={p.estado} />,
     },
     {
@@ -1268,18 +1204,10 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
       headerClassName: "text-xs",
       render: (p) => (
         <div className="flex items-center justify-end gap-2">
-          <ActionBtn
-            onClick={() => setPdfPresupuesto(p)}
-            label={p.alegraId ? "Ver PDF" : "PDF no disponible"}
-            disabled={!p.alegraId}
-          >
+          <ActionBtn onClick={() => setPdfPresupuesto(p)} label={p.alegraId ? "Ver PDF" : "PDF no disponible"} disabled={!p.alegraId}>
             <EyeIcon />
           </ActionBtn>
-          <ActionBtn
-            onClick={() => descargarDocumento("presupuesto", p)}
-            label={p.alegraId ? "Descargar PDF" : "PDF no disponible"}
-            disabled={!p.alegraId}
-          >
+          <ActionBtn onClick={() => descargarDocumento("presupuesto", p)} label={p.alegraId ? "Descargar PDF" : "PDF no disponible"} disabled={!p.alegraId}>
             <DownloadIcon />
           </ActionBtn>
         </div>
@@ -1290,43 +1218,33 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
   return (
     <>
       <Toolbar
-        searchOpen={searchOpen}
-        setSearchOpen={(v) => { setSearchOpen(v); if (v) setTimeout(() => searchRef.current?.focus(), 50) }}
-        searchRef={searchRef}
-        search={search}
-        setSearch={setSearch}
         fromDate={fromDate}
         toDate={toDate}
-        onFromDateChange={setFromDate}
-        onToDateChange={setToDate}
-        dateFilterField={dateFilterField}
-        onDateFilterFieldChange={setDateFilterField}
+        onFromDateChange={(v) => { setFromDate(v); aplicar({ desde: v }) }}
+        onToDateChange={(v) => { setToDate(v); aplicar({ hasta: v }) }}
         multiFilterOptions={[
-          { value: "vigente", label: "Vigentes" },
-          { value: "vencido", label: "Vencidos" },
+          { value: "sin-aceptar", label: "Sin aceptar" },
           { value: "aceptado", label: "Aceptados" },
         ]}
-        activeFilters={filterEstados}
-        onToggleFilter={(v) => toggleEstado(v as PresupuestoEstado)}
-        onClearFilters={() => setFilterEstados(new Set())}
+        activeFilters={filtro}
+        onToggleFilter={(v) => toggleFiltro(v as FiltroPresupuesto)}
+        onClearFilters={() => { setFiltro(new Set()); aplicar({ filtro: new Set() }) }}
       />
 
-      {(
-        <SelectionBar
-          count={selected.size}
-          total={selectedTotal}
-          onClear={() => setSelected(new Set())}
-          onDownload={() => descargarVarios("presupuesto", selectedPresupuestos)}
-          onWhatsapp={() => setWspModal("avanzar")}
-          itemLabel="presupuesto"
-        />
-      )}
+      <SelectionBar
+        count={selected.size}
+        total={selectedTotal}
+        onClear={() => setSelected(new Set())}
+        onDownload={() => descargarVarios("presupuesto", selectedPresupuestos)}
+        onWhatsapp={() => setWspModal("avanzar")}
+        itemLabel="presupuesto"
+      />
 
       {wspModal && (
         <WhatsAppPresupuestosModal
           presupuestos={selectedPresupuestos}
           razonsocial={razonsocial}
-          cuentaCorriente={cuentaCorriente}
+          cuit={cuit}
           tenantName={tenantName}
           whatsappNumber={whatsappNumber}
           initialIntent={wspModal}
@@ -1337,21 +1255,28 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
       <Table<Presupuesto>
         className="mt-2"
         columns={presupuestoColumns}
-        rows={filtered}
+        rows={presupuestos}
         rowKey={(p) => p.id}
         selectable
         selectedKeys={Array.from(selected)}
         onSelectionChange={(keys) => setSelected(new Set(keys))}
-        defaultSort={{ key: "fecha", dir: "desc" }}
         empty="No hay presupuestos para mostrar"
+      />
+
+      <Paginacion
+        desde={pag.desde}
+        cantidad={presupuestos.length}
+        total={pag.total}
+        hayMas={pag.hayMas}
+        cargando={pag.cargando}
+        error={pag.error}
+        pageSize={PAGINA_PRESUPUESTOS}
+        onIrAPagina={(start) => { setSelected(new Set()); void pag.irAPagina(start) }}
+        onCargarMas={() => void pag.cargarMas()}
       />
 
       {pdfPresupuesto?.alegraId && (
         <PdfModal kind="presupuesto" doc={pdfPresupuesto} titulo={`Presupuesto ${pdfPresupuesto.id}`} onClose={() => setPdfPresupuesto(null)} />
-      )}
-
-      {modalPresupuesto && (
-        <PresupuestoModal presupuesto={modalPresupuesto} tenantName={tenantName} whatsappNumber={whatsappNumber} onClose={() => setModalPresupuesto(null)} />
       )}
     </>
   )
@@ -1360,11 +1285,6 @@ function PresupuestosTable({ presupuestos, razonsocial, cuentaCorriente, tenantN
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 interface ToolbarProps {
-  searchOpen: boolean
-  setSearchOpen: (v: boolean) => void
-  searchRef: React.RefObject<HTMLInputElement | null>
-  search: string
-  setSearch: (v: string) => void
   filterOptions?: { value: string; label: string; tooltip?: string }[]
   filterValue?: string
   setFilterValue?: (v: string) => void
@@ -1384,11 +1304,6 @@ interface ToolbarProps {
 
 function Toolbar(props: ToolbarProps) {
   const {
-    searchOpen,
-    setSearchOpen,
-    searchRef,
-    search,
-    setSearch,
     filterOptions,
     filterValue,
     setFilterValue,
@@ -1742,27 +1657,8 @@ function Toolbar(props: ToolbarProps) {
           </div>
         )}
 
-      {/* Search — icon button when closed, SearchInput when open */}
-      <div className="relative shrink-0 flex items-center">
-        {searchOpen ? (
-          <SearchInput
-            ref={searchRef}
-            value={search}
-            onValueChange={setSearch}
-            onBlur={() => { if (!search) setSearchOpen(false) }}
-            className="h-[26px] py-0 text-xs"
-          />
-        ) : (
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center justify-center rounded-full px-2.5 transition-all"
-            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "var(--bg)", height: 26 }}
-          >
-            <Search size={12} strokeWidth={2} color="currentColor" />
-          </button>
-        )}
-      </div>
-
+      {/* Sin búsqueda: todo viene paginado de Alegra, que no busca por número. Una lupa que
+          mira solo la página cargada le hace creer al cliente que la factura no existe. */}
       {/* Extra actions (e.g. "Adjuntar comprobante") — extremo derecho */}
       {extraActions && <div className="ml-auto shrink-0 flex items-center">{extraActions}</div>}
       </div>
@@ -1778,7 +1674,7 @@ function Toolbar(props: ToolbarProps) {
 function WhatsAppFacturasModal({
   facturas,
   razonsocial,
-  cuentaCorriente,
+  cuit,
   tenantName,
   whatsappNumber,
   initialIntent,
@@ -1786,7 +1682,7 @@ function WhatsAppFacturasModal({
 }: {
   facturas: Factura[]
   razonsocial: string
-  cuentaCorriente: number
+  cuit: string
   tenantName: string
   whatsappNumber: string
   initialIntent: WhatsAppFacturaIntent
@@ -1794,7 +1690,7 @@ function WhatsAppFacturasModal({
 }) {
   const [intent, setIntent] = useState<WhatsAppFacturaIntent>(initialIntent)
   const [message, setMessage] = useState(() =>
-    buildFacturasWhatsAppMessage(initialIntent, tenantName, razonsocial, cuentaCorriente, facturas, fmt),
+    buildFacturasWhatsAppMessage(initialIntent, tenantName, razonsocial, cuit, facturas, fmt),
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1809,7 +1705,7 @@ function WhatsAppFacturasModal({
   const [prevIntent, setPrevIntent] = useState(intent)
   if (prevIntent !== intent) {
     setPrevIntent(intent)
-    setMessage(buildFacturasWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, facturas, fmt))
+    setMessage(buildFacturasWhatsAppMessage(intent, tenantName, razonsocial, cuit, facturas, fmt))
   }
 
   // Tras regenerar el mensaje, devuelve el foco al textarea con el cursor al final.
@@ -2105,7 +2001,7 @@ function PdfModal({ kind, doc, titulo, onClose }: { kind: DocKind; doc: Document
   )
 }
 
-function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[]; onClose: () => void }) {
+function PagoModal({ pago, onClose }: { pago: Pago; onClose: () => void }) {
   return (
     <Modal onClose={onClose} title={`Recibo ${pago.id}`}>
       <div className="flex flex-col gap-5">
@@ -2121,24 +2017,18 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
             Facturas canceladas con este pago
           </p>
           <div className="flex flex-col gap-2">
-            {pago.facturas.map((imp) => {
-              const facturaAsoc = facturas.find((f) => f.id === imp.factura)
-              return (
-                <div
-                  key={imp.factura}
-                  className="flex items-center justify-between p-3 rounded-[var(--radius)]"
-                  style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-                >
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>{imp.factura}</p>
-                    {facturaAsoc && (
-                      <p className="text-xs" style={{ color: "var(--ink-soft)" }}>{facturaAsoc.tipo} · Emitida {facturaAsoc.emision}</p>
-                    )}
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{fmt(imp.imputado)}</span>
-                </div>
-              )
-            })}
+            {/* Solo lo que trae el pago. Antes se cruzaba con las facturas cargadas para mostrar
+                "Emitida el…", y con paginación eso aparecía o no según qué página estuviera. */}
+            {pago.facturas.map((imp) => (
+              <div
+                key={imp.factura}
+                className="flex items-center justify-between p-3 rounded-[var(--radius)]"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+              >
+                <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>{imp.factura}</p>
+                <span className="text-sm font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{fmt(imp.imputado)}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -2160,236 +2050,7 @@ function PagoModal({ pago, facturas, onClose }: { pago: Pago; facturas: Factura[
   )
 }
 
-// ── Presupuesto Modal ─────────────────────────────────────────────────────────
 
-function PresupuestoModal({ presupuesto, tenantName, whatsappNumber, onClose }: { presupuesto: Presupuesto; tenantName: string; whatsappNumber: string; onClose: () => void }) {
-  const items = [
-    { desc: "Luminaria LED Industrial 150W", qty: 4, unit: presupuesto.total * 0.5 / 4, total: presupuesto.total * 0.5 },
-    { desc: "Panel LED 40W retroiluminado", qty: 6, unit: presupuesto.total * 0.3 / 6, total: presupuesto.total * 0.3 },
-    { desc: "Reflector LED exterior 50W", qty: 5, unit: presupuesto.total * 0.2 / 5, total: presupuesto.total * 0.2 },
-  ]
-
-  function handleWsp() {
-    openWhatsApp(whatsappNumber, `Hola ${tenantName}, quiero avanzar con el presupuesto ${presupuesto.id} por un total de ${fmt(presupuesto.total)}.`)
-  }
-
-  return (
-    <Modal onClose={onClose} title={`Presupuesto ${presupuesto.id}`}>
-      <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-4">
-          <InfoRow label="N° de presupuesto" value={presupuesto.id} />
-          <InfoRow label="Estado" value={<PresupuestoBadge estado={presupuesto.estado} />} />
-          <InfoRow label="Fecha emisión" value={presupuesto.fecha} />
-          <InfoRow label="Válido hasta" value={presupuesto.validoHasta} />
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--ink-faint)" }}>Ítems</p>
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr style={{ background: "var(--bg)" }}>
-                <th className="py-2 px-3 text-left font-semibold" style={{ color: "var(--ink-soft)" }}>Descripción</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Cant.</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Precio unit.</th>
-                <th className="py-2 px-3 text-right font-semibold" style={{ color: "var(--ink-soft)" }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td className="py-2 px-3" style={{ color: "var(--ink)" }}>{item.desc}</td>
-                  <td className="py-2 px-3 text-right" style={{ color: "var(--ink-soft)" }}>{item.qty}</td>
-                  <td className="py-2 px-3 text-right tabular-nums" style={{ color: "var(--ink-soft)" }}>{fmt(item.unit)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums font-medium" style={{ color: "var(--ink)" }}>{fmt(item.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-end">
-          <div className="flex flex-col gap-1 text-sm min-w-[160px]">
-            <div
-              className="flex justify-between font-bold pt-1"
-              style={{ borderTop: "2px solid var(--border)", color: "var(--ink)" }}
-            >
-              <span>Total</span>
-              <span className="tabular-nums">{fmt(presupuesto.total)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <button
-            onClick={() => descargarDocumento("presupuesto", presupuesto)}
-            disabled={!presupuesto.alegraId}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
-            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
-          >
-            <DownloadIcon />
-            Descargar
-          </button>
-
-          {presupuesto.estado === "vigente" && (
-            <button
-              onClick={handleWsp}
-              className="flex items-center gap-2 px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all text-white"
-              style={{ background: "var(--wsp)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--wsp-strong)" }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--wsp)" }}
-            >
-              <WspIcon />
-              Avanzar por WhatsApp
-            </button>
-          )}
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ── Adjuntar Modal ────────────────────────────────────────────────────────────
-
-function AdjuntarModal({ onClose, facturas }: { onClose: () => void; facturas: Factura[] }) {
-  const [dragging, setDragging] = useState(false)
-  const [files, setFiles] = useState<File[]>([])
-  const [tipo, setTipo] = useState("transferencia")
-  const [facturaId, setFacturaId] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    setDragging(false)
-    const dropped = Array.from(e.dataTransfer.files).filter(
-      (f) => f.type === "application/pdf" || f.type.startsWith("image/")
-    )
-    setFiles((prev) => [...prev, ...dropped])
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files) return
-    const selected = Array.from(e.target.files)
-    setFiles((prev) => [...prev, ...selected])
-  }
-
-  function removeFile(i: number) {
-    setFiles((prev) => prev.filter((_, idx) => idx !== i))
-  }
-
-  return (
-    <Modal onClose={onClose} title="Adjuntar comprobante de pago">
-      <div className="flex flex-col gap-5">
-        {/* Dropzone */}
-        <div
-          className="flex flex-col items-center justify-center gap-3 p-8 rounded-[var(--radius)] transition-all cursor-pointer"
-          style={{
-            border: `2px dashed ${dragging ? "var(--blue)" : "var(--border-strong)"}`,
-            background: dragging ? "var(--blue-soft)" : "var(--bg)",
-          }}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-        >
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--blue-soft)" }}>
-            <Upload size={24} strokeWidth={1.6} style={{ color: "var(--blue)" }} />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>
-              Arrastrá archivos o{" "}
-              <span style={{ color: "var(--blue)" }}>hacé clic para seleccionar</span>
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--ink-faint)" }}>PDF, JPG o PNG · Máx. 10 MB por archivo</p>
-          </div>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept=".pdf,image/*"
-            className="hidden"
-            onChange={handleFileInput}
-          />
-        </div>
-
-        {/* Files list */}
-        {files.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {files.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-3 py-2 rounded-[var(--radius)]"
-                style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-              >
-                <div className="flex items-center gap-2 text-sm" style={{ color: "var(--ink)" }}>
-                  <FileText size={14} strokeWidth={1.3} style={{ color: "var(--blue)" }} />
-                  <span className="truncate max-w-[200px]">{f.name}</span>
-                  <span className="text-xs" style={{ color: "var(--ink-faint)" }}>
-                    {(f.size / 1024).toFixed(0)} KB
-                  </span>
-                </div>
-                <button
-                  onClick={() => removeFile(i)}
-                  className="transition-opacity hover:opacity-70"
-                  style={{ color: "var(--ink-faint)" }}
-                >
-                  <X size={14} strokeWidth={1.6} color="currentColor" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <Field label="Tipo de comprobante">
-          <Select
-            value={tipo}
-            onValueChange={setTipo}
-            options={[
-              { value: "transferencia", label: "Transferencia bancaria" },
-              { value: "cheque", label: "Cheque" },
-              { value: "efectivo", label: "Efectivo" },
-              { value: "otro", label: "Otro" },
-            ]}
-          />
-        </Field>
-
-        <Field label="Factura asociada (opcional)">
-          <Select
-            value={facturaId || "none"}
-            onValueChange={(v) => setFacturaId(v === "none" ? "" : v)}
-            options={[
-              { value: "none", label: "Sin asociar" },
-              ...facturas.map((f) => ({ value: f.id, label: `${f.id} — ${fmt(f.importe)}` })),
-            ]}
-          />
-        </Field>
-
-        <div className="flex gap-3 justify-end pt-2" style={{ borderTop: "1px solid var(--border)" }}>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-all"
-            style={{ border: "1px solid var(--border)", color: "var(--ink-soft)", background: "transparent" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent" }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => { alert("Envío: próximamente"); onClose() }}
-            disabled={files.length === 0}
-            className="px-4 py-2 rounded-[var(--radius)] text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "var(--blue)" }}
-            onMouseEnter={(e) => { if (files.length > 0) e.currentTarget.style.background = "var(--blue-hover)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--blue)" }}
-          >
-            Enviar comprobante
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
 
 // ── Small components ──────────────────────────────────────────────────────────
 
@@ -2428,16 +2089,16 @@ function EyeIcon() {
 
 // ── WhatsApp Pagos Modal ──────────────────────────────────────────────────────
 
-function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, onClose }: {
+function WhatsAppPagosModal({ pagos, razonsocial, cuit, tenantName, whatsappNumber, onClose }: {
   pagos: Pago[]
   razonsocial: string
-  cuentaCorriente: number
+  cuit: string
   tenantName: string
   whatsappNumber: string
   onClose: () => void
 }) {
   const [message, setMessage] = useState(() =>
-    buildPagosWhatsAppMessage(tenantName, razonsocial, cuentaCorriente, pagos, fmt)
+    buildPagosWhatsAppMessage(tenantName, razonsocial, cuit, pagos, fmt)
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -2512,10 +2173,10 @@ function WhatsAppPagosModal({ pagos, razonsocial, cuentaCorriente, tenantName, w
 
 // ── WhatsApp Presupuestos Modal ───────────────────────────────────────────────
 
-function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente, tenantName, whatsappNumber, initialIntent, onClose }: {
+function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuit, tenantName, whatsappNumber, initialIntent, onClose }: {
   presupuestos: Presupuesto[]
   razonsocial: string
-  cuentaCorriente: number
+  cuit: string
   tenantName: string
   whatsappNumber: string
   initialIntent: WhatsAppPresupuestoIntent
@@ -2523,7 +2184,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente,
 }) {
   const [intent, setIntent] = useState<WhatsAppPresupuestoIntent>(initialIntent)
   const [message, setMessage] = useState(() =>
-    buildPresupuestosWhatsAppMessage(initialIntent, tenantName, razonsocial, cuentaCorriente, presupuestos, fmt)
+    buildPresupuestosWhatsAppMessage(initialIntent, tenantName, razonsocial, cuit, presupuestos, fmt)
   )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -2538,7 +2199,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuentaCorriente,
   const [prevIntent, setPrevIntent] = useState(intent)
   if (prevIntent !== intent) {
     setPrevIntent(intent)
-    setMessage(buildPresupuestosWhatsAppMessage(intent, tenantName, razonsocial, cuentaCorriente, presupuestos, fmt))
+    setMessage(buildPresupuestosWhatsAppMessage(intent, tenantName, razonsocial, cuit, presupuestos, fmt))
   }
 
   // Tras regenerar el mensaje, devuelve el foco al textarea con el cursor al final.

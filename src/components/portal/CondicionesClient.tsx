@@ -78,7 +78,7 @@ export function CondicionesClient({ cliente, condiciones, razonsocial, tenantNam
             Condiciones comerciales
           </h1>
           <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-            {razonsocial} · CUIT {cliente.cuit} · Cuenta corriente N° {cliente.numerocuentacorriente}
+            {razonsocial}{cliente.cuit && ` · CUIT ${cliente.cuit}`}
           </p>
         </div>
 
