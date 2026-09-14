@@ -12,6 +12,7 @@ import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialo
 import type { InboxContact } from "@/lib/inbox-api"
 import { roleRank, type AdminRole } from "@/lib/roles"
 import { UnsavedGuardProvider, useUnsavedGuardCtx } from "@/lib/unsaved-guard"
+import { useVisiblePoll } from "@/lib/use-visible-poll"
 import { getLastVisit, SECTION_VISITED_EVENT, type BadgeSection } from "@/lib/admin-last-visit"
 
 interface AdminShellProps {
@@ -83,20 +84,17 @@ function usePendingCounts(): PendingCounts | null {
     }
   }, [])
 
-  // Carga inicial al montar; poll cada 30s SIEMPRE, también con la pestaña oculta: el sentido
-  // del contador es avisar DESDE OTRA pestaña, pausarlo apagaba justo el caso de uso. El
-  // endpoint cachea 15s server-side y cuenta sobre el raw cacheado (barato). El focus de la
-  // ventana dispara otra pasada.
+  // Carga inicial al montar; poll cada 30 s pausado con la pestaña oculta (useVisiblePoll,
+  // que además pega de una al volver). El caso "estoy en OTRA pestaña" lo cubre Web Push;
+  // acá el badge es para quien está dentro de la app. El endpoint cachea 15 s server-side
+  // y cuenta sobre el raw cacheado (barato). El focus de la ventana dispara otra pasada.
   useEffect(() => {
     // Falso positivo de la regla: el setState de load va después del await del fetch, no
     // sincrónicamente dentro del effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
-  useEffect(() => {
-    const timer = setInterval(() => void load(), POLL_MS)
-    return () => clearInterval(timer)
-  }, [load])
+  useVisiblePoll(() => void load(), POLL_MS)
   useEffect(() => {
     const onFocus = () => void load()
     window.addEventListener("focus", onFocus)
