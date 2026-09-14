@@ -28,7 +28,6 @@ import {
 } from "@/lib/whatsapp"
 import { CreditCard, X, Eye, Download, Info, Calendar, Plus } from "lucide-react"
 import { InformarPagoModal } from "./InformarPagoModal"
-import { MisComprobantesDialog } from "./MisComprobantesDialog"
 import { usePaginado, Paginacion, useEsDesktop } from "./paginado"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -782,7 +781,6 @@ function PagosTable({
   const [pdfPago, setPdfPago] = useState<Pago | null>(null)
   const [wspModal, setWspModal] = useState(false)
   const [informarPago, setInformarPago] = useState(false)
-  const [misComprobantes, setMisComprobantes] = useState(false)
 
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
@@ -880,23 +878,16 @@ function PagosTable({
 
       {informarPago && <InformarPagoModal onClose={() => setInformarPago(false)} />}
 
-      {misComprobantes && <MisComprobantesDialog onClose={() => setMisComprobantes(false)} />}
-
-      {/* Botones de comprobantes (solo con storage configurado). Pagos no usa filtros: el
-          slot extraActions es todo lo que renderiza el Toolbar. */}
+      {/* Botón "Informar pago" (solo con storage configurado). Pagos no usa filtros: el slot
+          extraActions es todo lo que renderiza el Toolbar. */}
       {receiptsEnabled && (
         <Toolbar
           hideFilter
           extraActions={
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setMisComprobantes(true)}>
-                Mis comprobantes
-              </Button>
-              <Button size="sm" onClick={() => setInformarPago(true)}>
-                <Plus size={14} strokeWidth={2} />
-                Informar pago
-              </Button>
-            </>
+            <Button size="sm" onClick={() => setInformarPago(true)}>
+              <Plus size={14} strokeWidth={2} />
+              Informar pago
+            </Button>
           }
         />
       )}
