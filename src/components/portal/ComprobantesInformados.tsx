@@ -3,11 +3,11 @@
 import { Badge, Table, type TableColumn } from "@myd-org/ui"
 import { usePaginado, Paginacion } from "./paginado"
 
-// Historial de comprobantes informados (entrega B): bloque sobre la tabla de pagos de
-// Alegra. La primera página la trae el server component de dashboard (props); el resto
-// pagina contra GET /api/portal/comprobantes (10 por página, "Cargar más" en celular).
-// Solo llegan estados pending/loaded propios del cliente; tras informar, el modal llama
-// `router.refresh()` y `usePaginado` resetea con la página nueva.
+// Historial de comprobantes informados (entrega B). Vive en el diálogo "Mis comprobantes"
+// (MisComprobantesDialog.tsx), que trae la primera página al abrir; el resto pagina contra
+// GET /api/portal/comprobantes (10 por página, "Cargar más" en celular). Solo llegan estados
+// pending/loaded propios del cliente; tras informar, el modal llama `router.refresh()` y
+// `usePaginado` resetea con la página nueva.
 
 export interface ComprobanteInformado {
   id: string
@@ -43,9 +43,12 @@ function fmtFecha(iso: string): string {
 export function ComprobantesInformados({
   comprobantes: inicial,
   total: totalInicial,
+  mostrarTitulo = true,
 }: {
   comprobantes: ComprobanteInformado[]
   total: number
+  /** El diálogo "Mis comprobantes" ya tiene su propio título: no duplicar el heading. */
+  mostrarTitulo?: boolean
 }) {
   const pag = usePaginado<ComprobanteInformado>({
     url: "/api/portal/comprobantes",
@@ -100,9 +103,11 @@ export function ComprobantesInformados({
 
   return (
     <section className="mb-6">
-      <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--ink)" }}>
-        Comprobantes que informaste
-      </h3>
+      {mostrarTitulo && (
+        <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--ink)" }}>
+          Comprobantes que informaste
+        </h3>
+      )}
       <Table<ComprobanteInformado>
         columns={columns}
         rows={pag.items}

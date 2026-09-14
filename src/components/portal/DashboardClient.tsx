@@ -28,8 +28,8 @@ import {
 } from "@/lib/whatsapp"
 import { CreditCard, X, Eye, Download, Info, Calendar, Plus } from "lucide-react"
 import { InformarPagoModal } from "./InformarPagoModal"
+import { MisComprobantesDialog } from "./MisComprobantesDialog"
 import { usePaginado, Paginacion, useEsDesktop } from "./paginado"
-import { ComprobantesInformados, type ComprobanteInformado } from "./ComprobantesInformados"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 
@@ -162,9 +162,6 @@ interface Props {
   presupuestosTotal?: number
   /** Storage de comprobantes configurado (r2Config() !== null): muestra "Informar pago". */
   receiptsEnabled?: boolean
-  /** Primera página del historial de comprobantes informados (B). `comprobantesTotal` filas. */
-  comprobantes?: ComprobanteInformado[]
-  comprobantesTotal?: number
 }
 
 type Tab = "facturas" | "pagos" | "presupuestos"
@@ -177,7 +174,7 @@ function toTab(value?: string): Tab {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, abiertas, pagos, pagosTotal = pagos.length, presupuestos, presupuestosTotal = presupuestos.length, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, openFacturaId, openFacturaAlegraId, shopUrl, seccionesCaidas = [], receiptsEnabled = false, comprobantes = [], comprobantesTotal = 0 }: Props) {
+export function DashboardClient({ cliente, facturas, facturasTotal = facturas.length, abiertas, pagos, pagosTotal = pagos.length, presupuestos, presupuestosTotal = presupuestos.length, razonsocial, tenantName, whatsappNumber, logoSrc, logoSubtitle, initialTab, openFacturaId, openFacturaAlegraId, shopUrl, seccionesCaidas = [], receiptsEnabled = false }: Props) {
   const startTab = toTab(initialTab)
 
   const [activeTab, setActiveTab] = useState<Tab>(startTab)
@@ -351,7 +348,7 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
                 openFacturaAlegraId={openFacturaAlegraId}
               />
             )}
-            {activeTab === "pagos" && <PagosTable pagos={pagos} total={pagosTotal} razonsocial={razonsocial} cuit={cliente.cuit} tenantName={tenantName} whatsappNumber={whatsappNumber} receiptsEnabled={receiptsEnabled} comprobantes={comprobantes} comprobantesTotal={comprobantesTotal} />}
+            {activeTab === "pagos" && <PagosTable pagos={pagos} total={pagosTotal} razonsocial={razonsocial} cuit={cliente.cuit} tenantName={tenantName} whatsappNumber={whatsappNumber} receiptsEnabled={receiptsEnabled} />}
             {activeTab === "presupuestos" && <PresupuestosTable presupuestos={presupuestos} total={presupuestosTotal} razonsocial={razonsocial} cuit={cliente.cuit} tenantName={tenantName} whatsappNumber={whatsappNumber} />}
 
           </div>
@@ -759,8 +756,6 @@ function PagosTable({
   tenantName,
   whatsappNumber,
   receiptsEnabled = false,
-  comprobantes = [],
-  comprobantesTotal = 0,
 }: {
   pagos: Pago[]
   total: number
@@ -769,8 +764,6 @@ function PagosTable({
   tenantName: string
   whatsappNumber: string
   receiptsEnabled?: boolean
-  comprobantes?: ComprobanteInformado[]
-  comprobantesTotal?: number
 }) {
   // Sin filtros, sin búsqueda y sin orden por columna: Alegra no filtra pagos por fecha
   // (date_afterOrNow se ignora, probado) ni busca por número, y ordenar por columna ordenaría
@@ -789,6 +782,7 @@ function PagosTable({
   const [pdfPago, setPdfPago] = useState<Pago | null>(null)
   const [wspModal, setWspModal] = useState(false)
   const [informarPago, setInformarPago] = useState(false)
+  const [misComprobantes, setMisComprobantes] = useState(false)
 
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
@@ -886,25 +880,25 @@ function PagosTable({
 
       {informarPago && <InformarPagoModal onClose={() => setInformarPago(false)} />}
 
-      {/* Botón "Informar pago" (solo con storage configurado). Pagos no usa filtros: el slot
-          extraActions es todo lo que renderiza el Toolbar. */}
+      {misComprobantes && <MisComprobantesDialog onClose={() => setMisComprobantes(false)} />}
+
+      {/* Botones de comprobantes (solo con storage configurado). Pagos no usa filtros: el
+          slot extraActions es todo lo que renderiza el Toolbar. */}
       {receiptsEnabled && (
         <Toolbar
           hideFilter
           extraActions={
-            <Button size="sm" onClick={() => setInformarPago(true)}>
-              <Plus size={14} strokeWidth={2} />
-              Informar pago
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setMisComprobantes(true)}>
+                Mis comprobantes
+              </Button>
+              <Button size="sm" onClick={() => setInformarPago(true)}>
+                <Plus size={14} strokeWidth={2} />
+                Informar pago
+              </Button>
+            </>
           }
         />
-      )}
-
-      {/* Historial de comprobantes informados (B), sobre la tabla de Alegra. Solo aparece si
-          hay al menos uno: tras el primer informe, el `router.refresh()` del modal trae la
-          primera página nueva y el bloque se monta. */}
-      {comprobantesTotal > 0 && (
-        <ComprobantesInformados comprobantes={comprobantes} total={comprobantesTotal} />
       )}
 
       <Table<Pago>
