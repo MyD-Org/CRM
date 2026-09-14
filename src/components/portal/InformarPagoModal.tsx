@@ -1,9 +1,10 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Info } from "lucide-react"
-import { Button, Dialog, Field, FileDropZone, Input, Progress, Select, Textarea } from "@myd-org/ui"
+import { Badge, Button, Dialog, Field, FileDropZone, Input, Progress, Select, Textarea } from "@myd-org/ui"
+import type { ComprobanteInformado } from "./ComprobantesInformados"
 import {
   isValidPaidOn,
   MAX_FILE_BYTES,
@@ -90,6 +91,20 @@ function tipoDeclarado(file: File): string {
   return ""
 }
 
+// Mismos formatos que la tabla del historial (ComprobantesInformados): el hint de "Ya
+// informaste" resume esas filas, no redefine el modelo.
+function fmtMonto(amount: string): string {
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(amount))
+}
+
+/** "2026-09-10" → "10/09/2026" (tanto paidOn como la fecha del submittedAt ISO). */
+function fmtFecha(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-")
+  return y && m && d ? `${d}/${m}/${y}` : iso
+}
+
+const ULTIMOS_INFORMADOS = 5
+
 export function InformarPagoModal({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
@@ -106,12 +121,32 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
   // B: fecha (dd/mm/aaaa) del comprobante anterior con los mismos bytes, si el confirm la
   // devuelve. Solo informativo: el informe se recibe igual.
   const [avisoDuplicado, setAvisoDuplicado] = useState("")
+  // Últimos comprobantes informados: hint anti-duplicados en el momento de informar. Sale
+  // de la misma página que el historial; best-effort (si falla, no se muestra nada).
+  const [yaInformados, setYaInformados] = useState<ComprobanteInformado[]>([])
   // El XHR y la respuesta del init viven en refs: se usan solo dentro de handlers (el poll de
   // progreso dispara renders y no hay que perder la referencia), y el abort al cerrar los corta.
   const xhrRef = useRef<XMLHttpRequest | null>(null)
   const initRef = useRef<InitResponse | null>(null)
 
   const ocupado = etapa === "creating" || etapa === "uploading" || etapa === "confirming"
+
+  // Se monta solo cuando se abre (el padre lo renderiza condicionalmente): al abrir pide
+  // la primera página y guarda los últimos N. Sin paginado ni reintentos: es un aviso.
+  useEffect(() => {
+    let cancelado = false
+    fetch("/api/portal/comprobantes?start=0", { cache: "no-store" })
+      .then(async (res) => {
+        if (cancelado || !res.ok) return
+        const body = await res.json().catch(() => null)
+        if (cancelado || !body) return
+        setYaInformados(((body.comprobantes as ComprobanteInformado[]) ?? []).slice(0, ULTIMOS_INFORMADOS))
+      })
+      .catch(() => {})
+    return () => {
+      cancelado = true
+    }
+  }, [])
 
   function validar(): boolean {
     const errores: Record<string, string> = {}
@@ -414,6 +449,27 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => { setNotes(e.target.value); setFieldErrors((prev) => ({ ...prev, notes: "" })) }}
             />
           </Field>
+
+          {etapa === "form" && yaInformados.length > 0 && (
+            <div
+              className="flex flex-col gap-1.5 rounded-[var(--radius)] p-3"
+              style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>
+                Ya informaste
+              </p>
+              {yaInformados.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span style={{ color: "var(--ink-soft)" }}>
+                    {fmtFecha(c.paidOn)} · {fmtMonto(c.amount)}
+                  </span>
+                  <Badge tone={c.status === "loaded" ? "success" : "warning"}>
+                    {c.status === "loaded" ? "Cargado" : "Pendiente"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
 
           {(etapa === "uploading" || etapa === "confirming") && (
             <div className="flex flex-col gap-1.5">

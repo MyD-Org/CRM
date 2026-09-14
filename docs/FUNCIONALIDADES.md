@@ -193,11 +193,13 @@ re-carga — la guarda anti-duplicados es el UPDATE condicional `alegra_payment_
 Alegra por fuera (solo cambia el status, como antes); los comprobantes marcados así antes
 también ofrecen "Cargar en Alegra" después.
 
-**Historial del cliente**: en Pagos, arriba de la tabla del ERP, una sección
-"Comprobantes que informaste" con estado (Pendiente/Cargado) y paginación
-(`GET /api/portal/comprobantes`). Si el cliente sube un archivo que ya había informado
-(mismo sha256), el informe se recibe igual pero se avisa: banner en el modal y
-*"Posible duplicado…"* en el mail al backoffice.
+**Historial del cliente**: en Pagos, el botón "Mis comprobantes" abre un diálogo con el
+historial ("Comprobantes que informaste"): estado (Pendiente/Cargado) y paginación contra
+`GET /api/portal/comprobantes`. El dashboard no lo trae server-side: lo pide el diálogo al
+abrir. Además, el modal "Informar pago" muestra los últimos 5 comprobantes informados
+("Ya informaste") para frenar duplicados en el momento de informar. Si el cliente sube un
+archivo que ya había informado (mismo sha256), el informe se recibe igual pero se avisa:
+banner en el modal y *"Posible duplicado…"* en el mail al backoffice.
 
 Requiere el set completo de env vars `R2_*`; sin ellas el botón no aparece en el
 portal (degradación) y las rutas nuevas responden 503 — el resto del portal sigue igual.

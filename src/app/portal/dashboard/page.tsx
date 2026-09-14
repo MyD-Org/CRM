@@ -8,7 +8,6 @@ import { DashboardClient } from "@/components/portal/DashboardClient"
 import { AiChat } from "@/components/portal/AiChat"
 import { aiChatEnabled, shopEnabled } from "@/lib/flags"
 import { r2Config } from "@/lib/r2"
-import { listPortal, type PortalReceiptDto } from "@/lib/payment-receipts"
 import type { SessionData } from "@/types"
 
 export default async function DashboardPage({
@@ -65,21 +64,10 @@ export default async function DashboardPage({
 
   const [aiEnabled, shopActive] = await Promise.all([aiChatEnabled(), shopEnabled()])
 
-  // Primera página del historial de comprobantes informados (B). Solo con el storage
-  // configurado; si la query falla la sección queda oculta (no es carga de Alegra y no
-  // suma a seccionesCaidas: antes de esta entrega el dashboard no la mostraba).
+  // Storage de comprobantes configurado: habilita "Informar pago" y "Mis comprobantes" en
+  // Pagos. El historial en sí NO se fetchea acá: lo pide el diálogo cuando se abre, así el
+  // dashboard no le pega a la DB por esto en cada carga.
   const receiptsEnabled = r2Config() !== null
-  let comprobantes: PortalReceiptDto[] = []
-  let comprobantesTotal = 0
-  if (receiptsEnabled) {
-    const comprobantesRes = await Promise.allSettled([listPortal(tenant.id, session.codigocliente as string, 0)])
-    if (comprobantesRes[0].status === "fulfilled") {
-      comprobantes = comprobantesRes[0].value.items
-      comprobantesTotal = comprobantesRes[0].value.total
-    } else {
-      console.error("dashboard: falló comprobantes:", comprobantesRes[0].reason)
-    }
-  }
 
   return (
     <>
@@ -103,8 +91,6 @@ export default async function DashboardPage({
       shopUrl={shopActive ? process.env.NEXT_PUBLIC_SHOP_URL : undefined}
       seccionesCaidas={seccionesCaidas}
       receiptsEnabled={receiptsEnabled}
-      comprobantes={comprobantes}
-      comprobantesTotal={comprobantesTotal}
       />
       {aiEnabled && (
         <AiChat
