@@ -108,19 +108,19 @@ export function parseInitBody(body: unknown, now: Date): InitValidation {
   const fields: Record<string, string> = {}
 
   const amount = parseAmount(b.amount)
-  if (amount === null) fields.amount = "Ingresá un monto mayor a 0 (hasta 2 decimales)"
+  if (amount === null) fields.amount = "Ingresá un monto mayor a cero (hasta dos decimales)"
 
-  if (!isValidPaidOn(b.paidOn, now)) fields.paidOn = "Ingresá una fecha de pago válida (no futura)"
+  if (!isValidPaidOn(b.paidOn, now)) fields.paidOn = "La fecha de pago no puede ser futura"
 
   const method = METHODS.find((m) => m === b.method)
   if (!method) {
-    fields.method = "Elegí el medio de pago"
+    fields.method = "Seleccioná el medio de pago"
   }
 
   let methodOther: string | null = null
   if (method === "otro") {
     if (typeof b.methodOther !== "string" || b.methodOther.trim().length === 0) {
-      fields.methodOther = "Contanos qué medio fue (obligatorio)"
+      fields.methodOther = "Indicá el medio de pago"
     } else if (b.methodOther.trim().length > MAX_METHOD_OTHER_CHARS) {
       fields.methodOther = `El detalle no puede superar los ${MAX_METHOD_OTHER_CHARS} caracteres`
     } else {
@@ -142,7 +142,7 @@ export function parseInitBody(body: unknown, now: Date): InitValidation {
   let fileSize: number | null = null
   let contentType: string | null = null
   if (!file) {
-    fields.file = "Elegí el archivo del comprobante"
+    fields.file = "Seleccioná el archivo del comprobante"
   } else {
     if (typeof file.name !== "string" || file.name.length === 0 || file.name.length > MAX_FILE_NAME_CHARS) {
       fields.file = "El nombre del archivo es inválido"
