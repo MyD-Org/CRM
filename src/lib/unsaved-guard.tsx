@@ -62,7 +62,7 @@ export function UnsavedGuardProvider({ children }: { children: ReactNode }) {
           // Cerrar por ESC / click fuera = quedarse (default seguro, no descarta cambios).
           if (!open) closeDialog(false)
         }}
-        title="Tenés cambios sin guardar"
+        title="Tiene cambios sin guardar"
         description="Si salís los vas a perder."
         headerBorder={false}
         footer={

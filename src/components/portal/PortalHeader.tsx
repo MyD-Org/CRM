@@ -202,7 +202,7 @@ function describeNotif(row: NotifRow): NotifMeta {
     const cuando = n === 1 ? "venció hace 1 día" : `venció hace ${n} días`
     return {
       title: `Factura ${row.facturaId} ${cuando}`,
-      detail: "Pago vencido — regularizá tu cuenta",
+      detail: "Pago vencido — regularice su cuenta",
       tone: "danger",
       target: facturaTarget,
     }
@@ -211,8 +211,8 @@ function describeNotif(row: NotifRow): NotifMeta {
   // Cambio en condiciones comerciales → navega a la página de condiciones
   if (row.type === "conditions_changed") {
     return {
-      title: "Se actualizaron tus condiciones comerciales",
-      detail: "Revisá tu condición de pago, descuentos y crédito",
+      title: "Se actualizaron sus condiciones comerciales",
+      detail: "Revise su condición de pago, descuentos y crédito",
       tone: "info",
       target: { label: "Ver condiciones", href: "/portal/condiciones" },
     }

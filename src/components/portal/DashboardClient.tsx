@@ -28,7 +28,6 @@ import {
 } from "@/lib/whatsapp"
 import { CreditCard, X, Eye, Download, Info, Calendar, Plus } from "lucide-react"
 import { InformarPagoModal } from "./InformarPagoModal"
-import { MisComprobantesDialog } from "./MisComprobantesDialog"
 import { usePaginado, Paginacion, useEsDesktop } from "./paginado"
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -331,7 +330,7 @@ export function DashboardClient({ cliente, facturas, facturasTotal = facturas.le
                 role="status"
               >
                 <Info size={16} strokeWidth={1.6} color="currentColor" />
-                <span>No pudimos cargar esta sección en este momento. Actualizá la página en unos minutos.</span>
+                <span>No pudimos cargar esta sección en este momento. Actualice la página en unos minutos.</span>
               </div>
             )}
             {activeTab === "facturas" && (
@@ -782,7 +781,6 @@ function PagosTable({
   const [pdfPago, setPdfPago] = useState<Pago | null>(null)
   const [wspModal, setWspModal] = useState(false)
   const [informarPago, setInformarPago] = useState(false)
-  const [misComprobantes, setMisComprobantes] = useState(false)
 
   const selectedPagos = pagos.filter((p) => selected.has(p.id))
   const selectedTotal = selectedPagos.reduce((s, p) => s + p.monto, 0)
@@ -880,23 +878,16 @@ function PagosTable({
 
       {informarPago && <InformarPagoModal onClose={() => setInformarPago(false)} />}
 
-      {misComprobantes && <MisComprobantesDialog onClose={() => setMisComprobantes(false)} />}
-
-      {/* Botones de comprobantes (solo con storage configurado). Pagos no usa filtros: el
-          slot extraActions es todo lo que renderiza el Toolbar. */}
+      {/* Botón "Informar pago" (solo con storage configurado). Pagos no usa filtros: el slot
+          extraActions es todo lo que renderiza el Toolbar. */}
       {receiptsEnabled && (
         <Toolbar
           hideFilter
           extraActions={
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setMisComprobantes(true)}>
-                Mis comprobantes
-              </Button>
-              <Button size="sm" onClick={() => setInformarPago(true)}>
-                <Plus size={14} strokeWidth={2} />
-                Informar pago
-              </Button>
-            </>
+            <Button size="sm" onClick={() => setInformarPago(true)}>
+              <Plus size={14} strokeWidth={2} />
+              Informar pago
+            </Button>
           }
         />
       )}
@@ -1600,7 +1591,7 @@ function WhatsAppFacturasModal({
                   Enviar por WhatsApp
                 </h2>
                 <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>
-                  Se abrirá WhatsApp con el mensaje listo para enviar al local. Podés editarlo antes.
+                  Se abrirá WhatsApp con el mensaje listo para enviar al local. Puede editarlo antes.
                 </p>
               </div>
             </div>
@@ -1622,7 +1613,7 @@ function WhatsAppFacturasModal({
               className="text-xs font-semibold uppercase tracking-wide mb-3"
               style={{ color: "var(--ink-faint)" }}
             >
-              ¿Sobre qué querés escribir?
+              ¿Sobre qué desea escribir?
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {intents.map((item) => {
@@ -1724,7 +1715,7 @@ function SelectionBar({
       count={count}
       label={label}
       summary={`Total: ${fmt(total)}`}
-      emptyHint="Seleccioná para descargar o consultar"
+      emptyHint="Seleccione para descargar o consultar"
       onClear={onClear}
     >
       <Button
@@ -1800,7 +1791,7 @@ function PdfModal({ kind, doc, titulo, onClose }: { kind: DocKind; doc: Document
         if (!cancelado) setEstado({ blobUrl })
       })
       .catch(() => {
-        if (!cancelado) setEstado({ error: "Error de conexión. Intentá de nuevo." })
+        if (!cancelado) setEstado({ error: "Error de conexión. Intente nuevamente." })
       })
     return () => {
       cancelado = true
@@ -1973,7 +1964,7 @@ function WhatsAppPagosModal({ pagos, razonsocial, cuit, tenantName, whatsappNumb
               </div>
               <div>
                 <h2 className="text-base font-semibold" style={{ color: "var(--ink)" }}>Enviar por WhatsApp</h2>
-                <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Se abrirá WhatsApp con el mensaje listo para enviar al local. Podés editarlo antes.</p>
+                <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Se abrirá WhatsApp con el mensaje listo para enviar al local. Puede editarlo antes.</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full transition-all shrink-0" style={{ color: "var(--ink-soft)" }}
@@ -2081,7 +2072,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuit, tenantName
               </div>
               <div>
                 <h2 className="text-base font-semibold" style={{ color: "var(--ink)" }}>Enviar por WhatsApp</h2>
-                <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Se abrirá WhatsApp con el mensaje listo para enviar al local. Podés editarlo antes.</p>
+                <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>Se abrirá WhatsApp con el mensaje listo para enviar al local. Puede editarlo antes.</p>
               </div>
             </div>
             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full transition-all shrink-0" style={{ color: "var(--ink-soft)" }}
@@ -2094,7 +2085,7 @@ function WhatsAppPresupuestosModal({ presupuestos, razonsocial, cuit, tenantName
         </div>
         <div className="p-6 flex flex-col gap-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--ink-faint)" }}>¿Sobre qué querés escribir?</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--ink-faint)" }}>¿Sobre qué desea escribir?</p>
             <div className="grid grid-cols-2 gap-3">
               {intents.map((item) => {
                 const active = intent === item.value

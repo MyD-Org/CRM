@@ -108,19 +108,19 @@ export function parseInitBody(body: unknown, now: Date): InitValidation {
   const fields: Record<string, string> = {}
 
   const amount = parseAmount(b.amount)
-  if (amount === null) fields.amount = "Ingresá un monto mayor a 0 (hasta 2 decimales)"
+  if (amount === null) fields.amount = "Ingrese un monto mayor a cero (hasta dos decimales)"
 
-  if (!isValidPaidOn(b.paidOn, now)) fields.paidOn = "Ingresá una fecha de pago válida (no futura)"
+  if (!isValidPaidOn(b.paidOn, now)) fields.paidOn = "La fecha de pago no puede ser futura"
 
   const method = METHODS.find((m) => m === b.method)
   if (!method) {
-    fields.method = "Elegí el medio de pago"
+    fields.method = "Seleccione el medio de pago"
   }
 
   let methodOther: string | null = null
   if (method === "otro") {
     if (typeof b.methodOther !== "string" || b.methodOther.trim().length === 0) {
-      fields.methodOther = "Contanos qué medio fue (obligatorio)"
+      fields.methodOther = "Indique el medio de pago"
     } else if (b.methodOther.trim().length > MAX_METHOD_OTHER_CHARS) {
       fields.methodOther = `El detalle no puede superar los ${MAX_METHOD_OTHER_CHARS} caracteres`
     } else {
@@ -142,7 +142,7 @@ export function parseInitBody(body: unknown, now: Date): InitValidation {
   let fileSize: number | null = null
   let contentType: string | null = null
   if (!file) {
-    fields.file = "Elegí el archivo del comprobante"
+    fields.file = "Seleccione el archivo del comprobante"
   } else {
     if (typeof file.name !== "string" || file.name.length === 0 || file.name.length > MAX_FILE_NAME_CHARS) {
       fields.file = "El nombre del archivo es inválido"
@@ -166,7 +166,7 @@ export function parseInitBody(body: unknown, now: Date): InitValidation {
   // C: HEIC/HEIF entran por acá (el confirm los convierte a JPEG). El <input accept> del
   // modal sigue pidiendo JPG/PNG/PDF, pero el server acepta los HEIC que se cuelan.
   if (!(DECLARED_CONTENT_TYPES as readonly string[]).includes(contentType as string)) {
-    return { ok: false, status: 415, code: "unsupported_type", error: "El tipo de archivo no es válido: subí un PDF, JPG, PNG o WebP" }
+    return { ok: false, status: 415, code: "unsupported_type", error: "El tipo de archivo no es válido: suba un PDF, JPG, PNG o WebP" }
   }
   if ((fileSize as number) <= 0 || (fileSize as number) > MAX_FILE_BYTES) {
     return { ok: false, status: 413, code: "file_too_large", error: "El archivo supera el máximo de 20 MB" }

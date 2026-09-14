@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     subject: "Recuperar contraseña — Backoffice",
     html: `
       <p>Hola ${user.name},</p>
-      <p>Recibimos una solicitud para restablecer tu contraseña del backoffice.</p>
+      <p>Recibimos una solicitud para restablecer su contraseña del backoffice.</p>
       <p><a href="${resetUrl}">Restablecer contraseña</a></p>
       <p>El link vence en 1 hora. Si no lo solicitaste, ignorá este email.</p>
     `,

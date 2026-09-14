@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Info } from "lucide-react"
 import { Badge, Button, Dialog, Field, FileDropZone, Input, Progress, Select, Textarea } from "@myd-org/ui"
-import type { ComprobanteInformado } from "./ComprobantesInformados"
 import {
   isValidPaidOn,
   MAX_FILE_BYTES,
@@ -18,6 +17,9 @@ import {
 // llama al confirm, que verifica el archivo y avisa a la empresa. Un error recuperable de la
 // subida NO llama al confirm: se muestra el error y se puede reintentar la subida a la misma
 // URL (sigue viva 10 minutos) sin crear una fila nueva.
+//
+// El historial de comprobantes vive SOLO acá: la sección "Últimos comprobantes enviados"
+// resume los últimos 5 de GET /api/portal/comprobantes (mismo shape que listPortal).
 
 const ACCEPT = "image/jpeg,image/png,application/pdf"
 // C: el <input accept> sigue pidiendo JPG/PNG/PDF (iOS convierte la mayoría de las fotos),
@@ -91,8 +93,20 @@ function tipoDeclarado(file: File): string {
   return ""
 }
 
-// Mismos formatos que la tabla del historial (ComprobantesInformados): el hint de "Ya
-// informaste" resume esas filas, no redefine el modelo.
+// Shape de las filas de GET /api/portal/comprobantes (lo que devuelve listPortal): lo usa
+// la sección "Últimos comprobantes enviados" del formulario.
+type ComprobanteInformado = {
+  id: string
+  submittedAt: string
+  paidOn: string
+  amount: string
+  currency: "ARS"
+  method: string
+  methodOther: string | null
+  status: "pending" | "loaded"
+  fileOriginalName: string | null
+}
+
 function fmtMonto(amount: string): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(amount))
 }
@@ -151,11 +165,11 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
   function validar(): boolean {
     const errores: Record<string, string> = {}
     if (!file) {
-      errores.file = "Elegí el archivo del comprobante"
+      errores.file = "Seleccione el archivo del comprobante"
     } else {
       const tipo = tipoDeclarado(file)
       if (!TIPOS_SOPORTADOS.includes(tipo)) {
-        errores.file = "El tipo de archivo no es válido: subí un PDF, JPG o PNG"
+        errores.file = "El tipo de archivo no es válido. Cargue un PDF, JPG o PNG."
       } else if (file.size <= 0) {
         errores.file = "El archivo está vacío"
       } else if (file.size > MAX_FILE_BYTES) {
@@ -164,16 +178,16 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
     }
     const normalizado = normalizarMonto(monto)
     if (!normalizado || !parseAmount(normalizado)) {
-      errores.amount = "Ingresá un monto mayor a 0 (hasta 2 decimales)"
+      errores.amount = "Ingrese un monto mayor a cero (hasta dos decimales)"
     }
     if (!isValidPaidOn(paidOn, new Date())) {
-      errores.paidOn = "Ingresá una fecha de pago válida (no futura)"
+      errores.paidOn = "La fecha de pago no puede ser futura"
     }
     if (!method) {
-      errores.method = "Elegí el medio de pago"
+      errores.method = "Seleccione el medio de pago"
     }
     if (method === "otro" && methodOther.trim().length === 0) {
-      errores.methodOther = "Contanos qué medio fue (obligatorio)"
+      errores.methodOther = "Indique el medio de pago"
     } else if (methodOther.trim().length > MAX_METHOD_OTHER_CHARS) {
       errores.methodOther = `El detalle no puede superar los ${MAX_METHOD_OTHER_CHARS} caracteres`
     }
@@ -206,7 +220,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       if (!res.ok) {
         // 400 invalid trae errores por campo; el resto (413/415/429/503/500) un mensaje general.
         if (body?.fields) setFieldErrors(body.fields as Record<string, string>)
-        setErrorGeneral(body?.error ?? "No pudimos preparar la subida, intentá de nuevo")
+        setErrorGeneral(body?.error ?? "No pudimos preparar la carga. Intente nuevamente.")
         setEtapa("form")
         return
       }
@@ -214,7 +228,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       initRef.current = init
       subir(init)
     } catch {
-      setErrorGeneral("Error de conexión. Intentá de nuevo.")
+      setErrorGeneral("Error de conexión. Intente nuevamente.")
       setEtapa("form")
     }
   }
@@ -242,12 +256,12 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       }
       // Error del PUT (red, CORS o 403): recuperable. NO se llama al confirm: la fila sigue
       // `uploading` y la URL sigue viva, así que se puede reintentar la subida.
-      setFallo({ mensaje: "No se pudo subir el archivo, probá de nuevo.", etapa: "put", reintentable: true })
+      setFallo({ mensaje: "No se pudo cargar el archivo. Intente nuevamente.", etapa: "put", reintentable: true })
       setEtapa("form")
     }
     xhr.onerror = () => {
       xhrRef.current = null
-      setFallo({ mensaje: "No se pudo subir el archivo, probá de nuevo.", etapa: "put", reintentable: true })
+      setFallo({ mensaje: "No se pudo cargar el archivo. Intente nuevamente.", etapa: "put", reintentable: true })
       setEtapa("form")
     }
     xhr.onabort = () => {
@@ -279,12 +293,12 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
         return
       }
       const body = await res.json().catch(() => null)
-      const mensaje = body?.error ?? "No pudimos procesar el comprobante, intentá de nuevo"
+      const mensaje = body?.error ?? "No pudimos procesar el comprobante. Intente nuevamente."
       // 409 upload_missing: la subida no llegó, se reintenta el PUT. 502/503: reintentar el
       // confirm. 413/415/422/404: el archivo o la fila quedaron rechazados, no tiene sentido
       // reintentar la misma subida.
       if (res.status === 409 && body?.code === "upload_missing") {
-        setFallo({ mensaje: "La subida no llegó, reintentá.", etapa: "put", reintentable: true })
+        setFallo({ mensaje: "El archivo no llegó a cargarse. Reintente.", etapa: "put", reintentable: true })
       } else if (res.status === 502 || res.status === 503) {
         setFallo({ mensaje, etapa: "confirm", reintentable: true })
       } else {
@@ -293,7 +307,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       }
       setEtapa("form")
     } catch {
-      setFallo({ mensaje: "No pudimos procesar el comprobante, intentá de nuevo.", etapa: "confirm", reintentable: true })
+      setFallo({ mensaje: "No pudimos procesar el comprobante. Intente nuevamente.", etapa: "confirm", reintentable: true })
       setEtapa("form")
     }
   }
@@ -346,7 +360,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
             <Button variant="ghost" onClick={cerrar} disabled={ocupado}>Cancelar</Button>
             {fallo?.reintentable && etapa === "form" ? (
               <Button onClick={reintentar}>
-                {fallo.etapa === "put" ? "Reintentar subida" : "Reintentar"}
+                {fallo.etapa === "put" ? "Reintentar carga" : "Reintentar"}
               </Button>
             ) : (
               <Button onClick={handleEnviar} loading={ocupado} disabled={ocupado}>
@@ -360,14 +374,14 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       {etapa === "done" && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <CheckCircle2 size={40} strokeWidth={1.4} style={{ color: "var(--green)" }} />
-          <p className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Recibimos tu comprobante</p>
+          <p className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Comprobante recibido</p>
           <p className="text-sm max-w-sm" style={{ color: "var(--ink-soft)" }}>
-            Lo vamos a revisar y cargar en nuestro sistema.
+            Lo revisaremos y registraremos a la brevedad.
           </p>
           {avisoDuplicado && (
             <p className="text-sm max-w-sm rounded-lg px-3 py-2" style={{ color: "var(--amber)", background: "var(--amber-soft, #fef3c7)" }}>
-              Ojo: ya nos habías mandado este mismo archivo el {avisoDuplicado}. Lo recibimos igual,
-              pero puede que sea un informe repetido.
+              Este archivo ya fue enviado el {avisoDuplicado}. Lo registramos igualmente; es posible
+              que se trate de un envío duplicado.
             </p>
           )}
         </div>
@@ -376,9 +390,9 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       {etapa === "queued" && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <Info size={40} strokeWidth={1.4} style={{ color: "var(--blue)" }} />
-          <p className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Estamos procesando tu comprobante</p>
+          <p className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Comprobante en procesamiento</p>
           <p className="text-sm max-w-sm" style={{ color: "var(--ink-soft)" }}>
-            La subida llegó bien y está siendo procesada. Si en unos minutos no aparece, volvé a intentarlo.
+            El archivo se recibió correctamente y está en proceso. Si no aparece en unos minutos, inténtelo nuevamente.
           </p>
         </div>
       )}
@@ -421,7 +435,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
             <Select
               options={METODOS}
               value={method}
-              placeholder="Elegí el medio"
+              placeholder="Seleccione el medio"
               disabled={ocupado}
               aria-invalid={Boolean(fieldErrors.method)}
               onValueChange={(v) => { setMethod(v); setFieldErrors((prev) => ({ ...prev, method: "" })) }}
@@ -429,7 +443,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
           </Field>
 
           {method === "otro" && (
-            <Field label="¿Qué medio fue?" error={fieldErrors.methodOther}>
+            <Field label="Especificar medio" error={fieldErrors.methodOther}>
               <Input
                 placeholder="Ej: Mercado Pago, link de pago…"
                 value={methodOther}
@@ -440,7 +454,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
             </Field>
           )}
 
-          <Field label="Notas (opcional)" error={fieldErrors.notes} hint={`Hasta ${MAX_NOTES_CHARS} caracteres. Ej: número de operación.`}>
+          <Field label="Notas (opcional)" error={fieldErrors.notes} hint={`Máximo ${MAX_NOTES_CHARS} caracteres. Ej.: número de operación.`}>
             <Textarea
               value={notes}
               maxLength={MAX_NOTES_CHARS}
@@ -456,7 +470,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
               style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
             >
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-faint)" }}>
-                Ya informaste
+                Últimos comprobantes enviados
               </p>
               {yaInformados.map((c) => (
                 <div key={c.id} className="flex items-center justify-between gap-2 text-xs">

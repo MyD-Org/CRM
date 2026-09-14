@@ -49,12 +49,12 @@ export default function AdminLoginPage() {
     >
       <div className="flex flex-col gap-1.5 mb-6">
         <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Backoffice</h1>
-        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Ingresá con tu email y contraseña</p>
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Ingrese con su email y contraseña</p>
       </div>
 
       {expired && !error && (
         <div className="mb-4">
-          <Alert tone="warning">Tu sesión expiró, volvé a ingresar.</Alert>
+          <Alert tone="warning">Su sesión expiró, vuelva a ingresar.</Alert>
         </div>
       )}
 

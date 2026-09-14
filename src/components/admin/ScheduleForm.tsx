@@ -289,7 +289,7 @@ export function ScheduleForm({ initialSchedule }: Props) {
       setSavedSnapshot(currentSnapshot)
       setEditing(false)
       // Invalida el Client Cache de Next (staleTimes: {dynamic: 30} en next.config.ts).
-      // Sin esto, salir y volver a /admin/configuracion dentro de 30s te muestra los props
+      // Sin esto, salir y volver a /admin/configuracion dentro de 30s le muestra los props
       // viejos (sin la excepción recién guardada) porque Next sirve el árbol RSC cacheado.
       router.refresh()
       toast({ title: "Horarios guardados", tone: "success" })

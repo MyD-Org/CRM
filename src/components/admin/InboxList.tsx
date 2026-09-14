@@ -170,7 +170,7 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
         <EmptyState
           icon={<MessageSquare size={28} strokeWidth={1.2} />}
           title={
-            scope === "mine" ? "No tenés contactos asignados"
+            scope === "mine" ? "No tiene contactos asignados"
               : tab === "history" ? "No hay contactos en el historial"
                 : "No hay conversaciones activas"
           }

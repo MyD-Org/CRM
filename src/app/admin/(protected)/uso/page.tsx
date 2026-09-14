@@ -27,7 +27,7 @@ export default async function UsoPage() {
   let configError = ""
 
   if (!tenant?.aiTenantId || !tenant?.aiApiUrl) {
-    configError = "El inbox no está configurado. Completá AI_TENANT_ID y AI_API_URL en la config del tenant."
+    configError = "El inbox no está configurado. Complete AI_TENANT_ID y AI_API_URL en la config del tenant."
   } else {
     try {
       ;[summary, limits] = await Promise.all([
@@ -35,7 +35,7 @@ export default async function UsoPage() {
         getLimits(tenant.aiApiUrl, tenant.aiTenantId),
       ])
     } catch {
-      configError = "No se pudo conectar con la API. Verificá la configuración."
+      configError = "No se pudo conectar con la API. Verifique la configuración."
     }
   }
 

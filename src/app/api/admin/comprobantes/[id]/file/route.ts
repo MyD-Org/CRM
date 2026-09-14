@@ -25,7 +25,7 @@ export async function GET(req: Request, { params }: IdParams) {
   const r2 = getR2()
   if (!r2) {
     return Response.json(
-      { error: "El almacenamiento de comprobantes no está disponible, intentá de nuevo más tarde", code: "storage_unavailable" },
+      { error: "El almacenamiento de comprobantes no está disponible, intente nuevamente más tarde", code: "storage_unavailable" },
       { status: 503, headers: { "Cache-Control": "private, no-store" } },
     )
   }

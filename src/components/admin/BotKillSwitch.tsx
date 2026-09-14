@@ -69,7 +69,7 @@ export function BotKillSwitch({ initialEnabled }: Props) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="¿Pausar el bot?"
-        description="El bot dejará de responder en TODAS las conversaciones de todos los canales. Los mensajes de los clientes seguirán llegando al inbox para que un operador los atienda a mano. Podés reactivarlo en cualquier momento."
+        description="El bot dejará de responder en TODAS las conversaciones de todos los canales. Los mensajes de los clientes seguirán llegando al inbox para que un operador los atienda a mano. Puede reactivarlo en cualquier momento."
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setConfirmOpen(false)} disabled={saving}>

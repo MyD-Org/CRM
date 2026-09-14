@@ -31,7 +31,7 @@ export async function PUT(req: Request) {
   const receiptsEmail = parseReceiptsEmail(body?.receiptsEmail)
   if (receiptsEmail === null) {
     return Response.json(
-      { error: "Ingresá un solo email válido (sin comas, espacios ni <>) o dejalo vacío", code: "invalid" },
+      { error: "Ingrese un solo email válido (sin comas, espacios ni <>) o déjelo vacío", code: "invalid" },
       { status: 400, headers: NO_STORE },
     )
   }

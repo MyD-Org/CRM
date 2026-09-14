@@ -206,7 +206,7 @@ export function ComprobantesShell({
             <a href="/admin/configuracion" style={{ textDecoration: "underline", fontWeight: 600 }}>
               Configuralo en Configuración → Comprobantes
             </a>{" "}
-            para que te llegue el aviso con cada comprobante.
+            para que le llegue el aviso con cada comprobante.
           </span>
         </div>
       )}

@@ -16,7 +16,7 @@ import { canActOnRole, canManageUsers } from "@/lib/roles"
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId || !canManageUsers(session.role)) {
-    return NextResponse.json({ error: "No tenés permisos de gestión de usuarios" }, { status: 403 })
+    return NextResponse.json({ error: "No tiene permisos de gestión de usuarios" }, { status: 403 })
   }
 
   const { id } = await params
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
   // Un admin solo puede reenviar invitaciones de operadores (no de admins/superadmins).
   if (!canActOnRole(session.role, user.role)) {
-    return NextResponse.json({ error: "No tenés permisos sobre este usuario" }, { status: 403 })
+    return NextResponse.json({ error: "No tiene permisos sobre este usuario" }, { status: 403 })
   }
   if (user.passwordHash) return NextResponse.json({ error: "El usuario ya activó su cuenta" }, { status: 409 })
 

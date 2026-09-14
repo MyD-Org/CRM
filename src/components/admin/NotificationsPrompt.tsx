@@ -147,7 +147,7 @@ export function NotificationsPrompt() {
             <p className="text-sm font-semibold text-text">Notificaciones bloqueadas</p>
             <p className="mt-0.5 text-sm text-subtle">
               Las bloqueaste en este navegador. Activalas desde el candado de la barra de direcciones
-              (Notificaciones → Permitir) para enterarte de tus conversaciones.
+              (Notificaciones → Permitir) para enterarse de sus conversaciones.
             </p>
           </div>
           <button
@@ -172,7 +172,7 @@ export function NotificationsPrompt() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-text">Activá las notificaciones</p>
           <p className="mt-0.5 text-sm text-subtle">
-            Te avisamos cuando te asignen o deriven una conversación, aunque no tengas el CRM abierto.
+            Le avisamos cuando le asignen o deriven una conversación, aunque no tenga el CRM abierto.
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button

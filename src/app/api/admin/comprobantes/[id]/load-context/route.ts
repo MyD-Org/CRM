@@ -27,7 +27,7 @@ export async function GET(req: Request, { params }: IdParams) {
   if (!config) {
     console.error(`[admin/comprobantes] sin config para tenant "${guard.tenantId}" en load-context`)
     return Response.json(
-      { error: "No pudimos preparar la carga, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos preparar la carga, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }
@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: IdParams) {
   } catch (err) {
     console.error(`[admin/comprobantes] Alegra respondió mal en load-context de ${id}:`, err)
     return Response.json(
-      { error: "Alegra no respondió bien, intentá de nuevo en unos minutos", code: "alegra_error" },
+      { error: "Alegra no respondió bien, intente nuevamente en unos minutos", code: "alegra_error" },
       { status: 502, headers: NO_STORE },
     )
   }

@@ -198,13 +198,13 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
           </div>
         }
       >
-        <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar este usuario?</p>
+        <p className="text-sm" style={{ color: "var(--ink)" }}>¿Está seguro que desea eliminar este usuario?</p>
       </Dialog>
 
       <Dialog
         open={inviteModal !== null}
         onOpenChange={(open) => { if (!open) setInviteModal(null) }}
-        title="Compartí el link de invitación"
+        title="Comparta el link de invitación"
         description={inviteModal ? `Enviale este link a ${inviteModal.name} para que cree su contraseña y acceda a su cuenta.` : undefined}
         headerBorder={false}
         footer={
@@ -229,7 +229,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
               </Button>
             </div>
             <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
-              El link vence en 7 días. Podés volver a copiarlo desde la columna <strong>Estado</strong>{" "}
+              El link vence en 7 días. Puede volver a copiarlo desde la columna <strong>Estado</strong>{" "}
               mientras la invitación siga pendiente.
             </p>
           </div>
@@ -341,7 +341,7 @@ export function UserList({ initialUsers, currentUserId, currentRole }: Props) {
                         ) : (
                           <p className="font-medium" style={{ color: "var(--ink)" }}>
                             {user.name}{" "}
-                            {isSelf && <span className="text-xs font-normal" style={{ color: "var(--ink-faint)" }}>(vos)</span>}
+                            {isSelf && <span className="text-xs font-normal" style={{ color: "var(--ink-faint)" }}>(usted)</span>}
                           </p>
                         )}
                         <p className="flex items-center gap-1 text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>

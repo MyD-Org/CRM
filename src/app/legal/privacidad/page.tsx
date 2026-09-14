@@ -26,21 +26,21 @@ export default async function PrivacidadPage() {
           en este documento.
         </p>
         <p>
-          Para cualquier consulta sobre tus datos podés escribirnos a{" "}
+          Para cualquier consulta sobre sus datos puede escribirnos a{" "}
           <Dato valor={legal.contactEmail} label="mail de contacto" />.
         </p>
       </Seccion>
 
       <Seccion titulo="Qué datos recolectamos">
-        <p>Según cómo te contactes con nosotros, podemos tratar:</p>
+        <p>Según cómo se contacte con nosotros, podemos tratar:</p>
         <ul className="ml-5 flex list-disc flex-col gap-1.5">
           <li>
-            <strong>Mensajería (WhatsApp y otros canales):</strong> tu número de teléfono, el
-            nombre de tu perfil y el contenido de los mensajes que nos enviás, incluidas las
+            <strong>Mensajería (WhatsApp y otros canales):</strong> su número de teléfono, el
+            nombre de su perfil y el contenido de los mensajes que nos envíe, incluidas las
             imágenes o archivos que adjuntes.
           </li>
           <li>
-            <strong>Portal de clientes:</strong> los datos de tu cuenta comercial (razón social,
+            <strong>Portal de clientes:</strong> los datos de su cuenta comercial (razón social,
             datos de contacto, comprobantes, presupuestos y estado de cuenta).
           </li>
           <li>
@@ -54,27 +54,27 @@ export default async function PrivacidadPage() {
         <ul className="ml-5 flex list-disc flex-col gap-1.5">
           <li>Responder consultas y brindar atención comercial y postventa.</li>
           <li>Preparar presupuestos, gestionar pedidos y comprobantes.</li>
-          <li>Darte acceso a tu cuenta en el portal de clientes.</li>
+          <li>Darle acceso a su cuenta en el portal de clientes.</li>
           <li>Mejorar la calidad de la atención y cumplir obligaciones legales y fiscales.</li>
         </ul>
         <p>
-          No vendemos ni cedemos tus datos personales a terceros con fines publicitarios.
+          No vendemos ni cedemos sus datos personales a terceros con fines publicitarios.
         </p>
       </Seccion>
 
       <Seccion titulo="Atención automatizada">
         <p>
           Parte de la atención por mensajería la realiza un asistente automatizado basado en
-          inteligencia artificial, que procesa el contenido de tus mensajes para responderte. Un
+          inteligencia artificial, que procesa el contenido de sus mensajes para responderle. Un
           integrante de nuestro equipo puede intervenir en cualquier momento de la conversación, y
-          siempre podés pedir hablar con una persona.
+          siempre puede pedir hablar con una persona.
         </p>
       </Seccion>
 
       <Seccion titulo="Con quién los compartimos">
         <p>
           Recurrimos a proveedores que tratan datos por nuestra cuenta y bajo instrucciones
-          nuestras: la plataforma de mensajería por la que nos escribís (por ejemplo WhatsApp, de
+          nuestras: la plataforma de mensajería por la que nos escribe (por ejemplo WhatsApp, de
           Meta Platforms), servicios de infraestructura y alojamiento, proveedores de modelos de
           inteligencia artificial para la atención automatizada, y nuestro sistema de gestión
           administrativa. También podemos compartir información cuando lo exija una autoridad
@@ -88,15 +88,15 @@ export default async function PrivacidadPage() {
 
       <Seccion titulo="Cuánto tiempo los conservamos">
         <p>
-          Conservamos tus datos mientras dure la relación comercial y, luego, durante los plazos
+          Conservamos sus datos mientras dure la relación comercial y, luego, durante los plazos
           que exijan las normas fiscales y comerciales aplicables. Cumplidos esos plazos, los
           eliminamos o anonimizamos.
         </p>
       </Seccion>
 
-      <Seccion titulo="Tus derechos">
+      <Seccion titulo="Sus derechos">
         <p>
-          Podés solicitar el acceso, la rectificación, la actualización y la supresión de tus datos
+          Puede solicitar el acceso, la rectificación, la actualización y la supresión de sus datos
           personales escribiendo a{" "}
           <Dato valor={legal.contactEmail} label="mail de contacto" />. Para saber cómo pedir la
           eliminación, ver{" "}
