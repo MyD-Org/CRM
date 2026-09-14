@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -12,6 +12,7 @@ import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialo
 import type { InboxContact } from "@/lib/inbox-api"
 import { roleRank, type AdminRole } from "@/lib/roles"
 import { UnsavedGuardProvider, useUnsavedGuardCtx } from "@/lib/unsaved-guard"
+import { useVisiblePoll } from "@/lib/use-visible-poll"
 
 interface AdminShellProps {
   name: string
@@ -28,6 +29,62 @@ interface AdminShellProps {
   children: React.ReactNode
 }
 
+// Contadores de pendientes del sidebar (GET /api/admin/pending-counts). `comprobantes` viene
+// en null para operadores: la ruta no lo expone a ese rol y la UI lo trata como "sin badge".
+interface PendingCounts {
+  inbox: number
+  comprobantes: number | null
+}
+
+const POLL_MS = 30_000
+
+/** Badge con el numerito de pendientes sobre el ícono del ítem. SideNav (del design system)
+ *  no soporta badge y no se toca en v1: se envuelve el ícono en un contenedor relativo y el
+ *  contador va absoluto arriba a la derecha. `count` en null o 0 no muestra nada. */
+function BadgeIcon({ icon, count }: { icon: React.ReactNode; count: number | null }) {
+  if (count === null || count <= 0) return <>{icon}</>
+  return (
+    <span className="relative inline-flex">
+      {icon}
+      <span
+        aria-hidden
+        className="absolute -top-1 -right-1 flex items-center justify-center rounded-full text-[10px] font-semibold leading-none"
+        style={{ background: "var(--red)", color: "#fff", minWidth: 15, height: 15, padding: "0 3px" }}
+      >
+        {count > 9 ? "9+" : count}
+      </span>
+    </span>
+  )
+}
+
+function usePendingCounts(): PendingCounts | null {
+  const [counts, setCounts] = useState<PendingCounts | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/pending-counts", { cache: "no-store" })
+      if (!res.ok) return
+      setCounts((await res.json()) as PendingCounts)
+    } catch {
+      // Fallo de red o 502: mantener lo último conocido (badge viejo o ninguno), en silencio.
+    }
+  }, [])
+
+  // Carga inicial al montar; el poll se pausa con la pestaña oculta (useVisiblePoll) y vuelve
+  // a pegar apenas la pestaña se ve de nuevo. El focus de la ventana dispara otra pasada.
+  useEffect(() => {
+    void load()
+  }, [load])
+  useVisiblePoll(() => void load(), POLL_MS)
+  useEffect(() => {
+    const onFocus = () => void load()
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [load])
+
+  return counts
+}
+
 function roleLabel(role: AdminRole): string {
   if (role === "superadmin") return "Superadmin"
   if (role === "admin") return "Admin"
@@ -36,11 +93,12 @@ function roleLabel(role: AdminRole): string {
 
 // `flag`: entradas gateadas por feature flag (evaluado server-side y pasado por prop).
 // `minRole`: nivel mínimo para ver la entrada (usa el ranking de roles).
+// `badge`: contador de pendientes que va sobre el ícono (ver usePendingCounts).
 const NAV = [
-  { href: "/admin/inbox", label: "Mensajes", icon: <MessageSquare size={16} strokeWidth={1.6} /> },
+  { href: "/admin/inbox", label: "Mensajes", icon: <MessageSquare size={16} strokeWidth={1.6} />, badge: "inbox" as const },
   { href: "/admin/uso", label: "Uso del bot", icon: <BarChart3 size={16} strokeWidth={1.6} />, minRole: "superadmin" as const, flag: "usagePanel" as const },
   { href: "/admin/configuracion", label: "Configuración", icon: <Settings size={16} strokeWidth={1.6} />, minRole: "admin" as const },
-  { href: "/admin/comprobantes", label: "Comprobantes", icon: <Receipt size={16} strokeWidth={1.6} />, minRole: "admin" as const },
+  { href: "/admin/comprobantes", label: "Comprobantes", icon: <Receipt size={16} strokeWidth={1.6} />, minRole: "admin" as const, badge: "comprobantes" as const },
   { href: "/admin/usuarios", label: "Usuarios", icon: <Users size={16} strokeWidth={1.6} />, minRole: "admin" as const },
   { href: "/admin/plantillas", label: "Plantillas", icon: <FileText size={16} strokeWidth={1.6} />, minRole: "superadmin" as const },
 ]
@@ -67,6 +125,7 @@ function AdminShellInner({ name, email, role, logoSrc, iconSrc, tenantName, avai
   // versión expanded (footerSlot) y la compact (footerSlotCompact, rail) muestren el mismo
   // estado sin desincronizarse cuando el operador colapsa/expande el sidebar.
   const [availability, setAvailability] = useState<Availability>(initialAvailability)
+  const pendingCounts = usePendingCounts()
 
   // Antes de ausentarse o cerrar sesión, chequea si el operador tiene conversaciones
   // asignadas dentro de la ventana de 24hs y sin responder; si las hay, pide confirmación.
@@ -185,7 +244,7 @@ function AdminShellInner({ name, email, role, logoSrc, iconSrc, tenantName, avai
       items={visibleNav.map((item) => ({
         href: item.href,
         label: item.label,
-        icon: item.icon,
+        icon: item.badge ? <BadgeIcon icon={item.icon} count={pendingCounts ? pendingCounts[item.badge] : null} /> : item.icon,
         active: pathname.startsWith(item.href),
       }))}
       user={{
