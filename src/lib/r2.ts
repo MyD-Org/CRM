@@ -236,7 +236,13 @@ export function createR2(cfg: R2Config, deps: R2Deps = {}): R2Client {
     },
 
     async put(key, body, o) {
-      const headers: Record<string, string> = { "content-type": o.contentType }
+      const headers: Record<string, string> = {
+        "content-type": o.contentType,
+        // R2 rechaza con 411 Length Required un PUT chunked: el buffer está en memoria y el
+        // largo es exacto, pero hay que declararlo — inferirlo depende del runtime de fetch
+        // (en Vercel llegó chunked y el confirm explotó con storage_error).
+        "content-length": String(body.byteLength),
+      }
       if (o.contentDisposition) headers["content-disposition"] = o.contentDisposition
       // Uint8Array genérico (ArrayBufferLike) no calza con BodyInit de TS 5.7+; el
       // runtime acepta cualquier Uint8Array.
