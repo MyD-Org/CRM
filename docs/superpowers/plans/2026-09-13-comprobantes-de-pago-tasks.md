@@ -19,10 +19,10 @@ REPO PÚBLICO: fixtures con `@example.com`/`ejemplo.com`, tenants `tenant-a`/`te
 
 ### A0. Ops pre-merge (bloqueantes)
 - [x] A0.1 [ops] Token R2 re-scopeado a `crm-portal` (Object R&W). VERIFICADO: 403 sobre `crm-adjuntos`. (ST bucket)
-- [ ] A0.2 [ops] CORS del bucket `crm-portal`: `AllowedMethods:["PUT"]`, `AllowedHeaders:["content-type"]`, orígenes explícitos del portal (sin `*` ni comodín) + origen exacto del preview temporal. (ST bucket, D13)
-- [ ] A0.3 [ops] Lifecycle `tmp/` → borrar a 1 día; nada sobre `receipts/`. (ST bucket, PS huérfanos)
+- [ ] A0.2 [ops] CORS del bucket `crm-portal`: `AllowedMethods:["PUT"]`, `AllowedHeaders:["content-type"]`, orígenes explícitos del portal (sin `*` ni comodín) + origen exacto del preview temporal. (ST bucket, D13) — ⚠️ 2026-09-13: `scripts/r2-setup.ts` quedó listo para aplicarlo por S3 API, pero el token re-scopeado (Object R&W) no tiene permisos de bucket-config (403 en `?cors`) y el `R2_TOKEN` cfat de `.env` da auth error en la REST API. **Hay que hacerlo en el dashboard de Cloudflare** (R2 → crm-portal → Settings → CORS Policy).
+- [ ] A0.3 [ops] Lifecycle `tmp/` → borrar a 1 día; nada sobre `receipts/`. (ST bucket, PS huérfanos) — ⚠️ 2026-09-13: mismo bloqueo que A0.2 (dashboard → Object Lifecycle Rules).
 - [x] A0.4 [ops] Aplicar `0023` en PROD ANTES DE MERGEAR (`db:migrate` a mano; verificar hash en `__drizzle_migrations`, ver memoria drizzle-desync). (DM 0023, DM TenantConfig) — ✅ 2026-09-13: aplicada contra Neon vía `.env.prod`, hash == sha256 del SQL, `payment_receipts` + `tenants.receipts_email` + 15 constraints verificados en prod (24 migraciones en `drizzle.__drizzle_migrations`).
-- [ ] A0.5 [ops] Vercel Production + Preview: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `RECEIPTS_EMAIL_FROM` → redeploy. (ST config, EM contenido)
+- [x] A0.5 [ops] Vercel Production + Preview: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `RECEIPTS_EMAIL_FROM` → redeploy. (ST config, EM contenido) — ✅ 2026-09-13: Prod tiene 7 vars (R2_* ×5 + `R2_TOKEN` + `RECEIPTS_EMAIL_FROM=portal@tevro.com.ar`), Preview tiene 6 (R2_* ×5 + `RECEIPTS_EMAIL_FROM`), redeploy hecho (deployment `crm-pyumekd1c`, aliased a `*.tevro.com.ar`).
 - [ ] A0.6 [manual-preview] Checklist en preview: PDF 15–20 MB sube+confirma sin 413, sha256 igual, mail sin adjunto con link, admin abre por 302; archivo <10 MB con adjunto; PUT con Content-Type distinto ⇒ 403; PUT con tamaño distinto (registrar si R2 da 403); `response-content-disposition` honrado; operator sin nav. Sacar el origen del preview del CORS al terminar. (ST bytes, EM adjunto, TH manual)
 - [ ] A0.7 [ops] Post-merge: cargar el mail destino desde Configuración → Comprobantes del tenant. (TS)
 

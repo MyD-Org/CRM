@@ -20,9 +20,10 @@ import {
 // Auth HTTP Basic (email:token). Espejo del patrón de lib/flexxus.ts. Modo mock (alegraMock)
 // usa fixtures locales — permite construir/probar sin credenciales. Ver ADR catálogo Alegra.
 //
-// OJO: las cuentas de Alegra son REALES (no hay sandbox). Las lecturas son inocuas; la única
-// escritura permitida desde este cliente son cotizaciones (/estimates), que se pueden borrar
-// por API. No exponer creación de facturas/pagos desde acá sin decisión explícita.
+// OJO: las cuentas de Alegra son REALES (no hay sandbox). Las lecturas son inocuas; las
+// escrituras deliberadas son cotizaciones (/estimates, borrables por API) y pagos (/payments,
+// decisión explícita del backoffice de comprobantes: el admin carga el cobro real del
+// cliente, imputado a facturas abiertas). No exponer creación de facturas desde acá.
 
 const ALEGRA_BASE = process.env.ALEGRA_BASE_URL ?? "https://api.alegra.com/api/v1"
 const PAGE_SIZE = 30 // Alegra topea limit en 30
@@ -162,6 +163,45 @@ export interface AlegraContactBalance {
   total: number // deuda total (saldo de facturas open)
   overdue: number // vencido (dueDate < hoy)
   toFallDue: number // a vencer
+}
+
+// ── Pagos: escritura real (backoffice de comprobantes) ──────────────────────
+// Hasta acá la única escritura era /estimates (borrable). Crear pagos es la excepción
+// deliberada del backoffice de comprobantes: el admin revisa el comprobante del cliente y
+// carga el cobro REAL en Alegra, imputado a facturas abiertas. Ver docs/pagos de Alegra:
+//   POST   /payments                → { client: {id}, date, paymentMethod, bankAccount,
+//                                       invoices: [{id, amount}], observations (≤500) }
+//   POST   /payments/{id}/attachment → multipart, campo `file`, un solo archivo, tope 2 MB.
+
+/** Métodos de pago que acepta Alegra (paymentMethod, tope 15 chars). */
+export const ALEGRA_PAYMENT_METHODS = ["transfer", "cash", "deposit", "check", "credit-card", "debit-card"] as const
+export type AlegraPaymentMethod = (typeof ALEGRA_PAYMENT_METHODS)[number]
+
+/** Tope de adjunto de la API de Alegra (POST /payments/{id}/attachment): 2 MB por archivo. */
+export const ALEGRA_ATTACHMENT_MAX_BYTES = 2 * 1024 * 1024
+
+export interface AlegraBankAccount {
+  alegraId: string
+  name: string
+  type: string | null // bank | cash | credit-card
+  status: string
+}
+
+export interface AlegraPaymentCreateInput {
+  contactAlegraId: string
+  /** "YYYY-MM-DD". */
+  date: string
+  paymentMethod: AlegraPaymentMethod
+  bankAccountId?: string
+  invoices: { alegraId: string; amount: number }[]
+  /** Observaciones del pago: NO visibles en el documento impreso (tope 500 en Alegra). */
+  notes?: string
+}
+
+export interface AlegraPaymentCreated {
+  alegraId: string
+  /** Número del recibo de caja en Alegra, o null si la cuenta no numeró el pago. */
+  number: string | null
 }
 
 function authHeader(config: TenantConfig): string {
@@ -401,6 +441,15 @@ function mapRawPayment(raw: Record<string, unknown>): AlegraPayment {
         amount: Number(inv.amount ?? 0),
       }
     }),
+  }
+}
+
+function mapRawBankAccount(raw: Record<string, unknown>): AlegraBankAccount {
+  return {
+    alegraId: String(raw.id),
+    name: String(raw.name ?? ""),
+    type: raw.type != null ? String(raw.type) : null,
+    status: String(raw.status ?? "active"),
   }
 }
 
@@ -724,6 +773,72 @@ export function computeBalance(invoices: AlegraInvoice[]): AlegraContactBalance 
 
 export async function getContactBalance(config: TenantConfig, contactAlegraId: string): Promise<AlegraContactBalance> {
   return computeBalance(await listOpenInvoicesByContact(config, contactAlegraId))
+}
+
+/** Cuentas bancarias del tenant (para el select de cuenta destino al cargar un pago).
+ *  Por defecto Alegra devuelve solo las activas; las inactivas solo entran pidiéndolas. */
+export async function listBankAccounts(config: TenantConfig): Promise<AlegraBankAccount[]> {
+  if (config.alegraMock) return []
+  return fetchAllPages(config, "/bank-accounts", mapRawBankAccount)
+}
+
+/**
+ * Crea el pago (recibo de caja) en Alegra, imputado a las facturas dadas. `notes` va como
+ * `observations`: no se imprime en el documento que ve el cliente (la alternativa `anotation`
+ * sí se imprime). El número del pago viene en la respuesta del POST; si la cuenta no lo trae,
+ * se consulta el pago una vez (GET /payments/{id}, mismo shape) antes de rendirse con null.
+ */
+export async function createPayment(config: TenantConfig, input: AlegraPaymentCreateInput): Promise<AlegraPaymentCreated> {
+  if (config.alegraMock) {
+    // Id numérico puro: la fila guarda alegra_payment_id como integer.
+    return { alegraId: String(Date.now()), number: null }
+  }
+  const body: Record<string, unknown> = {
+    client: Number(input.contactAlegraId),
+    date: input.date,
+    paymentMethod: input.paymentMethod,
+    invoices: input.invoices.map((inv) => ({ id: Number(inv.alegraId), amount: inv.amount })),
+  }
+  if (input.bankAccountId) body.bankAccount = { id: Number(input.bankAccountId) }
+  if (input.notes) body.observations = input.notes.slice(0, 500)
+  const raw = (await alegraFetch(config, "/payments", undefined, { method: "POST", body })) as Record<string, unknown>
+
+  let created = mapRawPayment(raw)
+  if (created.number === null) {
+    try {
+      const fetched = (await alegraFetch(config, `/payments/${created.alegraId}`)) as Record<string, unknown>
+      created = mapRawPayment(fetched)
+    } catch {
+      // El pago existe pero no conseguimos su número: no vale fallar la carga por eso.
+    }
+  }
+  return { alegraId: created.alegraId, number: created.number }
+}
+
+/**
+ * Adjunta un archivo al pago de Alegra (POST multipart, campo `file`, tope 2 MB). El caller
+ * decide si vale la pena: acá el adjunto es best-effort — quien lo llama lo envuelve en
+ * try/catch y sigue aunque esto falle. Devuelve la URL firmada (vence a los 30 min) o null
+ * si Alegra no devolvió una.
+ */
+export async function attachFileToPayment(
+  config: TenantConfig,
+  paymentAlegraId: string,
+  file: { name: string; contentType: string; bytes: Uint8Array },
+): Promise<string | null> {
+  if (config.alegraMock) return null
+  const form = new FormData()
+  // Uint8Array genérico (ArrayBufferLike) no calza con BlobPart de TS 5.7+; el runtime acepta cualquier Uint8Array.
+  form.append("file", new Blob([file.bytes as unknown as BlobPart], { type: file.contentType }), file.name)
+
+  const url = `${ALEGRA_BASE}/payments/${paymentAlegraId}/attachment`
+  const res = await fetch(url, { method: "POST", headers: { Authorization: authHeader(config) }, body: form, cache: "no-store" })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "")
+    throw new Error(`Alegra error ${res.status} en /payments/${paymentAlegraId}/attachment${detail ? `: ${detail.slice(0, 300)}` : ""}`)
+  }
+  const raw = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  return raw && typeof raw.url === "string" ? raw.url : null
 }
 
 // ── PDF de documentos (facturas, recibos de pago, cotizaciones) ──────────────
