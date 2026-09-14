@@ -419,6 +419,15 @@ export const paymentReceipts = pgTable(
     loadedBy: uuid("loaded_by").references(() => adminUsers.id, { onDelete: "set null" }),
     // Snapshot del nombre al marcar: sobrevive al borrado del usuario.
     loadedByName: text("loaded_by_name"),
+    // Pago REAL creado en Alegra desde el backoffice (ver migración 0024). Con id cargado no hay
+    // deshacer ni re-carga: la guarda es el UPDATE condicional `alegra_payment_id IS NULL`.
+    alegraPaymentId: integer("alegra_payment_id"),
+    // Número legible del pago en Alegra (ej. recibo de caja), para mostrar sin pegarle a la API.
+    alegraPaymentNumber: text("alegra_payment_number"),
+    // Lo que el cliente DECLARÓ al informar, cuando el admin corrige monto/fecha al cargar
+    // (el comprobante manda). NULL = cargado con los datos declarados.
+    declaredAmount: numeric("declared_amount", { precision: 14, scale: 2 }),
+    declaredPaidOn: date("declared_paid_on"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

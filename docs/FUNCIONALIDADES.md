@@ -161,7 +161,8 @@ aplicada; los PDF no se modifican.
 
 **Estados** (máquina de estados con UPDATEs condicionales, sin read-then-write):
 `uploading` (subiendo, invisible) → `processing` (verificando, invisible) → `pending`
-(aviso en casilla, espera carga en el ERP) → `loaded` (cargado; se puede deshacer).
+(aviso en casilla, espera carga en el ERP) → `loaded` (cargado; se puede deshacer solo
+mientras no tenga pago creado en Alegra).
 `rejected` (invisible) guarda el motivo (tipo inválido, tamaño, mismatch) y no se
 resucita. Límites anti-abuso: **20 informes por día** (filas no-`uploading` en 24 h) y
 **10 inits por hora**; los `uploading` huérfanos (>24 h) se limpian al informar.
@@ -175,8 +176,22 @@ key por intento).
 
 **Backoffice** (`/admin/comprobantes`, rol admin+): tabs Pendientes/Cargados con
 paginación, detalle, ver/descargar el archivo (redirect 302 a URL firmada de 5 min,
-sin bytes en el body), **Marcar cargado** / deshacer (idempotente, `loaded_by_name` de
-la DB + log de auditoría) y reenviar el aviso. El item del nav lo ve solo admin+.
+sin bytes en el body) y reenviar el aviso. El item del nav lo ve solo admin+.
+
+**Cargar en Alegra** (botón del diálogo): crea el pago REAL en Alegra desde el
+backoffice. El admin elige medio (transferencia/efectivo/depósito/cheque/tarjetas), cuenta
+bancaria destino (requerida para transferencia/depósito/cheque) y a qué facturas abiertas
+del cliente se imputa, con montos por factura y un helper "Repartir" (llena de la más vieja
+a la más nueva hasta cubrir el monto); la suma tiene que ser exacta y ninguna imputación
+puede superar el saldo de su factura. Monto y fecha son corregibles (el comprobante manda):
+si difieren de lo informado, lo declarado queda guardado en `declared_amount` /
+`declared_paid_on` (auditoría) y el diálogo lo avisa. El comprobante se adjunta al pago de
+Alegra (best-effort: tope de 2 MB del adjunto; si falla, el pago queda cargado igual). Con
+`alegra_payment_id` la fila muestra el número del pago en Alegra y no admite deshacer ni
+re-carga — la guarda anti-duplicados es el UPDATE condicional `alegra_payment_id IS NULL`
+(Alegra no tiene idempotency-key). "Ya lo cargué a mano" queda para los pagos cargados en
+Alegra por fuera (solo cambia el status, como antes); los comprobantes marcados así antes
+también ofrecen "Cargar en Alegra" después.
 
 **Historial del cliente**: en Pagos, arriba de la tabla del ERP, una sección
 "Comprobantes que informaste" con estado (Pendiente/Cargado) y paginación
@@ -338,9 +353,11 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | POST | `/api/portal/comprobantes` | sesión portal | Informar pago: valida, rate limit y URL PUT prefirmada para R2 |
 | POST | `/api/portal/comprobantes/{id}/confirm` | sesión portal | Verifica el archivo en R2 (tipo/tamaño/sha256) y publica el comprobante |
 | GET | `/api/admin/comprobantes` | admin | Lista de comprobantes (status, paginado; sin URLs firmadas) |
-| GET/PATCH | `/api/admin/comprobantes/{id}` | admin | Detalle / marcar cargado en el ERP o deshacer (idempotente) |
+| GET/PATCH | `/api/admin/comprobantes/{id}` | admin | Detalle / marcar cargado a mano o deshacer (idempotente; deshacer solo sin pago en Alegra) |
 | GET | `/api/admin/comprobantes/{id}/file` | admin | Redirect 302 a URL firmada del archivo (sin bytes en el body) |
 | POST | `/api/admin/comprobantes/{id}/resend-email` | admin | Reenvía el mail de aviso (lease 60 s, no toca el status) |
+| GET | `/api/admin/comprobantes/{id}/load-context` | admin | Facturas abiertas del cliente + cuentas bancarias, para "Cargar en Alegra" |
+| POST | `/api/admin/comprobantes/{id}/load-to-alegra` | admin | Crea el pago en Alegra (imputado a facturas elegidas), adjunta el comprobante y marca la fila |
 | GET/PUT | `/api/admin/settings/receipts` | admin | Casilla de avisos de comprobantes del tenant |
 
 ---

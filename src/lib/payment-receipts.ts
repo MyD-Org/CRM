@@ -348,6 +348,58 @@ async function adminName(tenantId: string, userId: string): Promise<string | nul
   return row?.name ?? null
 }
 
+export interface MarkLoadedFromAlegraInput {
+  /** Id numérico del pago creado en Alegra. */
+  alegraPaymentId: number
+  /** Número legible del pago en Alegra (recibo de caja), si la cuenta lo numeró. */
+  alegraPaymentNumber: string | null
+  /** Monto FINAL cargado (normalizado "12345.67"); puede corregir al declarado. */
+  amount: string
+  /** Fecha final "YYYY-MM-DD"; puede corregir a la declarada. */
+  paidOn: string
+  /** Lo declarado originalmente, SOLO cuando difiere de lo corregido (auditoría). */
+  declaredAmount: string | null
+  declaredPaidOn: string | null
+  adminUserId: string
+}
+
+/**
+ * Marca el comprobante como cargado CON pago real en Alegra. La guarda anti-duplicados en
+ * Alegra (que no tiene idempotency-key) es este UPDATE condicional: solo aplica mientras la
+ * fila siga sin `alegra_payment_id` y visible (pending/loaded). 0 filas ⇒ alguien cargó
+ * antes (o la fila no existe): null, y el llamador responde 409 sin pisar nada.
+ */
+export async function markLoadedFromAlegra(
+  tenantId: string,
+  id: string,
+  data: MarkLoadedFromAlegraInput,
+  now: Date,
+): Promise<PaymentReceiptRow | null> {
+  const [row] = await getDb()
+    .update(paymentReceipts)
+    .set({
+      status: "loaded",
+      loadedAt: now,
+      loadedBy: data.adminUserId,
+      loadedByName: await adminName(tenantId, data.adminUserId),
+      amount: data.amount,
+      paidOn: data.paidOn,
+      declaredAmount: data.declaredAmount,
+      declaredPaidOn: data.declaredPaidOn,
+      alegraPaymentId: data.alegraPaymentId,
+      alegraPaymentNumber: data.alegraPaymentNumber,
+      updatedAt: now,
+    })
+    .where(and(
+      eq(paymentReceipts.tenantId, tenantId),
+      eq(paymentReceipts.id, id),
+      isNull(paymentReceipts.alegraPaymentId),
+      inArray(paymentReceipts.status, [...VISIBLE_STATUSES]),
+    ))
+    .returning()
+  return row ?? null
+}
+
 // ---------------------------------------------------------------------------
 // Mail (lease propio de 60 s, D4)
 // ---------------------------------------------------------------------------
@@ -428,6 +480,10 @@ export interface AdminReceiptDto {
     stale: boolean
   }
   loaded: { at: string; byName: string | null } | null
+  /** Pago real creado en Alegra desde el backoffice; null = cargado a mano (solo status). */
+  alegra: { id: number; number: string | null } | null
+  /** Lo que el cliente declaró, cuando el admin corrigió monto/fecha al cargar. */
+  declared: { amount: string; paidOn: string } | null
 }
 
 /** Serializa una fila (pending/loaded) al DTO del backoffice. Sin file_key, file_sha256 ni
@@ -466,6 +522,11 @@ export function toAdminDto(row: PaymentReceiptRow, now: Date): AdminReceiptDto {
       stale,
     },
     loaded: row.loadedAt ? { at: row.loadedAt.toISOString(), byName: row.loadedByName } : null,
+    alegra: row.alegraPaymentId !== null ? { id: row.alegraPaymentId, number: row.alegraPaymentNumber } : null,
+    declared:
+      row.declaredAmount !== null && row.declaredPaidOn !== null
+        ? { amount: row.declaredAmount, paidOn: row.declaredPaidOn }
+        : null,
   }
 }
 
