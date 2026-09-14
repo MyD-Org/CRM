@@ -28,12 +28,12 @@ export default async function TerminosPage() {
 
       <Seccion titulo="Uso del portal de clientes">
         <p>
-          El acceso al portal es personal y está destinado a clientes con cuenta activa. Sos
-          responsable de resguardar tus credenciales de acceso y de la actividad realizada con
+          El acceso al portal es personal y está destinado a clientes con cuenta activa. Es
+          responsable de resguardar sus credenciales de acceso y de la actividad realizada con
           ellas. Avisanos de inmediato ante cualquier uso no autorizado.
         </p>
         <p>
-          La información de tu cuenta (comprobantes, saldos, presupuestos) se muestra a título
+          La información de su cuenta (comprobantes, saldos, presupuestos) se muestra a título
           informativo y proviene de nuestro sistema de gestión. Ante cualquier discrepancia, prevalece
           la documentación comercial y fiscal emitida formalmente.
         </p>
@@ -43,7 +43,7 @@ export default async function TerminosPage() {
         <p>
           La atención por mensajería puede ser respondida por un asistente automatizado con
           inteligencia artificial. Sus respuestas son orientativas y pueden contener errores: no
-          constituyen una oferta vinculante ni asesoramiento técnico definitivo. Podés pedir hablar
+          constituyen una oferta vinculante ni asesoramiento técnico definitivo. Puede pedir hablar
           con una persona del equipo en cualquier momento.
         </p>
         <p>
@@ -85,7 +85,7 @@ export default async function TerminosPage() {
 
       <Seccion titulo="Datos personales">
         <p>
-          El tratamiento de tus datos se rige por nuestra{" "}
+          El tratamiento de sus datos se rige por nuestra{" "}
           <a href="/legal/privacidad" style={{ color: "var(--blue)" }}>
             Política de privacidad
           </a>

@@ -75,7 +75,7 @@ export default async function WhatsAppOnboardingPage({
       <Shell>
         <h1 className="text-2xl font-bold text-red-700">Enlace no válido</h1>
         <p className="mt-3 text-slate-600">
-          Este enlace no es válido o ya expiró. Pedí uno nuevo a quien te lo compartió.
+          Este enlace no es válido o ya expiró. Pida uno nuevo a quien se lo compartió.
         </p>
       </Shell>
     )
@@ -88,7 +88,7 @@ export default async function WhatsAppOnboardingPage({
         <p className="mt-3 text-slate-600">
           No se completó la conexión con WhatsApp{metaErrorDescription ? `: ${metaErrorDescription}` : "."}
         </p>
-        <p className="mt-3 text-slate-600">Podés volver a abrir el enlace para intentarlo de nuevo.</p>
+        <p className="mt-3 text-slate-600">Puede volver a abrir el enlace para intentarlo de nuevo.</p>
       </Shell>
     )
   }
@@ -134,13 +134,13 @@ export default async function WhatsAppOnboardingPage({
       {result.isOnBizApp === false ? (
         <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           Meta informa que este número <strong>no</strong> quedó en modo coexistencia: la app de WhatsApp
-          Business del celular puede dejar de funcionar. Avisá al equipo antes de seguir usándola.
+          Business del celular puede dejar de funcionar. Avise al equipo antes de seguir usándola.
         </p>
       ) : null}
       {result.isOnBizApp === null || result.isOnBizApp === undefined ? (
         <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
           No pudimos confirmar con Meta si la app de WhatsApp Business del celular sigue activa.
-          Verificá en el celular que puedas seguir usándola normalmente.
+          Verifique en el celular que pueda seguir usándola normalmente.
         </p>
       ) : null}
       <dl className="mt-6 space-y-2 text-sm">
@@ -148,10 +148,10 @@ export default async function WhatsAppOnboardingPage({
             onboarding y desarma el layout en mobile. Queda en los logs de ai-api. */}
         <Row label="Negocio" value={result.verifiedName ?? result.tenantName} />
         <Row label="Número" value={result.displayPhoneNumber} />
-        <Row label="Recepción de mensajes" value={result.subscribedApps ? "activada" : "⚠️ falló — avisá al equipo"} />
+        <Row label="Recepción de mensajes" value={result.subscribedApps ? "activada" : "⚠️ falló — avise al equipo"} />
       </dl>
       <p className="mt-6 text-slate-600">
-        Ya podés cerrar esta ventana. Para probarlo, escribile un mensaje al número desde otro teléfono.
+        Ya puede cerrar esta ventana. Para probarlo, escríbale un mensaje al número desde otro teléfono.
       </p>
     </Shell>
   )

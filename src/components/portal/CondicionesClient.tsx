@@ -87,7 +87,7 @@ export function CondicionesClient({ cliente, condiciones, razonsocial, tenantNam
             className="p-6 rounded-[var(--radius)] text-sm text-center"
             style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--ink-soft)" }}
           >
-            Todavía no hay condiciones comerciales cargadas para tu cuenta. Consultá con {tenantName}.
+            Todavía no hay condiciones comerciales cargadas para su cuenta. Consulte con {tenantName}.
           </div>
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -192,7 +192,7 @@ export function CondicionesClient({ cliente, condiciones, razonsocial, tenantNam
         )}
 
         <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-          Estas condiciones son informativas y pueden actualizarse. Ante cualquier duda, contactá a {vendedor ? "tu vendedor asignado" : tenantName}.
+          Estas condiciones son informativas y pueden actualizarse. Ante cualquier duda, contacte a {vendedor ? "su vendedor asignado" : tenantName}.
         </p>
       </main>
     </div>

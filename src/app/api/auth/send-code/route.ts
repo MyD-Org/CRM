@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     sweep(now)
     if (!takeSendSlot(`${tenant.id}:${identifier.toLowerCase()}`, now)) {
       return Response.json(
-        { error: "Pediste demasiados códigos. Esperá unos minutos." },
+        { error: "Pidió demasiados códigos. Espere unos minutos." },
         { status: 429 },
       )
     }
@@ -71,13 +71,13 @@ export async function POST(request: Request) {
     const cliente = await getClienteByIdentifier(tenant, identifier)
     if (!cliente) {
       return Response.json(
-        { error: "No encontramos una cuenta con ese CUIT o email. Contactate con atención al cliente." },
+        { error: "No encontramos una cuenta con ese CUIT o email. Contáctese con atención al cliente." },
         { status: 404 },
       )
     }
     if (!cliente.email) {
       return Response.json(
-        { error: "Tu cuenta no tiene un email cargado. Contactate con atención al cliente." },
+        { error: "Su cuenta no tiene un email cargado. Contáctese con atención al cliente." },
         { status: 409 },
       )
     }
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       // esperando en la pantalla de los 6 dígitos.
       console.error("send-code: falló el envío del email:", err)
       return Response.json(
-        { error: "No pudimos enviar el código. Intentá de nuevo en unos minutos." },
+        { error: "No pudimos enviar el código. Intente nuevamente en unos minutos." },
         { status: 502 },
       )
     }

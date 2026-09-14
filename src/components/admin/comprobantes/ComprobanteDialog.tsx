@@ -169,7 +169,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
       const body = await res.json().catch(() => null)
       setErrorAccion(body?.error ?? "No pudimos actualizar el comprobante")
     } catch {
-      setErrorAccion("Error de conexión. Intentá de nuevo.")
+      setErrorAccion("Error de conexión. Intente nuevamente.")
     } finally {
       setAccionando(false)
     }
@@ -188,7 +188,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
       // 409 email_in_progress / email_skipped y 502 email_failed: el server manda mensaje mostrable.
       setErrorAccion(body?.error ?? "No pudimos reenviar el mail")
     } catch {
-      setErrorAccion("Error de conexión. Intentá de nuevo.")
+      setErrorAccion("Error de conexión. Intente nuevamente.")
     } finally {
       setAccionando(false)
     }
@@ -221,7 +221,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
       setAsignaciones({})
     } catch {
       setContexto(null)
-      setErrorContexto("Error de conexión. Intentá de nuevo.")
+      setErrorContexto("Error de conexión. Intente nuevamente.")
     } finally {
       setCargandoContexto(false)
     }
@@ -282,7 +282,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
       }
       setErrorAlegra(body?.error ?? "No pudimos cargar el pago en Alegra")
     } catch {
-      setErrorAlegra("Error de conexión. Intentá de nuevo.")
+      setErrorAlegra("Error de conexión. Intente nuevamente.")
     } finally {
       setCargandoAlegra(false)
     }
@@ -378,7 +378,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
             )}
             {previoError && (
               <p className="text-xs" style={{ color: "var(--red)" }}>
-                No pudimos mostrar el archivo. Probá abrirlo en una pestaña nueva.
+                No pudimos mostrar el archivo. Intente abrirlo en una pestaña nueva.
               </p>
             )}
 
@@ -558,7 +558,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <Field label="Monto" hint="Según el comprobante; podés corregir lo informado.">
+                  <Field label="Monto" hint="Según el comprobante; puede corregir lo informado.">
                     <Input
                       value={monto}
                       onChange={(e) => setMonto(e.target.value)}
@@ -583,7 +583,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
                         setMedio(v)
                         if (!METODOS_CON_CUENTA.includes(v)) setCuentaId("")
                       }}
-                      placeholder="Elegí el medio"
+                      placeholder="Seleccione el medio"
                       aria-label="Medio de pago"
                     />
                   </Field>
@@ -593,7 +593,7 @@ export function ComprobanteDialog({ id, initial, onClose, onChanged }: Props) {
                         options={contexto.bankAccounts.map((c) => ({ value: c.alegraId, label: c.name }))}
                         value={cuentaId}
                         onValueChange={setCuentaId}
-                        placeholder={contexto.bankAccounts.length > 0 ? "Elegí la cuenta" : "Sin cuentas en Alegra"}
+                        placeholder={contexto.bankAccounts.length > 0 ? "Seleccione la cuenta" : "Sin cuentas en Alegra"}
                         aria-label="Cuenta bancaria"
                       />
                     </Field>

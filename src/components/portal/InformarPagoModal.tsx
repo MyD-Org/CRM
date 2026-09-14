@@ -165,11 +165,11 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
   function validar(): boolean {
     const errores: Record<string, string> = {}
     if (!file) {
-      errores.file = "Seleccioná el archivo del comprobante"
+      errores.file = "Seleccione el archivo del comprobante"
     } else {
       const tipo = tipoDeclarado(file)
       if (!TIPOS_SOPORTADOS.includes(tipo)) {
-        errores.file = "El tipo de archivo no es válido. Cargá un PDF, JPG o PNG."
+        errores.file = "El tipo de archivo no es válido. Cargue un PDF, JPG o PNG."
       } else if (file.size <= 0) {
         errores.file = "El archivo está vacío"
       } else if (file.size > MAX_FILE_BYTES) {
@@ -178,16 +178,16 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
     }
     const normalizado = normalizarMonto(monto)
     if (!normalizado || !parseAmount(normalizado)) {
-      errores.amount = "Ingresá un monto mayor a cero (hasta dos decimales)"
+      errores.amount = "Ingrese un monto mayor a cero (hasta dos decimales)"
     }
     if (!isValidPaidOn(paidOn, new Date())) {
       errores.paidOn = "La fecha de pago no puede ser futura"
     }
     if (!method) {
-      errores.method = "Seleccioná el medio de pago"
+      errores.method = "Seleccione el medio de pago"
     }
     if (method === "otro" && methodOther.trim().length === 0) {
-      errores.methodOther = "Indicá el medio de pago"
+      errores.methodOther = "Indique el medio de pago"
     } else if (methodOther.trim().length > MAX_METHOD_OTHER_CHARS) {
       errores.methodOther = `El detalle no puede superar los ${MAX_METHOD_OTHER_CHARS} caracteres`
     }
@@ -220,7 +220,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       if (!res.ok) {
         // 400 invalid trae errores por campo; el resto (413/415/429/503/500) un mensaje general.
         if (body?.fields) setFieldErrors(body.fields as Record<string, string>)
-        setErrorGeneral(body?.error ?? "No pudimos preparar la carga. Intentá nuevamente.")
+        setErrorGeneral(body?.error ?? "No pudimos preparar la carga. Intente nuevamente.")
         setEtapa("form")
         return
       }
@@ -228,7 +228,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       initRef.current = init
       subir(init)
     } catch {
-      setErrorGeneral("Error de conexión. Intentá nuevamente.")
+      setErrorGeneral("Error de conexión. Intente nuevamente.")
       setEtapa("form")
     }
   }
@@ -256,12 +256,12 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       }
       // Error del PUT (red, CORS o 403): recuperable. NO se llama al confirm: la fila sigue
       // `uploading` y la URL sigue viva, así que se puede reintentar la subida.
-      setFallo({ mensaje: "No se pudo cargar el archivo. Intentá nuevamente.", etapa: "put", reintentable: true })
+      setFallo({ mensaje: "No se pudo cargar el archivo. Intente nuevamente.", etapa: "put", reintentable: true })
       setEtapa("form")
     }
     xhr.onerror = () => {
       xhrRef.current = null
-      setFallo({ mensaje: "No se pudo cargar el archivo. Intentá nuevamente.", etapa: "put", reintentable: true })
+      setFallo({ mensaje: "No se pudo cargar el archivo. Intente nuevamente.", etapa: "put", reintentable: true })
       setEtapa("form")
     }
     xhr.onabort = () => {
@@ -293,12 +293,12 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
         return
       }
       const body = await res.json().catch(() => null)
-      const mensaje = body?.error ?? "No pudimos procesar el comprobante. Intentá nuevamente."
+      const mensaje = body?.error ?? "No pudimos procesar el comprobante. Intente nuevamente."
       // 409 upload_missing: la subida no llegó, se reintenta el PUT. 502/503: reintentar el
       // confirm. 413/415/422/404: el archivo o la fila quedaron rechazados, no tiene sentido
       // reintentar la misma subida.
       if (res.status === 409 && body?.code === "upload_missing") {
-        setFallo({ mensaje: "El archivo no llegó a cargarse. Reintentá.", etapa: "put", reintentable: true })
+        setFallo({ mensaje: "El archivo no llegó a cargarse. Reintente.", etapa: "put", reintentable: true })
       } else if (res.status === 502 || res.status === 503) {
         setFallo({ mensaje, etapa: "confirm", reintentable: true })
       } else {
@@ -307,7 +307,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
       }
       setEtapa("form")
     } catch {
-      setFallo({ mensaje: "No pudimos procesar el comprobante. Intentá nuevamente.", etapa: "confirm", reintentable: true })
+      setFallo({ mensaje: "No pudimos procesar el comprobante. Intente nuevamente.", etapa: "confirm", reintentable: true })
       setEtapa("form")
     }
   }
@@ -392,7 +392,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
           <Info size={40} strokeWidth={1.4} style={{ color: "var(--blue)" }} />
           <p className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Comprobante en procesamiento</p>
           <p className="text-sm max-w-sm" style={{ color: "var(--ink-soft)" }}>
-            El archivo se recibió correctamente y está en proceso. Si no aparece en unos minutos, volvé a intentarlo.
+            El archivo se recibió correctamente y está en proceso. Si no aparece en unos minutos, inténtelo nuevamente.
           </p>
         </div>
       )}
@@ -435,7 +435,7 @@ export function InformarPagoModal({ onClose }: { onClose: () => void }) {
             <Select
               options={METODOS}
               value={method}
-              placeholder="Seleccioná el medio"
+              placeholder="Seleccione el medio"
               disabled={ocupado}
               aria-invalid={Boolean(fieldErrors.method)}
               onValueChange={(v) => { setMethod(v); setFieldErrors((prev) => ({ ...prev, method: "" })) }}

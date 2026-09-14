@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: IdParams) {
   const to = body?.status
   if (to !== "loaded" && to !== "pending") {
     return Response.json(
-      { error: "El estado es inválido: usá \"loaded\" o \"pending\"", code: "invalid" },
+      { error: "El estado es inválido: use \"loaded\" o \"pending\"", code: "invalid" },
       { status: 400, headers: NO_STORE },
     )
   }

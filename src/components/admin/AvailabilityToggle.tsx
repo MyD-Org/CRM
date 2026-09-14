@@ -58,7 +58,7 @@ export function AvailabilityToggle({ value, onChange, onBeforeAway, compact = fa
         role="switch"
         aria-checked={available}
         aria-label={available ? "Disponible" : "Ausente"}
-        title={available ? "Disponible — recibiendo conversaciones" : "Ausente — no se te asignan conversaciones"}
+        title={available ? "Disponible — recibiendo conversaciones" : "Ausente — no se le asignan conversaciones"}
         className="flex items-center justify-center h-8 w-8 rounded-full transition-colors disabled:opacity-60 hover:bg-elevated"
       >
         <span
@@ -77,7 +77,7 @@ export function AvailabilityToggle({ value, onChange, onBeforeAway, compact = fa
       disabled={pending}
       role="switch"
       aria-checked={available}
-      title={available ? "Estás recibiendo conversaciones" : "No se te asignan conversaciones"}
+      title={available ? "Está recibiendo conversaciones" : "No se le asignan conversaciones"}
       className={`flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
         available ? "text-green" : "text-subtle hover:bg-subtle/10"
       }`}

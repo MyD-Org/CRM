@@ -23,11 +23,11 @@ export function PendingRepliesDialog({ open, action, contacts, onCancel, onConfi
     <Dialog
       open={open}
       onOpenChange={(next) => { if (!next) onCancel() }}
-      title="Tenés mensajes asignados sin responder"
+      title="Tiene mensajes asignados sin responder"
       description={
         action === "away"
-          ? "Si te marcás como ausente, estas conversaciones quedan sin nadie respondiendo mientras corre la ventana de 24hs."
-          : "Si cerrás sesión, estas conversaciones quedan sin nadie respondiendo mientras corre la ventana de 24hs."
+          ? "Si se marca como ausente, estas conversaciones quedan sin nadie respondiendo mientras corre la ventana de 24hs."
+          : "Si cierra sesión, estas conversaciones quedan sin nadie respondiendo mientras corre la ventana de 24hs."
       }
       footer={
         <>

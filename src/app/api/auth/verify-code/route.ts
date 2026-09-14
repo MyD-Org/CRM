@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const clienteData = await getClienteByIdentifier(tenant, otpSession.identifier)
     if (!clienteData) {
-      return Response.json({ error: "No encontramos una cuenta asociada. Contactate con atención al cliente." }, { status: 404 })
+      return Response.json({ error: "No encontramos una cuenta asociada. Contáctese con atención al cliente." }, { status: 404 })
     }
 
     // Las opciones salen del HOST: una COOKIE_DOMAIN que no cubra este host hace que

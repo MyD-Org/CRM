@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: IdParams) {
   if (!config) {
     console.error(`[admin/comprobantes] sin config para tenant "${guard.tenantId}" en resend`)
     return Response.json(
-      { error: "No pudimos preparar el envío, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos preparar el envío, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }
@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: IdParams) {
     }
     case "in_progress":
       return Response.json(
-        { error: "Ya hay un envío de este mail en curso, probá de nuevo en unos segundos", code: "email_in_progress" },
+        { error: "Ya hay un envío de este mail en curso, intente nuevamente en unos segundos", code: "email_in_progress" },
         { status: 409, headers: NO_STORE },
       )
     case "skipped":
@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: IdParams) {
       )
     case "storage_unavailable":
       return Response.json(
-        { error: "El almacenamiento de comprobantes no está disponible, intentá de nuevo más tarde", code: "storage_unavailable" },
+        { error: "El almacenamiento de comprobantes no está disponible, intente nuevamente más tarde", code: "storage_unavailable" },
         { status: 503, headers: NO_STORE },
       )
   }

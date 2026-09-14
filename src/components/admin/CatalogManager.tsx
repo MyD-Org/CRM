@@ -137,7 +137,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
 
   async function handleUpload() {
     if (!uploadName || !uploadCategory || !uploadFile) {
-      setUploadError("Completá todos los campos")
+      setUploadError("Complete todos los campos")
       return
     }
     setUploading(true)
@@ -171,7 +171,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
     const filled = conditions.filter((c) => c.method.trim() || c.description.trim())
     const incomplete = filled.some((c) => !c.method.trim() || !c.description.trim())
     if (incomplete) {
-      toast({ title: "Completá método y condición en todas las filas", tone: "warning" })
+      toast({ title: "Complete método y condición en todas las filas", tone: "warning" })
       return
     }
     setSavingConditions(true)
@@ -226,7 +226,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
           </div>
         }
       >
-        <p className="text-sm" style={{ color: "var(--ink)" }}>¿Estás seguro que querés eliminar esta lista y todos sus productos?</p>
+        <p className="text-sm" style={{ color: "var(--ink)" }}>¿Está seguro que desea eliminar esta lista y todos sus productos?</p>
       </Dialog>
 
       {/* Listas de precios (carga manual — oculta: ahora el catálogo viene de Alegra) */}
@@ -286,7 +286,7 @@ export function CatalogManager({ initialLists, initialPaymentConditions }: Props
             <div className="flex flex-col items-center gap-2 py-14 text-center">
               <Package size={24} strokeWidth={1.4} style={{ color: "var(--ink-faint)" }} />
               <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>Sin listas cargadas</p>
-              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Subí un Excel con productos y precios para que el agente pueda responder consultas.</p>
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Suba un Excel con productos y precios para que el agente pueda responder consultas.</p>
             </div>
           }
           columns={[

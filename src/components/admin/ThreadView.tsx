@@ -88,7 +88,7 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
           setSendError("La ventana de 24h de WhatsApp está cerrada. El cliente debe enviarte un mensaje primero.")
           setWithinWindow(false)
         } else {
-          setSendError("No se pudo enviar el mensaje. Intentá de nuevo.")
+          setSendError("No se pudo enviar el mensaje. Intente nuevamente.")
         }
       }
     } finally {
@@ -163,7 +163,7 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
         {mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
             {withinWindow
-              ? 'El bot está respondiendo. Hacé click en "Tomar" para responder vos.'
+              ? 'El bot está respondiendo. Haga click en "Tomar" para responder usted.'
               : "El bot está respondiendo esta conversación."}
           </p>
         ) : !withinWindow ? (
@@ -175,7 +175,7 @@ export function ThreadView({ conversation, initialMessages, currentUserId }: Pro
             <Textarea
               value={reply}
               onChange={(e) => setReply(e.target.value)}
-              placeholder="Escribí tu respuesta..."
+              placeholder="Escriba su respuesta..."
               rows={2}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as unknown as React.FormEvent) }

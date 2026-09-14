@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const contactName = conv?.contact || "un cliente"
     await sendPushToOperator(session.tenantId, targetOperatorId, {
       title: "Nueva conversación asignada",
-      body: `Se te asignó la conversación con ${contactName}.`,
+      body: `Se le asignó la conversación con ${contactName}.`,
       url: `/admin/inbox/${id}`,
       icon: `/logos/${tenant.id}-icon.svg`,
       tag: `assign-${id}`,

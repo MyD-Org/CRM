@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const r2 = getR2()
   if (!r2) {
     return Response.json(
-      { error: "El servicio de comprobantes no está disponible, intentá de nuevo más tarde", code: "storage_unavailable" },
+      { error: "El servicio de comprobantes no está disponible, intente nuevamente más tarde", code: "storage_unavailable" },
       { status: 503, headers: NO_STORE },
     )
   }
@@ -66,7 +66,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (err) {
     console.error("[portal/comprobantes] confirm error:", err)
     return Response.json(
-      { error: "No pudimos procesar el comprobante, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos procesar el comprobante, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }

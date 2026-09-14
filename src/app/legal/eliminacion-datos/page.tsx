@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getTenantConfig()
   return {
     title: `Eliminación de datos — ${tenant.name}`,
-    description: `Cómo solicitar la eliminación de tus datos personales a ${tenant.name}.`,
+    description: `Cómo solicitar la eliminación de sus datos personales a ${tenant.name}.`,
   }
 }
 
@@ -21,22 +21,22 @@ export default async function EliminacionDatosPage() {
       tenantName={tenant.name}
       logoSrc={tenant.logoPath}
     >
-      <Seccion titulo="Cómo pedir la eliminación de tus datos">
+      <Seccion titulo="Cómo pedir la eliminación de sus datos">
         <p>
-          Si querés que <Dato valor={legal.legalName} label="razón social" /> elimine los datos
-          personales que tiene sobre vos, seguí estos pasos:
+          Si desea que <Dato valor={legal.legalName} label="razón social" /> elimine los datos
+          personales que tiene sobre usted, siga estos pasos:
         </p>
         <ol className="ml-5 flex list-decimal flex-col gap-1.5">
           <li>
-            Escribí un correo a <Dato valor={legal.contactEmail} label="mail de contacto" /> con el
+            Escriba un correo a <Dato valor={legal.contactEmail} label="mail de contacto" /> con el
             asunto <strong>&laquo;Eliminación de datos&raquo;</strong>.
           </li>
           <li>
-            Indicá el número de teléfono con el que nos escribiste y, si sos cliente, tu razón
+            Indique el número de teléfono con el que nos escribió y, si es cliente, su razón
             social o número de cuenta, para poder identificarte.
           </li>
           <li>
-            Aclará si querés eliminar el historial de conversaciones, los datos de tu cuenta, o
+            Aclare si desea eliminar el historial de conversaciones, los datos de su cuenta, o
             ambos.
           </li>
         </ol>
@@ -60,9 +60,9 @@ export default async function EliminacionDatosPage() {
 
       <Seccion titulo="Datos en la plataforma de mensajería">
         <p>
-          Los mensajes almacenados en tu propio dispositivo o en tu cuenta de WhatsApp los
-          administra el proveedor del servicio, no nosotros. Para borrarlos, usá las opciones de la
-          aplicación o consultá la política de privacidad de ese proveedor.
+          Los mensajes almacenados en su propio dispositivo o en su cuenta de WhatsApp los
+          administra el proveedor del servicio, no nosotros. Para borrarlos, use las opciones de la
+          aplicación o consulte la política de privacidad de ese proveedor.
         </p>
       </Seccion>
 

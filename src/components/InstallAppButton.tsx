@@ -112,7 +112,7 @@ export function InstallAppButton({ appName }: { appName: string }) {
               Instalá {appName}
             </h2>
             <p className="text-sm mb-4" style={{ color: "var(--muted-foreground, #666)" }}>
-              Tres pasos para agregarlo a tu pantalla de inicio:
+              Tres pasos para agregarlo a su pantalla de inicio:
             </p>
             <ol className="flex flex-col gap-3 text-sm">
               <li className="flex items-center gap-3">
@@ -123,7 +123,7 @@ export function InstallAppButton({ appName }: { appName: string }) {
                   1
                 </span>
                 <span className="flex items-center gap-1.5">
-                  Tocá <Share size={16} className="inline" aria-label="Compartir" /> abajo (en Safari)
+                  Toque <Share size={16} className="inline" aria-label="Compartir" /> abajo (en Safari)
                 </span>
               </li>
               <li className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export function InstallAppButton({ appName }: { appName: string }) {
                   2
                 </span>
                 <span className="flex items-center gap-1.5">
-                  Elegí &quot;Agregar a inicio&quot; <Plus size={16} className="inline" aria-label="Más" />
+                  Seleccione &quot;Agregar a inicio&quot; <Plus size={16} className="inline" aria-label="Más" />
                 </span>
               </li>
               <li className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export function InstallAppButton({ appName }: { appName: string }) {
                 >
                   3
                 </span>
-                <span>Tocá &quot;Agregar&quot; arriba a la derecha</span>
+                <span>Toque &quot;Agregar&quot; arriba a la derecha</span>
               </li>
             </ol>
           </div>

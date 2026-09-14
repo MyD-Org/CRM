@@ -37,7 +37,7 @@ export function ReceiptsEmailForm({ initialReceiptsEmail }: Props) {
       router.refresh()
       toast({ title: "Email guardado", tone: "success" })
     } catch {
-      setError("Error de conexión. Intentá de nuevo.")
+      setError("Error de conexión. Intente nuevamente.")
     } finally {
       setSaving(false)
     }
@@ -47,7 +47,7 @@ export function ReceiptsEmailForm({ initialReceiptsEmail }: Props) {
     <div className="flex flex-col gap-3 max-w-xl">
       <Field
         label="Email para comprobantes"
-        hint="Cuando un cliente informa un pago desde el portal, se avisa a este email con el comprobante adjunto (hasta 10 MB; si pesa más, con un link). Si lo dejás vacío, los avisos no se envían: los comprobantes siguen llegando a la pantalla de Comprobantes."
+        hint="Cuando un cliente informa un pago desde el portal, se avisa a este email con el comprobante adjunto (hasta 10 MB; si pesa más, con un link). Si lo deja vacío, los avisos no se envían: los comprobantes siguen llegando a la pantalla de Comprobantes."
       >
         <Input
           type="email"
