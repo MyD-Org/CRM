@@ -66,7 +66,7 @@ function buildEmail(tenant: TenantConfig, cliente: Cliente, items: PendingNotifi
   const vencidas = items.filter((i) => i.diasDiff > 0)
 
   const subject = vencidas.length
-    ? `${tenant.name} — Tenés ${vencidas.length === 1 ? "una factura vencida" : `${vencidas.length} facturas vencidas`}`
+    ? `${tenant.name} — Tiene ${vencidas.length === 1 ? "una factura vencida" : `${vencidas.length} facturas vencidas`}`
     : `${tenant.name} — Recordatorio de vencimiento`
 
   const filas = items
@@ -88,7 +88,7 @@ function buildEmail(tenant: TenantConfig, cliente: Cliente, items: PendingNotifi
   <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#111827">
     <h2 style="font-size:18px">${tenant.name}</h2>
     <p>Hola ${cliente.razonsocial},</p>
-    <p>${vencidas.length ? "Te recordamos que tenés facturas con saldo vencido:" : "Te recordamos los próximos vencimientos de tu cuenta corriente:"}</p>
+    <p>${vencidas.length ? "Le recordamos que tiene facturas con saldo vencido:" : "Le recordamos los próximos vencimientos de su cuenta corriente:"}</p>
     <table style="border-collapse:collapse;width:100%;font-size:14px">
       <thead><tr style="text-align:left;color:#6b7280">
         <th style="padding:8px 12px">Factura</th><th style="padding:8px 12px">Vencimiento</th>
@@ -97,8 +97,8 @@ function buildEmail(tenant: TenantConfig, cliente: Cliente, items: PendingNotifi
       <tbody>${filas}</tbody>
     </table>
     <p style="font-weight:600">Total: ${fmt(total)}</p>
-    <p>Podés ver el detalle y descargar tus facturas desde el portal de clientes.</p>
-    <p style="color:#6b7280;font-size:12px">Si ya realizaste el pago, desestimá este mensaje. Ante cualquier duda contactate con atención al cliente.</p>
+    <p>Puede ver el detalle y descargar sus facturas desde el portal de clientes.</p>
+    <p style="color:#6b7280;font-size:12px">Si ya realizaste el pago, desestimá este mensaje. Ante cualquier duda contáctese con atención al cliente.</p>
   </div>`
 
   return { subject, html }

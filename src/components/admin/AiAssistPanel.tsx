@@ -102,7 +102,7 @@ export function AiAssistPanel({ open, prefetch = false, onClose, endUserId, conv
         setError(
           code === "assist_agent_not_configured"
             ? "El copiloto no está configurado para este tenant."
-            : "No se pudo abrir el asistente. Intentá de nuevo.",
+            : "No se pudo abrir el asistente. Intente nuevamente.",
         )
       })
       .finally(() => setLoading(false))

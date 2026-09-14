@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
       {sent ? (
         <>
           <Alert tone="success" className="mt-4">
-            Si el email existe, vas a recibir un link para restablecer tu contraseña.
+            Si el email existe, recibirá un link para restablecer su contraseña.
           </Alert>
           <Link
             href="/admin/login"
@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
       ) : (
         <>
           <p className="text-sm mb-6 mt-1" style={{ color: "var(--ink-soft)" }}>
-            Ingresá tu email y te enviamos un link para restablecer tu contraseña.
+            Ingrese su email y le enviamos un link para restablecer su contraseña.
           </p>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Field label="Email">

@@ -57,14 +57,14 @@ export type ConfirmResult =
 
 const CONFIRM_ERRORS = {
   not_found: { status: 404, error: "Comprobante no encontrado" },
-  in_progress: { status: 202, error: "El comprobante se está procesando, probá de nuevo en unos segundos" },
+  in_progress: { status: 202, error: "El comprobante se está procesando, intente nuevamente en unos segundos" },
   upload_missing: { status: 409, error: "Todavía no recibimos el archivo del comprobante" },
   file_too_large: { status: 413, error: "El archivo supera el máximo de 20 MB" },
   size_mismatch: { status: 413, error: "El archivo no coincide con lo declarado al informar el pago" },
-  unsupported_type: { status: 415, error: "El tipo de archivo no es válido: subí un PDF, JPG, PNG o WebP" },
+  unsupported_type: { status: 415, error: "El tipo de archivo no es válido: suba un PDF, JPG, PNG o WebP" },
   image_too_large: { status: 415, error: "La imagen es demasiado grande" },
   processing_failed: { status: 422, error: "No pudimos procesar la imagen" },
-  storage_error: { status: 502, error: "No pudimos verificar el archivo, intentá de nuevo en unos minutos" },
+  storage_error: { status: 502, error: "No pudimos verificar el archivo, intente nuevamente en unos minutos" },
 } as const
 
 export type ConfirmErrorCode = keyof typeof CONFIRM_ERRORS

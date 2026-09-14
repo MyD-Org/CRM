@@ -101,7 +101,7 @@ describe("POST /api/auth/send-code", () => {
     // El asunto lleva el código: es lo único que el celular ve en la notificación.
     expect(subject).toContain(code)
     // Parte en texto plano presente (la que parsean los detectores) con la frase gatillo.
-    expect(text).toContain(`Tu código de verificación es ${code}`)
+    expect(text).toContain(`Su código de verificación es ${code}`)
     // Los 6 dígitos van juntos: un separador o un espaciado que los parta rompe la detección.
     expect(text).not.toMatch(new RegExp(code.split("").join("[\\s-]")))
     expect(html).toContain(code)

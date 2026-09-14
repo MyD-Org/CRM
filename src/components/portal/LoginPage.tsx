@@ -75,7 +75,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
       startCountdown()
       setTimeout(() => otpRefs.current[0]?.focus(), 100)
     } catch {
-      setError("Error de conexión. Intentá de nuevo.")
+      setError("Error de conexión. Intente nuevamente.")
     } finally {
       setLoading(false)
     }
@@ -85,7 +85,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
     e.preventDefault()
     const code = otp.join("")
     if (code.length < 6) {
-      setError("Ingresá los 6 dígitos del código")
+      setError("Ingrese los 6 dígitos del código")
       return
     }
     await verificar(code)
@@ -107,7 +107,7 @@ export default function LoginPage({ logoSrc, tenantName, tenantSubtitle }: Login
       }
       router.push(data.redirect ?? "/portal/dashboard")
     } catch {
-      setError("Error de conexión. Intentá de nuevo.")
+      setError("Error de conexión. Intente nuevamente.")
     } finally {
       setLoading(false)
     }
@@ -304,7 +304,7 @@ function IdentifyStep({
           Bienvenido
         </h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-          Ingresá tu CUIT o email para acceder a tu cuenta
+          Ingrese su CUIT o email para acceder a su cuenta
         </p>
       </div>
 
@@ -338,7 +338,7 @@ function IdentifyStep({
       </Button>
 
       <p className="text-xs text-center" style={{ color: "var(--ink-faint)" }}>
-        Te enviaremos un código de verificación de 6 dígitos.
+        Le enviaremos un código de verificación de 6 dígitos.
       </p>
     </form>
   )
@@ -397,10 +397,10 @@ function OtpStep({
           Volver
         </Button>
         <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>
-          Verificá tu identidad
+          Verifique su identidad
         </h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-          Ingresá el código de 6 dígitos enviado a{" "}
+          Ingrese el código de 6 dígitos enviado a{" "}
           <span className="font-medium" style={{ color: "var(--ink)" }}>{destino}</span>
         </p>
       </div>
@@ -512,8 +512,8 @@ function TiendaCard({ onBack }: { onBack: () => void }) {
           Tienda Online
         </h2>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-          Estamos trabajando para traerte la mejor experiencia de compra online.
-          Pronto podrás adquirir todos nuestros productos desde aquí.
+          Estamos trabajando para ofrecerle la mejor experiencia de compra online.
+          Pronto podrá adquirir todos nuestros productos desde aquí.
         </p>
       </div>
 

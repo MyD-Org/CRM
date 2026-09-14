@@ -13,12 +13,12 @@ import type { TenantConfig } from "@/lib/tenants"
 // cercano que funciona es un link al portal, evaluado y descartado por ahora.
 export function buildOtpEmail(tenant: TenantConfig, razonsocial: string, otp: string) {
   return {
-    subject: `${otp} es tu código de verificación de ${tenant.name}`,
+    subject: `${otp} es su código de verificación de ${tenant.name}`,
     text:
-      `Tu código de verificación es ${otp}\n\n` +
-      `Hola ${razonsocial}: usá este código para entrar al portal de clientes de ${tenant.name}. ` +
+      `Su código de verificación es ${otp}\n\n` +
+      `Hola ${razonsocial}: use este código para entrar al portal de clientes de ${tenant.name}. ` +
       `Vence en 10 minutos y sirve una sola vez.\n\n` +
-      `Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.`,
+      `Si no solicitó este código, ignore este mensaje: sin él nadie puede entrar a su cuenta.`,
     // Maquetado con tablas y estilos inline: es lo único que renderiza parejo en todos
     // los clientes de mail (Outlook de escritorio usa el motor de Word — ignora flex,
     // grid y border-radius, pero respeta las tablas y degrada sin romperse).
@@ -31,7 +31,7 @@ export function buildOtpEmail(tenant: TenantConfig, razonsocial: string, otp: st
       </td></tr>
       <tr><td style="padding:20px 32px 0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#111827">
         <p style="margin:0 0 4px">Hola ${razonsocial},</p>
-        <p style="margin:0">Tu código de verificación es:</p>
+        <p style="margin:0">Su código de verificación es:</p>
       </td></tr>
       <tr><td style="padding:20px 32px 0">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f6f8fb;border:1px solid #e5e7eb;border-radius:8px">
@@ -40,7 +40,7 @@ export function buildOtpEmail(tenant: TenantConfig, razonsocial: string, otp: st
       </td></tr>
       <tr><td style="padding:16px 32px 28px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:13px;line-height:1.55;color:#6b7280">
         <p style="margin:0">Vence en 10 minutos y sirve una sola vez.</p>
-        <p style="margin:16px 0 0;padding-top:16px;border-top:1px solid #eef1f5">Si no pediste este código, ignorá este mensaje: sin él nadie puede entrar a tu cuenta.</p>
+        <p style="margin:16px 0 0;padding-top:16px;border-top:1px solid #eef1f5">Si no solicitó este código, ignore este mensaje: sin él nadie puede entrar a su cuenta.</p>
       </td></tr>
     </table>
     <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:12px;color:#9ca3af;padding:16px 0 0">Portal de clientes de ${tenant.name}</div>

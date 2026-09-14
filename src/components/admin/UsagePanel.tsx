@@ -98,7 +98,7 @@ export function UsagePanel({ initial }: Props) {
       )}
 
       <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
-        Costo <strong>estimado</strong> del modelo Claude (no es la factura real de Anthropic; verificá el total en la
+        Costo <strong>estimado</strong> del modelo Claude (no es la factura real de Anthropic; verifique el total en la
         consola de Anthropic). Los mensajes de plantilla de WhatsApp se facturan aparte por Meta.
       </p>
     </div>

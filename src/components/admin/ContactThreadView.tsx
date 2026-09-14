@@ -208,7 +208,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     router.refresh()
   }
 
-  // Pasar la conversación a tu nombre aunque ya la tenga otro operador (o esté sin asignar en
+  // Pasar la conversación a su nombre aunque ya la tenga otro operador (o esté sin asignar en
   // la cola). No bloquea a nadie —cualquiera puede seguir respondiendo—, solo cambia el dueño
   // visible: al reasignar, el chip pasa a "Asignado a vos" y el operador anterior lo ve.
   async function handleAssignToMe() {
@@ -226,7 +226,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
     setStatus("active")
     // Cambió el dueño visible: la copia cacheada de la lista quedó vieja.
     router.refresh()
-    toast({ title: "Te asignaste la conversación", tone: "success" })
+    toast({ title: "Se asignó la conversación", tone: "success" })
   }
 
   async function handleArchive() {
@@ -315,7 +315,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           return { ...m, id: body.id!, pending: false, delivery_status: failed ? "failed" : null }
         }))
         if (failed) {
-          toast({ title: "No se entregó al cliente", description: "Podés reintentar desde la burbuja.", tone: "danger" })
+          toast({ title: "No se entregó al cliente", description: "Puede reintentar desde la burbuja.", tone: "danger" })
           return
         }
         // Telemetría del copiloto: si el mensaje venía del "Copiar", medimos as-is/edited.
@@ -334,7 +334,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       if (body.error === "window_closed") {
         toast({ title: "Ventana cerrada", description: "La ventana de 24h de WhatsApp está cerrada. El cliente debe escribirte primero.", tone: "danger" })
       } else {
-        toast({ title: "No se pudo enviar", description: "Volvé a escribirlo e intentá de nuevo.", tone: "danger" })
+        toast({ title: "No se pudo enviar", description: "Vuelva a escribirlo e inténtelo nuevamente.", tone: "danger" })
       }
     } catch {
       // Error de red del navegador: no sabemos si ai-api llegó a persistir. Sacamos la burbuja
@@ -342,7 +342,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       // persistió del otro lado, el próximo poll lo trae con delivery_status='failed' y el
       // operador ve la burbuja con Reintentar/Cancelar normalmente.
       setMessages((prev) => prev.filter((m) => m.id !== tempId))
-      toast({ title: "Sin conexión", description: "No se pudo confirmar el envío. Volvé a escribirlo.", tone: "danger" })
+      toast({ title: "Sin conexión", description: "No se pudo confirmar el envío. Vuelva a escribirlo.", tone: "danger" })
     }
   }
 
@@ -388,7 +388,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       title: "No se pudo reenviar",
       description: body.error === "window_closed"
         ? "La ventana de 24h está cerrada. El cliente debe escribirte primero."
-        : "Intentá de nuevo en unos segundos.",
+        : "Intente nuevamente en unos segundos.",
       tone: "danger",
     })
     return false
@@ -408,7 +408,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
       toast({ title: "Mensaje cancelado", description: "Ya no se va a reintentar.", tone: "success" })
       return true
     }
-    toast({ title: "No se pudo cancelar", description: "Intentá de nuevo en unos segundos.", tone: "danger" })
+    toast({ title: "No se pudo cancelar", description: "Intente nuevamente en unos segundos.", tone: "danger" })
     return false
   }
 
@@ -501,7 +501,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                   size="sm"
                   onClick={handleAssignToMe}
                   disabled={!convId}
-                  title="Pasar esta conversación a tu nombre"
+                  title="Pasar esta conversación a su nombre"
                   aria-label="Asignarme"
                   className="flex items-center gap-1.5 rounded-full"
                 >
@@ -561,13 +561,13 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
           // (sería engañoso); avisamos que quedó sin atender y hay que tomarla.
           <p className="text-xs text-center py-1" style={{ color: "var(--amber)" }}>
             {contact.within_window
-              ? 'El bot está pausado — nadie la está atendiendo. Hacé click en "Asignarme" para responder vos.'
+              ? 'El bot está pausado — nadie la está atendiendo. Haga click en "Asignarme" para responder usted.'
               : "El bot está pausado — esta conversación quedó sin atender."}
           </p>
         ) : mode === "bot" ? (
           <p className="text-xs text-center py-1" style={{ color: "var(--ink-faint)" }}>
             {contact.within_window
-              ? 'El bot está respondiendo. Hacé click en "Asignarme" para responder vos.'
+              ? 'El bot está respondiendo. Haga click en "Asignarme" para responder usted.'
               : "El bot está respondiendo esta conversación."}
           </p>
         ) : !contact.within_window ? (
@@ -597,7 +597,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
                 ref={replyRef}
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
-                placeholder="Escribí tu respuesta..."
+                placeholder="Escriba su respuesta..."
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e as unknown as React.FormEvent) }
                 }}
@@ -650,7 +650,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         onOpenChange={(open) => { if (!open) setPendingBudget(null) }}
         size="sm"
         title="Reemplazar el mensaje"
-        description="Ya tenés un mensaje escrito en el compose. ¿Querés reemplazarlo por el presupuesto?"
+        description="Ya tiene un mensaje escrito en el compose. ¿Desea reemplazarlo por el presupuesto?"
         footer={
           <>
             <Button variant="ghost" onClick={() => setPendingBudget(null)}>Cancelar</Button>
@@ -671,7 +671,7 @@ export function ContactThreadView({ contact, initialPage, currentUserId, botEnab
         onOpenChange={(open) => { if (!open) setPendingSuggestion(null) }}
         size="sm"
         title="Reemplazar el mensaje"
-        description="Ya tenés un mensaje escrito en el compose. ¿Querés reemplazarlo por la sugerencia del asistente?"
+        description="Ya tiene un mensaje escrito en el compose. ¿Desea reemplazarlo por la sugerencia del asistente?"
         footer={
           <>
             <Button variant="ghost" onClick={() => setPendingSuggestion(null)}>Cancelar</Button>

@@ -63,7 +63,7 @@ export async function GET(req: Request) {
   } catch (err) {
     console.error("[portal/comprobantes] list error:", err)
     return Response.json(
-      { error: "No pudimos cargar tus comprobantes, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos cargar sus comprobantes, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     const r2 = getR2()
     if (!r2) {
       return Response.json(
-        { error: "El servicio de comprobantes no está disponible, intentá de nuevo más tarde", code: "storage_unavailable" },
+        { error: "El servicio de comprobantes no está disponible, intente nuevamente más tarde", code: "storage_unavailable" },
         { status: 503, headers: NO_STORE },
       )
     }
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
     if (!parsed.ok) {
       if (parsed.status === 400) {
         return Response.json(
-          { error: "Revisá los datos del formulario", code: "invalid", fields: parsed.fields },
+          { error: "Revise los datos del formulario", code: "invalid", fields: parsed.fields },
           { status: 400, headers: NO_STORE },
         )
       }
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
     sweepHourly(nowMs)
     if (hourlyLimitHit(attemptKey, nowMs)) {
       return Response.json(
-        { error: "Informaste demasiados comprobantes en la última hora, probá de nuevo más tarde", code: "hourly_limit" },
+        { error: "Informó demasiados comprobantes en la última hora, intente nuevamente más tarde", code: "hourly_limit" },
         { status: 429, headers: NO_STORE },
       )
     }
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     const recentCount = await countRecentForClient(guard.tenantId, codigocliente, now)
     if (recentCount >= RECEIPTS_DAILY_LIMIT) {
       return Response.json(
-        { error: `Llegaste al límite de ${RECEIPTS_DAILY_LIMIT} comprobantes por día, probá de nuevo mañana`, code: "daily_limit" },
+        { error: `Llegó al límite de ${RECEIPTS_DAILY_LIMIT} comprobantes por día, intente nuevamente mañana`, code: "daily_limit" },
         { status: 429, headers: NO_STORE },
       )
     }
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[portal/comprobantes] init error:", err)
     return Response.json(
-      { error: "No pudimos preparar la subida del comprobante, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos preparar la subida del comprobante, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }

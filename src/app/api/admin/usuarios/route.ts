@@ -90,7 +90,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getAdminSession()
   if (!session.userId || !canManageUsers(session.role)) {
-    return NextResponse.json({ error: "No tenés permisos de gestión de usuarios" }, { status: 403 })
+    return NextResponse.json({ error: "No tiene permisos de gestión de usuarios" }, { status: 403 })
   }
 
   const body = await req.json().catch(() => null)
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   }
   // El actor solo puede crear roles dentro de lo que puede otorgar (un admin: solo operadores).
   if (!assignableRoles(session.role).includes(body.role as AdminRole)) {
-    return NextResponse.json({ error: "No podés asignar ese rol" }, { status: 403 })
+    return NextResponse.json({ error: "No puede asignar ese rol" }, { status: 403 })
   }
 
   const db = getDb()

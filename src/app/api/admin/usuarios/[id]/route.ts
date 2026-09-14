@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // propio) lo puede hacer cualquiera.
   const isSelf = id === session.userId
   if (!isSelf && (!canManageUsers(session.role) || !canActOnRole(session.role, target.role))) {
-    return NextResponse.json({ error: "No tenés permisos sobre este usuario" }, { status: 403 })
+    return NextResponse.json({ error: "No tiene permisos sobre este usuario" }, { status: 403 })
   }
 
   const updates: Partial<typeof adminUsers.$inferInsert> = {}
@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!isSelf && canManageUsers(session.role)) {
     if (body.role) {
       if (!assignableRoles(session.role).includes(body.role)) {
-        return NextResponse.json({ error: "No podés asignar ese rol" }, { status: 403 })
+        return NextResponse.json({ error: "No puede asignar ese rol" }, { status: 403 })
       }
       updates.role = body.role
     }
@@ -64,10 +64,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (!session.userId) return NextResponse.json({ error: "no autorizado" }, { status: 401 })
-  if (!canManageUsers(session.role)) return NextResponse.json({ error: "No tenés permisos de gestión de usuarios" }, { status: 403 })
+  if (!canManageUsers(session.role)) return NextResponse.json({ error: "No tiene permisos de gestión de usuarios" }, { status: 403 })
 
   const { id } = await params
-  if (id === session.userId) return NextResponse.json({ error: "No podés eliminarte a vos mismo" }, { status: 400 })
+  if (id === session.userId) return NextResponse.json({ error: "No puede eliminarse a usted mismo" }, { status: 400 })
 
   const db = getDb()
   const [target] = await db
@@ -78,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // Un admin solo puede eliminar operadores; al superadmin y a otros admins, solo el superadmin.
   if (!canActOnRole(session.role, target.role)) {
-    return NextResponse.json({ error: "No tenés permisos sobre este usuario" }, { status: 403 })
+    return NextResponse.json({ error: "No tiene permisos sobre este usuario" }, { status: 403 })
   }
 
   await db.delete(adminUsers).where(eq(adminUsers.id, id))

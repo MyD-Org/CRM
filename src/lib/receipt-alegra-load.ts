@@ -55,26 +55,26 @@ export function parseLoadBody(body: unknown, now: Date): LoadBodyValidation {
     bankAccountId = b.bankAccountId
   }
   if ((METHODS_REQUIRING_BANK as readonly string[]).includes(method) && !bankAccountId) {
-    return { ok: false, error: "Elegí la cuenta bancaria del pago" }
+    return { ok: false, error: "Seleccione la cuenta bancaria del pago" }
   }
 
   let amount: string | null = null
   if (b.amount !== undefined && b.amount !== null && b.amount !== "") {
     amount = parseAmount(b.amount)
-    if (amount === null) return { ok: false, error: "Ingresá un monto válido (mayor a 0, hasta 2 decimales)" }
+    if (amount === null) return { ok: false, error: "Ingrese un monto válido (mayor a 0, hasta 2 decimales)" }
   }
 
   let paidOn: string | null = null
   if (b.paidOn !== undefined && b.paidOn !== null && b.paidOn !== "") {
     if (!isValidPaidOn(b.paidOn, now)) {
-      return { ok: false, error: "Ingresá una fecha de pago válida (no futura)" }
+      return { ok: false, error: "Ingrese una fecha de pago válida (no futura)" }
     }
     // isValidPaidOn verifica el formato YYYY-MM-DD: acá ya es un string válido.
     paidOn = String(b.paidOn)
   }
 
   if (!Array.isArray(b.allocations) || b.allocations.length === 0) {
-    return { ok: false, error: "Elegí al menos una factura a la que imputar el pago" }
+    return { ok: false, error: "Seleccione al menos una factura a la que imputar el pago" }
   }
   const seen = new Set<string>()
   const allocations: { invoiceId: string; amount: string }[] = []
@@ -87,7 +87,7 @@ export function parseLoadBody(body: unknown, now: Date): LoadBodyValidation {
     }
     const itemAmount = parseAmount(item.amount)
     if (itemAmount === null) {
-      return { ok: false, error: "Ingresá montos mayores a 0 (hasta 2 decimales) en cada factura" }
+      return { ok: false, error: "Ingrese montos mayores a 0 (hasta 2 decimales) en cada factura" }
     }
     seen.add(item.invoiceId)
     allocations.push({ invoiceId: item.invoiceId, amount: itemAmount })

@@ -63,7 +63,7 @@ export async function POST(req: Request, { params }: IdParams) {
   if (!config) {
     console.error(`[admin/comprobantes] sin config para tenant "${guard.tenantId}" en load-to-alegra`)
     return Response.json(
-      { error: "No pudimos preparar la carga, intentá de nuevo en unos minutos", code: "internal_error" },
+      { error: "No pudimos preparar la carga, intente nuevamente en unos minutos", code: "internal_error" },
       { status: 500, headers: NO_STORE },
     )
   }
@@ -74,7 +74,7 @@ export async function POST(req: Request, { params }: IdParams) {
   } catch (err) {
     console.error(`[admin/comprobantes] Alegra respondió mal listando facturas de ${id}:`, err)
     return Response.json(
-      { error: "Alegra no respondió bien, intentá de nuevo en unos minutos", code: "alegra_error" },
+      { error: "Alegra no respondió bien, intente nuevamente en unos minutos", code: "alegra_error" },
       { status: 502, headers: NO_STORE },
     )
   }
@@ -99,7 +99,7 @@ export async function POST(req: Request, { params }: IdParams) {
     // Alegra rechazó el pago: la fila NO se tocó y el admin puede corregir y reintentar.
     console.error(`[admin/comprobantes] Alegra rechazó el pago del comprobante ${id}:`, err)
     return Response.json(
-      { error: "Alegra rechazó el pago. Revisá los datos y reintentá.", code: "alegra_error" },
+      { error: "Alegra rechazó el pago. Revise los datos y reintente.", code: "alegra_error" },
       { status: 502, headers: NO_STORE },
     )
   }

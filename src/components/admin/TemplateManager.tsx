@@ -121,7 +121,7 @@ export function TemplateManager() {
         <div>
           <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Plantillas de WhatsApp</h1>
           <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-            Mensajes preaprobados por Meta para notificar a tus clientes (pedidos, cotizaciones, etc.).
+            Mensajes preaprobados por Meta para notificar a sus clientes (pedidos, cotizaciones, etc.).
           </p>
         </div>
         <div className="flex gap-2">
@@ -139,7 +139,7 @@ export function TemplateManager() {
       ) : templates.length === 0 ? (
         <div className="rounded-lg border border-dashed py-12 text-center" style={{ borderColor: "var(--border)", color: "var(--ink-soft)" }}>
           <p className="font-medium" style={{ color: "var(--ink)" }}>Todavía no hay plantillas</p>
-          <p className="text-sm mt-1">Creá la primera con “Nueva plantilla”.</p>
+          <p className="text-sm mt-1">Cree la primera con “Nueva plantilla”.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--border)" }}>
@@ -208,7 +208,7 @@ export function TemplateManager() {
               value={form.body}
               onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
               rows={4}
-              placeholder="Hola, tu pedido en Central Led fue confirmado. ¡Gracias por tu compra!"
+              placeholder="Hola, su pedido en Central Led fue confirmado. ¡Gracias por su compra!"
             />
           </Field>
         </div>

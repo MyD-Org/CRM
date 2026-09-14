@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       // Handoff a una persona puntual (assign_to_human por nombre).
       sent = await sendPushToOperator(tenant.id, body.operatorId, {
         title: "Nueva conversación asignada",
-        body: `Se te derivó la conversación con ${contact}.`,
+        body: `Se le derivó la conversación con ${contact}.`,
         url,
         icon,
         tag,
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     if (operatorId) {
       sent = await sendPushToOperator(tenant.id, operatorId, {
         title: contact,
-        body: "Te escribió un mensaje.",
+        body: "Le escribió un mensaje.",
         url,
         icon,
         tag,

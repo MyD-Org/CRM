@@ -21,7 +21,7 @@ export default async function InboxPage() {
   let configError = ""
 
   if (!tenant?.aiTenantId || !tenant?.aiApiUrl) {
-    configError = "El inbox no está configurado. Completá AI_TENANT_ID y AI_API_URL en la config del tenant."
+    configError = "El inbox no está configurado. Complete AI_TENANT_ID y AI_API_URL en la config del tenant."
   } else {
     const tenantRef = { id: tenant.id, aiApiUrl: tenant.aiApiUrl, aiTenantId: tenant.aiTenantId }
     try {
@@ -34,7 +34,7 @@ export default async function InboxPage() {
       contacts = await listEnrichedContacts(tenantRef, "active", convs, assignments)
       botEnabled = await botStatusPromise
     } catch {
-      configError = "No se pudo conectar con la API. Verificá la configuración."
+      configError = "No se pudo conectar con la API. Verifique la configuración."
     }
   }
 

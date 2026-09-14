@@ -61,7 +61,7 @@ export function LimitsPanel({ initial }: Props) {
     >
       <h2 className="text-sm font-semibold mb-1" style={{ color: "var(--ink)" }}>Topes de uso</h2>
       <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
-        Límite de gasto del asistente por tenant. Dejá el campo vacío para no aplicar tope. Al
+        Límite de gasto del asistente por tenant. Deje el campo vacío para no aplicar tope. Al
         superar el tope, el bot deja de responder y las conversaciones nuevas se derivan a un operador.
       </p>
 

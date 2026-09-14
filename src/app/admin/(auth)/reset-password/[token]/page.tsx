@@ -80,10 +80,10 @@ export default function ResetPasswordPage() {
   if (tokenState.status !== "valid") {
     const message =
       tokenState.status === "expired"
-        ? "Este link de invitación venció. Pedile a un administrador que te genere uno nuevo."
+        ? "Este link de invitación venció. Pídale a un administrador que le genere uno nuevo."
         : tokenState.status === "used"
-          ? "Esta invitación ya fue utilizada. Si ya creaste tu contraseña, iniciá sesión normalmente."
-          : "El link no es válido. Verificá que lo hayas copiado completo o pedí uno nuevo a un administrador."
+          ? "Esta invitación ya fue utilizada. Si ya creó su contraseña, inicie sesión normalmente."
+          : "El link no es válido. Verifique que lo haya copiado completo o pida uno nuevo a un administrador."
     return (
       <div className="w-full p-6 sm:p-8" style={cardStyle}>
         <div className="flex flex-col gap-1.5 mb-6">
@@ -102,9 +102,9 @@ export default function ResetPasswordPage() {
   return (
     <div className="w-full p-6 sm:p-8" style={cardStyle}>
       <div className="flex flex-col gap-1.5 mb-6">
-        <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Creá tu contraseña</h1>
+        <h1 className="text-xl font-semibold" style={{ color: "var(--ink)" }}>Cree su contraseña</h1>
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-          Estás activando la cuenta de <strong style={{ color: "var(--ink)" }}>{tokenState.email}</strong>. Elegí una contraseña de al menos 8 caracteres.
+          Está activando la cuenta de <strong style={{ color: "var(--ink)" }}>{tokenState.email}</strong>. Seleccione una contraseña de al menos 8 caracteres.
         </p>
       </div>
 

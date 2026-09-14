@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 
   if (isLocked(attemptKey, now)) {
     return NextResponse.json(
-      { error: "Demasiados intentos fallidos. Probá de nuevo en unos minutos." },
+      { error: "Demasiados intentos fallidos. Intente nuevamente en unos minutos." },
       { status: 429 },
     )
   }
