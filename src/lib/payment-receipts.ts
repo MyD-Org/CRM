@@ -289,6 +289,19 @@ export async function getAdmin(tenantId: string, id: string): Promise<PaymentRec
   return row ?? null
 }
 
+/** Contador de `pending` del tenant: badge del sidebar del backoffice. Solo estados visibles
+ *  relevantes: `pending` es exactamente "esperando carga en Alegra". */
+export async function countPending(tenantId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ count: sql<number>`count(*)::int` })
+    .from(paymentReceipts)
+    .where(and(
+      eq(paymentReceipts.tenantId, tenantId),
+      eq(paymentReceipts.status, "pending"),
+    ))
+  return row?.count ?? 0
+}
+
 export type SetLoadedResult =
   | { kind: "updated"; row: PaymentReceiptRow }
   | { kind: "already"; row: PaymentReceiptRow }
