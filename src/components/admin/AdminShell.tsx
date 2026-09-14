@@ -73,6 +73,9 @@ function usePendingCounts(): PendingCounts | null {
   // Carga inicial al montar; el poll se pausa con la pestaña oculta (useVisiblePoll) y vuelve
   // a pegar apenas la pestaña se ve de nuevo. El focus de la ventana dispara otra pasada.
   useEffect(() => {
+    // Falso positivo de la regla: el setState de load va después del await del fetch, no
+    // sincrónicamente dentro del effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
   useVisiblePoll(() => void load(), POLL_MS)
