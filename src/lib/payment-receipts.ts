@@ -289,17 +289,18 @@ export async function getAdmin(tenantId: string, id: string): Promise<PaymentRec
   return row ?? null
 }
 
-/** Contador de `pending` del tenant: badge del sidebar del backoffice. Solo estados visibles
- *  relevantes: `pending` es exactamente "esperando carga en Alegra". */
-export async function countPending(tenantId: string): Promise<number> {
-  const [row] = await getDb()
-    .select({ count: sql<number>`count(*)::int` })
+/** Ids + submittedAt de los `pending` del tenant, para el badge de novedades del sidebar:
+ *  el cliente filtra por su last-visit. Select liviano de una sola columna (el cache del
+ *  endpoint guarda esto, no los contadores). */
+export async function listPendingSubmittedAt(tenantId: string): Promise<Date[]> {
+  const rows = await getDb()
+    .select({ submittedAt: paymentReceipts.submittedAt })
     .from(paymentReceipts)
     .where(and(
       eq(paymentReceipts.tenantId, tenantId),
       eq(paymentReceipts.status, "pending"),
     ))
-  return row?.count ?? 0
+  return rows.map((r) => r.submittedAt).filter((d): d is Date => d !== null)
 }
 
 export type SetLoadedResult =
