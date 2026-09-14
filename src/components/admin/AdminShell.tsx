@@ -12,7 +12,7 @@ import { PendingRepliesDialog, type PendingContact } from "./PendingRepliesDialo
 import type { InboxContact } from "@/lib/inbox-api"
 import { roleRank, type AdminRole } from "@/lib/roles"
 import { UnsavedGuardProvider, useUnsavedGuardCtx } from "@/lib/unsaved-guard"
-import { useVisiblePoll } from "@/lib/use-visible-poll"
+import { getLastVisit, SECTION_VISITED_EVENT, type BadgeSection } from "@/lib/admin-last-visit"
 
 interface AdminShellProps {
   name: string
@@ -29,8 +29,10 @@ interface AdminShellProps {
   children: React.ReactNode
 }
 
-// Contadores de pendientes del sidebar (GET /api/admin/pending-counts). `comprobantes` viene
-// en null para operadores: la ruta no lo expone a ese rol y la UI lo trata como "sin badge".
+// Contadores de "novedades" del sidebar (GET /api/admin/pending-counts): items nuevos desde
+// la última visita a cada sección (modelo last-visit en localStorage, por dispositivo).
+// `comprobantes` viene en null para operadores: la ruta no lo expone a ese rol y la UI lo
+// trata como "sin badge".
 interface PendingCounts {
   inbox: number
   comprobantes: number | null
@@ -59,10 +61,21 @@ function BadgeIcon({ icon, count }: { icon: React.ReactNode; count: number | nul
 
 function usePendingCounts(): PendingCounts | null {
   const [counts, setCounts] = useState<PendingCounts | null>(null)
+  // Last-visit por sección. Lazy (se lee en el primer load, no durante el render) y en ref:
+  // no es estado, no debe re-renderizar ni re-inicializar.
+  const sinceRef = useRef<{ inbox: string | null; comprobantes: string | null } | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/pending-counts", { cache: "no-store" })
+      // Primer load: lectura lazy de localStorage (window no existe durante el render).
+      if (!sinceRef.current) {
+        sinceRef.current = { inbox: getLastVisit("inbox"), comprobantes: getLastVisit("comprobantes") }
+      }
+      const params = new URLSearchParams()
+      if (sinceRef.current.inbox) params.set("sinceInbox", sinceRef.current.inbox)
+      if (sinceRef.current.comprobantes) params.set("sinceComprobantes", sinceRef.current.comprobantes)
+      const qs = params.toString()
+      const res = await fetch(`/api/admin/pending-counts${qs ? `?${qs}` : ""}`, { cache: "no-store" })
       if (!res.ok) return
       setCounts((await res.json()) as PendingCounts)
     } catch {
@@ -70,19 +83,37 @@ function usePendingCounts(): PendingCounts | null {
     }
   }, [])
 
-  // Carga inicial al montar; el poll se pausa con la pestaña oculta (useVisiblePoll) y vuelve
-  // a pegar apenas la pestaña se ve de nuevo. El focus de la ventana dispara otra pasada.
+  // Carga inicial al montar; poll cada 30s SIEMPRE, también con la pestaña oculta: el sentido
+  // del contador es avisar DESDE OTRA pestaña, pausarlo apagaba justo el caso de uso. El
+  // endpoint cachea 15s server-side y cuenta sobre el raw cacheado (barato). El focus de la
+  // ventana dispara otra pasada.
   useEffect(() => {
     // Falso positivo de la regla: el setState de load va después del await del fetch, no
     // sincrónicamente dentro del effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
-  useVisiblePoll(() => void load(), POLL_MS)
+  useEffect(() => {
+    const timer = setInterval(() => void load(), POLL_MS)
+    return () => clearInterval(timer)
+  }, [load])
   useEffect(() => {
     const onFocus = () => void load()
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
+  }, [load])
+
+  // Visitar una sección (InboxList/ComprobantesShell marcan en cada load) actualiza su
+  // last-visit y recarga al instante: el badge se va en el momento, sin esperar el poll.
+  useEffect(() => {
+    const onVisited = (e: Event) => {
+      const section = (e as CustomEvent<{ section: BadgeSection }>).detail?.section
+      if (section !== "inbox" && section !== "comprobantes") return
+      if (sinceRef.current) sinceRef.current[section] = getLastVisit(section)
+      void load()
+    }
+    window.addEventListener(SECTION_VISITED_EVENT, onVisited)
+    return () => window.removeEventListener(SECTION_VISITED_EVENT, onVisited)
   }, [load])
 
   return counts

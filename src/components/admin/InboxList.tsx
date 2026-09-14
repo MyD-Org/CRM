@@ -7,6 +7,7 @@ import { Tabs, Badge, EmptyState } from "@myd-org/ui"
 import { channelLabel, type InboxContact } from "@/lib/inbox-api"
 import { previewText } from "@/lib/message-text"
 import { useVisiblePoll } from "@/lib/use-visible-poll"
+import { markVisited } from "@/lib/admin-last-visit"
 
 type Tab = "active" | "history"
 type Scope = "all" | "mine"
@@ -88,6 +89,10 @@ export function InboxList({ initialContacts, currentUserId, initialBotEnabled }:
     if (res?.ok && tabRef.current === tab) {
       const next: InboxContact[] = await res.json()
       setContacts(next)
+      // Está parado en la sección (load exitoso): marca la visita. El badge del sidebar se
+      // limpia en el acto vía el evento, y el poll de 10s vuelve a atrapar lo que llegue
+      // después sin salir de la pantalla.
+      markVisited("inbox")
 
       // ¿Apareció una conversación derivada sin operador que todavía no intentamos
       // repartir? Adelantamos la reconciliación al próximo poll en vez de esperar los 60s.

@@ -5,6 +5,7 @@ import { AlertTriangle, Receipt, RefreshCw } from "lucide-react"
 import { Badge, Button, EmptyState, Table, type TableColumn, Tabs } from "@myd-org/ui"
 import type { AdminReceiptDto } from "@/lib/payment-receipts"
 import { useVisiblePoll } from "@/lib/use-visible-poll"
+import { markVisited } from "@/lib/admin-last-visit"
 import { ComprobanteDialog } from "./ComprobanteDialog"
 import { fmtFecha, fmtFechaHora, fmtMonto, methodLabel } from "./format"
 
@@ -66,6 +67,9 @@ export function ComprobantesShell({
         setTotal(data.total)
         setReceiptsEmailConfigured(data.receiptsEmailConfigured)
         setError("")
+        // Está parado en la sección (load exitoso): marca la visita. El badge del sidebar se
+        // limpia en el acto vía el evento, y el poll vuelve a atrapar lo que llegue después.
+        markVisited("comprobantes")
       } else {
         setError("No pudimos cargar los comprobantes")
       }

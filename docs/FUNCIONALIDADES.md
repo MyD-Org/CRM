@@ -262,10 +262,14 @@ con las tools del agente consultando los datos reales del CRM.
   - `GET /api/agent/payments` — pagos
   - `GET /api/agent/account-balance` — saldo
 - **CORS**: rewrite `/ai-api/*` → `ai-api` (configurado en `next.config.ts`).
-- **Badges de pendientes** — los ítems del sidebar del backoffice llevan contador: "Mensajes"
-  muestra las conversaciones con `awaiting_reply` (ai-api) y "Comprobantes" los
-  `payment_receipts` pending (admin+). Los sirve `GET /api/admin/pending-counts` (cache en
-  memoria 15 s; el cliente pollea cada 30 s, pausado con la pestaña oculta).
+- **Badges de novedades** — los ítems del sidebar del backoffice llevan contador de items
+  nuevos desde la última visita a la sección (modelo last-visit en localStorage, por
+  dispositivo): "Mensajes" cuenta conversaciones activas con `awaiting_reply` (las cerradas
+  quedan con ese flag en la ai-api y no cuentan) y "Comprobantes" los `payment_receipts`
+  pending (admin+; null para operadores). Entrar a la sección limpia su badge; lo que llega
+  después vuelve a contar. Los sirve `GET /api/admin/pending-counts` (cache del raw 15 s; el
+  cliente pollea cada 30 s, también con la pestaña oculta — avisar desde otra pestaña es el
+  caso de uso).
 
 ---
 
@@ -365,7 +369,7 @@ DB propia del CRM (Postgres). Schema en **`src/db/schema.ts`** (Drizzle):
 | GET | `/api/admin/comprobantes/{id}/load-context` | admin | Facturas abiertas del cliente + cuentas bancarias, para "Cargar en Alegra" |
 | POST | `/api/admin/comprobantes/{id}/load-to-alegra` | admin | Crea el pago en Alegra (imputado a facturas elegidas), adjunta el comprobante y marca la fila |
 | GET/PUT | `/api/admin/settings/receipts` | admin | Casilla de avisos de comprobantes del tenant |
-| GET | `/api/admin/pending-counts` | sesión (cualquier rol) | Contadores para los badges del sidebar: inbox (`awaiting_reply`) y comprobantes pending (admin+, null para operadores) |
+| GET | `/api/admin/pending-counts` | sesión (cualquier rol) | Contadores de novedades para los badges del sidebar: inbox (activas con `awaiting_reply`) y comprobantes pending (admin+, null para operadores); filtra por `?since=`/`sinceInbox`/`sinceComprobantes` |
 
 ---
 
