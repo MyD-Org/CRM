@@ -24,7 +24,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ endUser
   // del contacto, que con varios números puede no ser la que el operador está mirando.
   const body = (await req.json().catch(() => null)) as { conversationId?: string } | null
 
-  const result = await startAssist(tenant.aiApiUrl, tenant.aiTenantId, endUserId, body?.conversationId)
+  // conversationId es opcional: sin valor no se pasa el argumento (un `undefined` explícito
+  // rompería el contrato de la llamada).
+  const result = body?.conversationId
+    ? await startAssist(tenant.aiApiUrl, tenant.aiTenantId, endUserId, body.conversationId)
+    : await startAssist(tenant.aiApiUrl, tenant.aiTenantId, endUserId)
   if (!result.ok) {
     const status = result.error === "contact_not_found" ? 404
       : result.error === "assist_agent_not_configured" ? 409
