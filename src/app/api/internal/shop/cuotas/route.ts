@@ -3,15 +3,16 @@ import { bearerMatches } from "@/lib/secure-compare"
 
 // GET /api/internal/shop/cuotas?tenant={tenants.id} — el Shop lee qué medios de pago y opciones
 // de cuotas ofrece el tenant. Contrato: platform/contracts/cuotas/v1 (schema.json).
-// Auth: Bearer INTERNAL_SECRET (mismo patrón que /api/internal/business-hours, pero el tenant se
-// busca por `tenants.id`, no por `aiTenantId`). Sólo lectura; nunca se cachea.
+// Auth: Bearer SHOP_CRM_SECRET, una llave propia del Shop. NO INTERNAL_SECRET: esa es la de ai-api y
+// además abre /api/agent/* (facturas, saldos, contactos); el Shop no tiene que tener ese acceso.
+// El tenant se busca por `tenants.id`, no por `aiTenantId`. Sólo lectura; nunca se cachea.
 
 const NO_STORE = { "Cache-Control": "no-store" }
 
 export const dynamic = "force-dynamic"
 
 export async function GET(req: Request) {
-  if (!bearerMatches(req.headers.get("authorization"), process.env.INTERNAL_SECRET)) {
+  if (!bearerMatches(req.headers.get("authorization"), process.env.SHOP_CRM_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401, headers: NO_STORE })
   }
 
