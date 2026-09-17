@@ -183,6 +183,13 @@
       "when": 1789617600000,
       "tag": "0025_cuotas_configurables",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789704000000,
+      "tag": "0026_cuotas_por_proveedor",
+      "breakpoints": true
     }
   ]
 }

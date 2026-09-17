@@ -1,29 +1,41 @@
 import { and, asc, eq, sql } from "drizzle-orm"
 import { getDb } from "@/db"
-import { installmentOptions, paymentMethods, tenants } from "@/db/schema"
+import { installmentOptions, paymentConfigVersions, paymentMethods, tenants } from "@/db/schema"
 import {
-  armarContratoCuotasV1,
-  buscarSuperpuesta,
-  validarMedio,
-  validarOpcion,
-  type ContratoCuotasV1,
-  type MedioValido,
-  type OpcionValida,
+  armarContratoCuotasV2,
+  buscarMontoRepetido,
+  CODIGO_CREDITO,
+  validarEscalon,
+  validarProveedor,
+  type ContratoCuotasV2,
+  type EscalonFila,
+  type EscalonValido,
+  type ProveedorFila,
+  type ProveedorValido,
 } from "@/lib/cuotas"
 
-// Acceso a datos de Medios de pago / Cuotas. TODO filtra por `tenantId` (el del guard, nunca el
-// del body): un id de otro tenant se comporta igual que uno inexistente (not_found → 404).
-// La regla "no dos opciones activas del mismo medio y cuotas con vigencia superpuesta" se
-// valida dentro de una transacción con pg_advisory_xact_lock por medio (D15): no hay unique
-// index porque la misma cantidad de cuotas puede repetirse en vigencias que no se tocan.
+// Acceso a datos de Medios de pago / Cuotas (v2: por proveedor). TODO filtra por `tenantId`
+// (el del guard, nunca el del body): un id de otro tenant se comporta igual que uno inexistente
+// (not_found → 404).
+//
+// Mapeo a las tablas de 0025 (sin columnas nuevas):
+//   proveedor = payment_methods con codigo_proveedor = CODIGO_CREDITO. Las filas v1 por marca
+//               (visa, master…) se ignoran en todo este módulo.
+//   escalón   = installment_options; `cuotas` guarda cuotasMax. sin_interes/vigencias sin uso.
+//
+// "No dos escalones activos del mismo proveedor con el mismo monto mínimo" se valida dentro de
+// una transacción con pg_advisory_xact_lock por proveedor. Cada escritura pisa
+// payment_config_versions (misma tx) para que `actualizadoEn` del contrato cambie también con
+// borrados.
 
-export type MedioRow = typeof paymentMethods.$inferSelect
-export type OpcionRow = typeof installmentOptions.$inferSelect
+type ProveedorRow = typeof paymentMethods.$inferSelect
+type EscalonRow = typeof installmentOptions.$inferSelect
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const esUuid = (id: string) => UUID_RE.test(id)
 
 type Invalido = { kind: "invalid"; campo: string; error: string }
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0]
 
 function esUniqueViolation(err: unknown): boolean {
   for (let e: unknown = err, i = 0; e && i < 3; e = (e as { cause?: unknown }).cause, i++) {
@@ -32,204 +44,249 @@ function esUniqueViolation(err: unknown): boolean {
   return false
 }
 
+async function tocarVersion(tx: Tx, tenantId: string): Promise<void> {
+  const ahora = new Date()
+  await tx
+    .insert(paymentConfigVersions)
+    .values({ tenantId, updatedAt: ahora })
+    .onConflictDoUpdate({ target: paymentConfigVersions.tenantId, set: { updatedAt: ahora } })
+}
+
 // ─── DTOs (lo que ve el backoffice) ──────────────────────────────────────────────────────
 
-export interface MedioDto extends MedioValido {
+export interface ProveedorDto extends ProveedorValido {
   id: string
 }
 
-export interface OpcionDto extends OpcionValida {
+export interface EscalonDto extends EscalonValido {
   id: string
   updatedAt: string
 }
 
-export const toMedioDto = (r: MedioRow): MedioDto => ({
+const aProveedorFila = (r: ProveedorRow): ProveedorFila => ({
   id: r.id,
   proveedor: r.proveedor,
-  codigoProveedor: r.codigoProveedor,
+  nombre: r.nombre,
+  activo: r.activo,
+  orden: r.orden,
+  updatedAt: r.updatedAt,
+})
+
+const escalonValido = (r: EscalonRow): EscalonValido => ({
+  proveedorId: r.paymentMethodId,
+  cuotasMax: r.cuotas,
+  montoMinimo: r.montoMinimo,
+  activo: r.activo,
+})
+
+const aEscalonFila = (r: EscalonRow): EscalonFila => ({ id: r.id, ...escalonValido(r), updatedAt: r.updatedAt })
+
+export const toProveedorDto = (r: ProveedorRow): ProveedorDto => ({
+  id: r.id,
+  proveedor: r.proveedor,
   nombre: r.nombre,
   activo: r.activo,
   orden: r.orden,
 })
 
-const opcionValida = (r: OpcionRow): OpcionValida => ({
-  paymentMethodId: r.paymentMethodId,
-  cuotas: r.cuotas,
-  sinInteres: r.sinInteres,
-  montoMinimo: r.montoMinimo,
-  vigenteDesde: r.vigenteDesde,
-  vigenteHasta: r.vigenteHasta,
-  activo: r.activo,
-})
+export const toEscalonDto = (r: EscalonRow): EscalonDto => ({ id: r.id, ...escalonValido(r), updatedAt: r.updatedAt.toISOString() })
 
-export const toOpcionDto = (r: OpcionRow): OpcionDto => ({ id: r.id, ...opcionValida(r), updatedAt: r.updatedAt.toISOString() })
+// ─── Proveedores ─────────────────────────────────────────────────────────────────────────
 
-// ─── Medios ──────────────────────────────────────────────────────────────────────────────
+const esProveedorV2 = eq(paymentMethods.codigoProveedor, CODIGO_CREDITO)
 
-export async function listarMedios(tenantId: string): Promise<MedioRow[]> {
+export async function listarProveedores(tenantId: string): Promise<ProveedorRow[]> {
   return getDb()
     .select()
     .from(paymentMethods)
-    .where(eq(paymentMethods.tenantId, tenantId))
+    .where(and(eq(paymentMethods.tenantId, tenantId), esProveedorV2))
     .orderBy(asc(paymentMethods.orden), asc(paymentMethods.nombre))
 }
 
-export type ResultadoMedio = { kind: "ok"; row: MedioRow } | { kind: "duplicado" } | { kind: "not_found" } | Invalido
+export type ResultadoProveedor = { kind: "ok"; row: ProveedorRow } | { kind: "duplicado" } | { kind: "not_found" } | Invalido
 
-export async function crearMedio(tenantId: string, body: unknown): Promise<ResultadoMedio> {
-  const v = validarMedio(body)
+export async function crearProveedor(tenantId: string, body: unknown): Promise<ResultadoProveedor> {
+  const v = validarProveedor(body)
   if (!v.ok) return { kind: "invalid", campo: v.campo, error: v.error }
   try {
-    const [row] = await getDb()
-      .insert(paymentMethods)
-      .values({ tenantId, ...v.value })
-      .returning()
-    return { kind: "ok", row: row as MedioRow }
+    return await getDb().transaction(async (tx) => {
+      const [row] = await tx
+        .insert(paymentMethods)
+        .values({ tenantId, codigoProveedor: CODIGO_CREDITO, ...v.value })
+        .returning()
+      await tocarVersion(tx, tenantId)
+      return { kind: "ok", row: row as ProveedorRow }
+    })
   } catch (err) {
     if (esUniqueViolation(err)) return { kind: "duplicado" }
     throw err
   }
 }
 
-export async function actualizarMedio(tenantId: string, id: string, body: unknown): Promise<ResultadoMedio> {
+export async function actualizarProveedor(tenantId: string, id: string, body: unknown): Promise<ResultadoProveedor> {
   if (!esUuid(id)) return { kind: "not_found" }
-  const db = getDb()
-  const [actual] = await db
-    .select()
-    .from(paymentMethods)
-    .where(and(eq(paymentMethods.id, id), eq(paymentMethods.tenantId, tenantId)))
-  if (!actual) return { kind: "not_found" }
-
-  const v = validarMedio(body, toMedioDto(actual))
-  if (!v.ok) return { kind: "invalid", campo: v.campo, error: v.error }
+  const donde = and(eq(paymentMethods.id, id), eq(paymentMethods.tenantId, tenantId), esProveedorV2)
   try {
-    const [row] = await db
-      .update(paymentMethods)
-      .set({ ...v.value, updatedAt: new Date() })
-      .where(and(eq(paymentMethods.id, id), eq(paymentMethods.tenantId, tenantId)))
-      .returning()
-    return row ? { kind: "ok", row } : { kind: "not_found" }
+    return await getDb().transaction(async (tx) => {
+      const [actual] = await tx.select().from(paymentMethods).where(donde)
+      if (!actual) return { kind: "not_found" }
+
+      const v = validarProveedor(body, toProveedorDto(actual))
+      if (!v.ok) return { kind: "invalid", campo: v.campo, error: v.error }
+      const [row] = await tx
+        .update(paymentMethods)
+        .set({ ...v.value, updatedAt: new Date() })
+        .where(donde)
+        .returning()
+      if (!row) return { kind: "not_found" }
+      await tocarVersion(tx, tenantId)
+      return { kind: "ok", row }
+    })
   } catch (err) {
     if (esUniqueViolation(err)) return { kind: "duplicado" }
     throw err
   }
 }
 
-// ─── Opciones ────────────────────────────────────────────────────────────────────────────
+// ─── Escalones ───────────────────────────────────────────────────────────────────────────
 
-export async function listarOpciones(tenantId: string): Promise<OpcionRow[]> {
-  return getDb()
-    .select()
+export async function listarEscalones(tenantId: string): Promise<EscalonRow[]> {
+  const rows = await getDb()
+    .select({ escalon: installmentOptions })
     .from(installmentOptions)
-    .where(eq(installmentOptions.tenantId, tenantId))
-    .orderBy(asc(installmentOptions.paymentMethodId), asc(installmentOptions.cuotas), asc(installmentOptions.vigenteDesde))
+    .innerJoin(paymentMethods, eq(paymentMethods.id, installmentOptions.paymentMethodId))
+    .where(and(eq(installmentOptions.tenantId, tenantId), esProveedorV2))
+    .orderBy(asc(installmentOptions.paymentMethodId), asc(installmentOptions.montoMinimo), asc(installmentOptions.cuotas))
+  return rows.map((r) => r.escalon)
 }
 
-export type ResultadoOpcion =
-  | { kind: "ok"; row: OpcionRow }
+export type ResultadoEscalon =
+  | { kind: "ok"; row: EscalonRow }
   | { kind: "not_found" }
-  | { kind: "superpuesta"; conId: string }
+  | { kind: "monto_repetido"; conId: string }
   | Invalido
 
-type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0]
-
-/** Bloquea el medio (dentro de la tx) y busca una opción que choque con `candidata`. */
-async function chequearSuperposicion(tx: Tx, candidata: OpcionValida & { id?: string }) {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${candidata.paymentMethodId}))`)
+/** Bloquea el proveedor (dentro de la tx) y busca un escalón activo con el mismo monto mínimo. */
+async function chequearMontoRepetido(tx: Tx, candidato: EscalonValido & { id?: string }) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${candidato.proveedorId}))`)
   const existentes = await tx
-    .select({
-      id: installmentOptions.id,
-      cuotas: installmentOptions.cuotas,
-      activo: installmentOptions.activo,
-      vigenteDesde: installmentOptions.vigenteDesde,
-      vigenteHasta: installmentOptions.vigenteHasta,
-    })
+    .select({ id: installmentOptions.id, montoMinimo: installmentOptions.montoMinimo, activo: installmentOptions.activo })
     .from(installmentOptions)
-    .where(
-      and(
-        eq(installmentOptions.paymentMethodId, candidata.paymentMethodId),
-        eq(installmentOptions.cuotas, candidata.cuotas),
-      ),
-    )
-  return buscarSuperpuesta(candidata, existentes)
+    .where(eq(installmentOptions.paymentMethodId, candidato.proveedorId))
+  return buscarMontoRepetido(candidato, existentes)
 }
 
-async function medioDelTenant(tx: Tx, tenantId: string, medioId: string): Promise<boolean> {
-  if (!esUuid(medioId)) return false
-  const [m] = await tx
+async function proveedorDelTenant(tx: Tx, tenantId: string, proveedorId: string): Promise<boolean> {
+  if (!esUuid(proveedorId)) return false
+  const [p] = await tx
     .select({ id: paymentMethods.id })
     .from(paymentMethods)
-    .where(and(eq(paymentMethods.id, medioId), eq(paymentMethods.tenantId, tenantId)))
-  return Boolean(m)
+    .where(and(eq(paymentMethods.id, proveedorId), eq(paymentMethods.tenantId, tenantId), esProveedorV2))
+  return Boolean(p)
 }
 
-export async function crearOpcion(tenantId: string, body: unknown, actorId: string): Promise<ResultadoOpcion> {
-  const v = validarOpcion(body)
+/** Columnas de installment_options para un escalón (los campos v1 quedan en su default). */
+const columnas = (e: EscalonValido) => ({
+  paymentMethodId: e.proveedorId,
+  cuotas: e.cuotasMax,
+  montoMinimo: e.montoMinimo,
+  activo: e.activo,
+})
+
+export async function crearEscalon(tenantId: string, body: unknown, actorId: string): Promise<ResultadoEscalon> {
+  const v = validarEscalon(body)
   if (!v.ok) return { kind: "invalid", campo: v.campo, error: v.error }
-  const opcion = v.value
+  const escalon = v.value
 
   return getDb().transaction(async (tx) => {
-    if (!(await medioDelTenant(tx, tenantId, opcion.paymentMethodId))) return { kind: "not_found" }
-    const choque = await chequearSuperposicion(tx, opcion)
-    if (choque) return { kind: "superpuesta", conId: choque.id }
+    if (!(await proveedorDelTenant(tx, tenantId, escalon.proveedorId))) return { kind: "not_found" }
+    const choque = await chequearMontoRepetido(tx, escalon)
+    if (choque) return { kind: "monto_repetido", conId: choque.id }
     const [row] = await tx
       .insert(installmentOptions)
-      .values({ tenantId, ...opcion, updatedBy: actorId })
+      .values({ tenantId, ...columnas(escalon), updatedBy: actorId })
       .returning()
-    return { kind: "ok", row: row as OpcionRow }
+    await tocarVersion(tx, tenantId)
+    return { kind: "ok", row: row as EscalonRow }
   })
 }
 
-export async function actualizarOpcion(
+export async function actualizarEscalon(
   tenantId: string,
   id: string,
   body: unknown,
   actorId: string,
-): Promise<ResultadoOpcion> {
+): Promise<ResultadoEscalon> {
   if (!esUuid(id)) return { kind: "not_found" }
 
   return getDb().transaction(async (tx) => {
     const [actual] = await tx
-      .select()
+      .select({ escalon: installmentOptions })
       .from(installmentOptions)
-      .where(and(eq(installmentOptions.id, id), eq(installmentOptions.tenantId, tenantId)))
+      .innerJoin(paymentMethods, eq(paymentMethods.id, installmentOptions.paymentMethodId))
+      .where(and(eq(installmentOptions.id, id), eq(installmentOptions.tenantId, tenantId), esProveedorV2))
     if (!actual) return { kind: "not_found" }
 
-    const v = validarOpcion(body, opcionValida(actual))
+    const v = validarEscalon(body, escalonValido(actual.escalon))
     if (!v.ok) return { kind: "invalid", campo: v.campo, error: v.error }
-    const opcion = v.value
+    const escalon = v.value
 
-    if (opcion.paymentMethodId !== actual.paymentMethodId && !(await medioDelTenant(tx, tenantId, opcion.paymentMethodId))) {
+    if (escalon.proveedorId !== actual.escalon.paymentMethodId && !(await proveedorDelTenant(tx, tenantId, escalon.proveedorId))) {
       return { kind: "not_found" }
     }
-    const choque = await chequearSuperposicion(tx, { ...opcion, id })
-    if (choque) return { kind: "superpuesta", conId: choque.id }
+    const choque = await chequearMontoRepetido(tx, { ...escalon, id })
+    if (choque) return { kind: "monto_repetido", conId: choque.id }
 
     const [row] = await tx
       .update(installmentOptions)
-      .set({ ...opcion, updatedBy: actorId, updatedAt: new Date() })
+      .set({ ...columnas(escalon), updatedBy: actorId, updatedAt: new Date() })
       .where(and(eq(installmentOptions.id, id), eq(installmentOptions.tenantId, tenantId)))
       .returning()
-    return row ? { kind: "ok", row } : { kind: "not_found" }
+    if (!row) return { kind: "not_found" }
+    await tocarVersion(tx, tenantId)
+    return { kind: "ok", row }
   })
 }
 
-export async function borrarOpcion(tenantId: string, id: string): Promise<boolean> {
+export async function borrarEscalon(tenantId: string, id: string): Promise<boolean> {
   if (!esUuid(id)) return false
-  const rows = await getDb()
-    .delete(installmentOptions)
-    .where(and(eq(installmentOptions.id, id), eq(installmentOptions.tenantId, tenantId)))
-    .returning({ id: installmentOptions.id })
-  return rows.length > 0
+  return getDb().transaction(async (tx) => {
+    const rows = await tx
+      .delete(installmentOptions)
+      .where(
+        and(
+          eq(installmentOptions.id, id),
+          eq(installmentOptions.tenantId, tenantId),
+          sql`${installmentOptions.paymentMethodId} in (select ${paymentMethods.id} from ${paymentMethods} where ${esProveedorV2})`,
+        ),
+      )
+      .returning({ id: installmentOptions.id })
+    if (rows.length === 0) return false
+    await tocarVersion(tx, tenantId)
+    return true
+  })
 }
 
-// ─── Contrato v1 ─────────────────────────────────────────────────────────────────────────
+// ─── Contrato v2 ─────────────────────────────────────────────────────────────────────────
 
 /** Payload del GET interno para `tenantId` (por `tenants.id`). null si el tenant no existe. */
-export async function contratoCuotasV1(tenantId: string, ahora = new Date()): Promise<ContratoCuotasV1 | null> {
+export async function contratoCuotasV2(tenantId: string, ahora = new Date()): Promise<ContratoCuotasV2 | null> {
   const db = getDb()
   const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId))
   if (!tenant) return null
-  const [medios, opciones] = await Promise.all([listarMedios(tenantId), listarOpciones(tenantId)])
-  return armarContratoCuotasV1({ tenant: tenant.id, medios, opciones, ahora })
+  const [proveedores, escalones, [version]] = await Promise.all([
+    listarProveedores(tenantId),
+    listarEscalones(tenantId),
+    db
+      .select({ updatedAt: paymentConfigVersions.updatedAt })
+      .from(paymentConfigVersions)
+      .where(eq(paymentConfigVersions.tenantId, tenantId)),
+  ])
+  return armarContratoCuotasV2({
+    tenant: tenant.id,
+    proveedores: proveedores.map(aProveedorFila),
+    escalones: escalones.map(aEscalonFila),
+    configActualizadaEn: version?.updatedAt ?? null,
+    ahora,
+  })
 }

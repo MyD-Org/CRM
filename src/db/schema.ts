@@ -446,9 +446,10 @@ export const paymentReceipts = pgTable(
   ],
 )
 
-// Medios de pago que el tenant ofrece en el Shop (Configuración → Medios de pago / Cuotas).
-// El CRM decide QUÉ se ofrece; las tasas reales las trae el Shop del proveedor (no viven acá).
-// Se exponen al Shop por GET /api/internal/shop/cuotas (contrato platform/contracts/cuotas/v1).
+// Proveedores de pago del tenant en el Shop (Configuración → Medios de pago / Cuotas).
+// v2 (platform/contracts/cuotas/v2): una fila por proveedor con codigo_proveedor = "credito"
+// (aplica a todas las tarjetas de crédito). Las filas v1 por marca (visa, master) quedan en la
+// tabla y se ignoran. Tasas y sin interés los informa el proveedor (no viven acá).
 export const paymentMethods = pgTable(
   "payment_methods",
   {
@@ -456,7 +457,7 @@ export const paymentMethods = pgTable(
     tenantId: text("tenant_id").notNull().references(() => tenants.id),
     // Ej. "mercadopago".
     proveedor: text("proveedor").notNull(),
-    // Código del medio en el proveedor, ej. "visa" | "master".
+    // v2: siempre "credito" (CODIGO_CREDITO en src/lib/cuotas.ts). v1: "visa" | "master".
     codigoProveedor: text("codigo_proveedor").notNull(),
     nombre: text("nombre").notNull(),
     activo: boolean("activo").notNull().default(true),
@@ -467,10 +468,11 @@ export const paymentMethods = pgTable(
   (t) => [uniqueIndex("payment_methods_tenant_proveedor_codigo_uniq").on(t.tenantId, t.proveedor, t.codigoProveedor)],
 )
 
-// Opciones de cuotas por medio. Aplican igual a TODOS los productos (modelo Tiendanube).
-// Sin unique (medio, cuotas): la misma cantidad puede repetirse en vigencias que NO se
-// superponen; esa regla se valida en src/lib/cuotas-repo.ts con advisory lock (D15).
-// El CHECK de cuotas 2..24 vive en la migración 0025.
+// Escalones de cuotas por proveedor (v2): desde `montoMinimo` se ofrecen hasta `cuotas`
+// (= cuotasMax). Aplican igual a TODOS los productos. "No dos escalones activos del mismo
+// proveedor con el mismo monto mínimo" se valida en src/lib/cuotas-repo.ts con advisory lock.
+// El CHECK de cuotas 1..24 vive en la migración 0026. sin_interes y vigencias son de v1 y
+// quedan sin uso.
 export const installmentOptions = pgTable(
   "installment_options",
   {
@@ -479,13 +481,13 @@ export const installmentOptions = pgTable(
     paymentMethodId: uuid("payment_method_id")
       .notNull()
       .references(() => paymentMethods.id, { onDelete: "cascade" }),
+    // cuotasMax del escalón (1..24).
     cuotas: integer("cuotas").notNull(),
-    // Lo que el tenant QUIERE ofrecer: el Shop sólo lo muestra sin interés si la tasa del
-    // proveedor para esas cuotas también es 0 (doble llave).
+    // v1, sin uso en v2 (el sin interés lo informa el proveedor con tasa 0).
     sinInteres: boolean("sin_interes").notNull().default(false),
     // Con IVA, sobre el monto base (precio final, total del carrito o del pedido). String decimal.
     montoMinimo: numeric("monto_minimo", { precision: 14, scale: 2 }).notNull().default("0"),
-    // "YYYY-MM-DD", inclusive, hora Argentina. null = sin límite de ese lado.
+    // v1, sin uso en v2 (quedan null).
     vigenteDesde: date("vigente_desde"),
     vigenteHasta: date("vigente_hasta"),
     activo: boolean("activo").notNull().default(true),
@@ -499,3 +501,13 @@ export const installmentOptions = pgTable(
     index("installment_options_method_cuotas_idx").on(t.paymentMethodId, t.cuotas),
   ],
 )
+
+// Versión de la configuración de cuotas por tenant: se pisa `updatedAt` en CADA escritura de
+// proveedores o escalones (incluidos borrados), así `actualizadoEn` del contrato v2 cambia
+// aunque la fila modificada ya no exista. Migración 0026.
+export const paymentConfigVersions = pgTable("payment_config_versions", {
+  tenantId: text("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})

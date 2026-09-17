@@ -1,0 +1,8 @@
+{
+  "version": "v2",
+  "tenant": "central-led",
+  "actualizadoEn": "2026-09-17T18:00:00.000Z",
+  "proveedores": [
+    { "id": "7b1f0c7e-0000-4000-8000-000000000001", "proveedor": "mercadopago", "nombre": "Mercado Pago", "activo": true, "orden": 0, "escalones": [] }
+  ]
+}

@@ -2,42 +2,39 @@
 
 import { useState } from "react"
 import { Alert, Badge, Button, Card, Checkbox, Dialog, Field, Input, Select, Table, useToast } from "@myd-org/ui"
-import type { MedioDto, OpcionDto } from "@/lib/cuotas-repo"
+import type { EscalonDto, ProveedorDto } from "@/lib/cuotas-repo"
+import { CUOTAS_MAX, CUOTAS_MIN, PROVEEDORES } from "@/lib/cuotas"
+import { textoTasa, type TasaCuotas, type TasasMP } from "@/lib/mp-tasas"
 
-// Configuración → Medios de pago / Cuotas (admin y superadmin). El tenant elige QUÉ ofrece en el
-// Shop: medios (proveedor + código) y, por medio, opciones de cuotas con monto mínimo (con IVA)
-// y vigencia opcional. Aplican igual a todos los productos: no hay campos de producto ni de
-// categoría. Las tasas reales las trae el Shop del proveedor.
+// Configuración → Medios de pago / Cuotas (admin y superadmin). Por proveedor de pago (hoy sólo
+// Mercado Pago, para todas las tarjetas de crédito) el tenant define escalones: desde un monto
+// mínimo (con IVA) se ofrecen hasta N cuotas. Para un monto, el Shop usa el mayor máximo de los
+// escalones alcanzados; si no alcanza ninguno, 1 pago. Aplican igual a todos los productos.
+//
+// El sin interés y las tasas NO se configuran acá: son los que devuelve Mercado Pago (tasa 0 =
+// sin interés, se activa en su panel). Al lado se muestran las tasas reales para decidir.
 //
 // Cada guardado persiste y avisa al Shop; si el aviso no llegó (`propagado: false`) el cambio
 // igual quedó guardado y se informa que el Shop lo toma en su próximo ciclo.
 
 interface Props {
-  initialMedios: MedioDto[]
-  initialOpciones: OpcionDto[]
+  initialProveedores: ProveedorDto[]
+  initialEscalones: EscalonDto[]
+  tasasMP: TasasMP
 }
 
 type ApiError = { error?: string; code?: string; campo?: string }
 type Errores = Record<string, string>
 
-const CUOTAS_OPCIONES = Array.from({ length: 23 }, (_, i) => String(i + 2)).map((v) => ({ value: v, label: `${v} cuotas` }))
+const textoCuotas = (n: number) => (n === 1 ? "1 pago" : `${n} cuotas`)
 
-const AVISO_SIN_INTERES =
-  "El sin interés también tiene que estar activo en tu cuenta del proveedor (ej. Mercado Pago). Si no lo está, el Shop muestra la tasa real en lugar de \"sin interés\"."
+const CUOTAS_OPCIONES = Array.from({ length: CUOTAS_MAX - CUOTAS_MIN + 1 }, (_, i) => i + CUOTAS_MIN).map((n) => ({
+  value: String(n),
+  label: n === 1 ? "1 pago" : `Hasta ${n} cuotas`,
+}))
 
 const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 })
-
-function fechaCorta(iso: string): string {
-  const [y, m, d] = iso.split("-")
-  return `${d}/${m}/${y}`
-}
-
-function textoVigencia(o: OpcionDto): string {
-  if (!o.vigenteDesde && !o.vigenteHasta) return "Siempre"
-  if (o.vigenteDesde && o.vigenteHasta) return `${fechaCorta(o.vigenteDesde)} al ${fechaCorta(o.vigenteHasta)}`
-  if (o.vigenteDesde) return `Desde ${fechaCorta(o.vigenteDesde)}`
-  return `Hasta ${fechaCorta(o.vigenteHasta as string)}`
-}
+const hora = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Argentina/Buenos_Aires" })
 
 async function enviar(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -48,6 +45,8 @@ async function enviar(url: string, method: string, body?: unknown) {
   const json = (await res.json().catch(() => null)) as (ApiError & Record<string, unknown>) | null
   return { res, json }
 }
+
+const ordenarEscalones = (a: EscalonDto, b: EscalonDto) => Number(a.montoMinimo) - Number(b.montoMinimo) || a.cuotasMax - b.cuotasMax
 
 function EstadoBadge({ activo }: { activo: boolean }) {
   return <Badge tone={activo ? "success" : "neutral"}>{activo ? "Activo" : "Inactivo"}</Badge>
@@ -62,41 +61,65 @@ function CheckboxLabel(props: { id: string; checked: boolean; onChange: (v: bool
   )
 }
 
-// ─── Formularios ─────────────────────────────────────────────────────────────────────────
+// ─── Tasas reales de Mercado Pago ────────────────────────────────────────────────────────
 
-type MedioForm = { id?: string; proveedor: string; codigoProveedor: string; nombre: string; orden: string; activo: boolean }
-type OpcionForm = {
-  id?: string
-  paymentMethodId: string
-  cuotas: string
-  sinInteres: boolean
-  montoMinimo: string
-  vigenteDesde: string
-  vigenteHasta: string
-  activo: boolean
+function TasasMercadoPago({ tasasMP }: { tasasMP: TasasMP }) {
+  return (
+    <Card
+      title="Tasas de Mercado Pago"
+      description="Lo que hoy cobra Mercado Pago por cantidad de cuotas. El sin interés se activa en tu cuenta de Mercado Pago, no acá."
+    >
+      {tasasMP.estado === "sin_clave" && (
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
+          Para ver las tasas, configurá la variable <code>MP_PUBLIC_KEY</code> con la public key de Mercado Pago.
+        </p>
+      )}
+      {tasasMP.estado === "error" && (
+        <Alert tone="warning" title="No pudimos consultar las tasas">
+          Mercado Pago no respondió. La configuración de cuotas funciona igual; probá recargar más tarde.
+        </Alert>
+      )}
+      {tasasMP.estado === "ok" && (
+        <div className="flex flex-col gap-2">
+          <Table<TasaCuotas>
+            rows={tasasMP.tasas}
+            rowKey={(t) => String(t.cuotas)}
+            columns={[
+              { key: "cuotas", header: "Cuotas", render: (t) => textoCuotas(t.cuotas) },
+              {
+                key: "tasa",
+                header: "Tasa",
+                render: (t) => (t.tasaPct === 0 ? <Badge tone="success">Sin interés</Badge> : textoTasa(t)),
+              },
+            ]}
+          />
+          <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+            Tasa más alta entre bancos, Visa y Mastercard. Consultado {hora.format(new Date(tasasMP.consultadoEn))}.
+          </p>
+        </div>
+      )}
+    </Card>
+  )
 }
 
-const medioVacio = (orden: number): MedioForm => ({ proveedor: "mercadopago", codigoProveedor: "", nombre: "", orden: String(orden), activo: true })
+// ─── Formularios ─────────────────────────────────────────────────────────────────────────
 
-const opcionVacia = (paymentMethodId: string): OpcionForm => ({
-  paymentMethodId,
-  cuotas: "3",
-  sinInteres: false,
-  montoMinimo: "",
-  vigenteDesde: "",
-  vigenteHasta: "",
-  activo: true,
-})
+type ProveedorForm = { id?: string; proveedor: string; orden: string; activo: boolean }
+type EscalonForm = { id?: string; proveedorId: string; cuotasMax: string; montoMinimo: string; activo: boolean }
 
-export function CuotasTab({ initialMedios, initialOpciones }: Props) {
-  const [medios, setMedios] = useState(initialMedios)
-  const [opciones, setOpciones] = useState(initialOpciones)
-  const [medioForm, setMedioForm] = useState<MedioForm | null>(null)
-  const [opcionForm, setOpcionForm] = useState<OpcionForm | null>(null)
-  const [borrar, setBorrar] = useState<OpcionDto | null>(null)
+const escalonVacio = (proveedorId: string): EscalonForm => ({ proveedorId, cuotasMax: "3", montoMinimo: "", activo: true })
+
+export function CuotasTab({ initialProveedores, initialEscalones, tasasMP }: Props) {
+  const [proveedores, setProveedores] = useState(initialProveedores)
+  const [escalones, setEscalones] = useState(initialEscalones)
+  const [proveedorForm, setProveedorForm] = useState<ProveedorForm | null>(null)
+  const [escalonForm, setEscalonForm] = useState<EscalonForm | null>(null)
+  const [borrar, setBorrar] = useState<EscalonDto | null>(null)
   const [errores, setErrores] = useState<Errores>({})
   const [guardando, setGuardando] = useState(false)
   const { toast } = useToast()
+
+  const disponibles = PROVEEDORES.filter((p) => !proveedores.some((c) => c.proveedor === p.id))
 
   function avisarGuardado(titulo: string, propagado: unknown) {
     if (propagado === true) {
@@ -118,29 +141,26 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
     }
   }
 
-  async function guardarMedio() {
-    if (!medioForm) return
+  async function guardarProveedor() {
+    if (!proveedorForm) return
     setGuardando(true)
     setErrores({})
     try {
       const body = {
-        proveedor: medioForm.proveedor,
-        codigoProveedor: medioForm.codigoProveedor,
-        nombre: medioForm.nombre,
-        orden: medioForm.orden.trim() === "" ? 0 : Number(medioForm.orden),
-        activo: medioForm.activo,
+        proveedor: proveedorForm.proveedor,
+        orden: proveedorForm.orden.trim() === "" ? 0 : Number(proveedorForm.orden),
+        activo: proveedorForm.activo,
       }
-      const { res, json } = medioForm.id
-        ? await enviar(`/api/admin/cuotas/medios/${medioForm.id}`, "PATCH", body)
-        : await enviar("/api/admin/cuotas/medios", "POST", body)
+      const { res, json } = proveedorForm.id
+        ? await enviar(`/api/admin/cuotas/proveedores/${proveedorForm.id}`, "PATCH", body)
+        : await enviar("/api/admin/cuotas/proveedores", "POST", body)
       if (!res.ok || !json) return manejarError(res, json)
-      const medio = json.medio as MedioDto
-      setMedios((prev) => {
-        const resto = prev.filter((m) => m.id !== medio.id)
-        return [...resto, medio].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre))
-      })
-      setMedioForm(null)
-      avisarGuardado(medioForm.id ? "Medio actualizado" : "Medio agregado", json.propagado)
+      const proveedor = json.proveedor as ProveedorDto
+      setProveedores((prev) =>
+        [...prev.filter((p) => p.id !== proveedor.id), proveedor].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre)),
+      )
+      setProveedorForm(null)
+      avisarGuardado(proveedorForm.id ? "Proveedor actualizado" : "Proveedor agregado", json.propagado)
     } catch {
       setErrores({ general: "Error de conexión. Intentá de nuevo." })
     } finally {
@@ -148,28 +168,25 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
     }
   }
 
-  async function guardarOpcion() {
-    if (!opcionForm) return
+  async function guardarEscalon() {
+    if (!escalonForm) return
     setGuardando(true)
     setErrores({})
     try {
       const body = {
-        paymentMethodId: opcionForm.paymentMethodId,
-        cuotas: Number(opcionForm.cuotas),
-        sinInteres: opcionForm.sinInteres,
-        montoMinimo: opcionForm.montoMinimo.trim(),
-        vigenteDesde: opcionForm.vigenteDesde || null,
-        vigenteHasta: opcionForm.vigenteHasta || null,
-        activo: opcionForm.activo,
+        proveedorId: escalonForm.proveedorId,
+        cuotasMax: Number(escalonForm.cuotasMax),
+        montoMinimo: escalonForm.montoMinimo.trim(),
+        activo: escalonForm.activo,
       }
-      const { res, json } = opcionForm.id
-        ? await enviar(`/api/admin/cuotas/opciones/${opcionForm.id}`, "PATCH", body)
-        : await enviar("/api/admin/cuotas/opciones", "POST", body)
+      const { res, json } = escalonForm.id
+        ? await enviar(`/api/admin/cuotas/escalones/${escalonForm.id}`, "PATCH", body)
+        : await enviar("/api/admin/cuotas/escalones", "POST", body)
       if (!res.ok || !json) return manejarError(res, json)
-      const opcion = json.opcion as OpcionDto
-      setOpciones((prev) => [...prev.filter((o) => o.id !== opcion.id), opcion])
-      setOpcionForm(null)
-      avisarGuardado(opcionForm.id ? "Opción actualizada" : "Opción agregada", json.propagado)
+      const escalon = json.escalon as EscalonDto
+      setEscalones((prev) => [...prev.filter((e) => e.id !== escalon.id), escalon])
+      setEscalonForm(null)
+      avisarGuardado(escalonForm.id ? "Escalón actualizado" : "Escalón agregado", json.propagado)
     } catch {
       setErrores({ general: "Error de conexión. Intentá de nuevo." })
     } finally {
@@ -178,19 +195,19 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
   }
 
   /** Activar/desactivar directo desde la tabla (sin abrir el formulario). */
-  async function alternarActivo(tipo: "medios" | "opciones", id: string, activo: boolean) {
+  async function alternarActivo(tipo: "proveedores" | "escalones", id: string, activo: boolean) {
     try {
       const { res, json } = await enviar(`/api/admin/cuotas/${tipo}/${id}`, "PATCH", { activo })
       if (!res.ok || !json) {
         toast({ title: json?.error ?? "No pudimos actualizar", tone: "danger" })
         return
       }
-      if (tipo === "medios") {
-        const medio = json.medio as MedioDto
-        setMedios((prev) => prev.map((m) => (m.id === medio.id ? medio : m)))
+      if (tipo === "proveedores") {
+        const proveedor = json.proveedor as ProveedorDto
+        setProveedores((prev) => prev.map((p) => (p.id === proveedor.id ? proveedor : p)))
       } else {
-        const opcion = json.opcion as OpcionDto
-        setOpciones((prev) => prev.map((o) => (o.id === opcion.id ? opcion : o)))
+        const escalon = json.escalon as EscalonDto
+        setEscalones((prev) => prev.map((e) => (e.id === escalon.id ? escalon : e)))
       }
       avisarGuardado(activo ? "Activado" : "Desactivado", json.propagado)
     } catch {
@@ -202,14 +219,14 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
     if (!borrar) return
     setGuardando(true)
     try {
-      const { res, json } = await enviar(`/api/admin/cuotas/opciones/${borrar.id}`, "DELETE")
+      const { res, json } = await enviar(`/api/admin/cuotas/escalones/${borrar.id}`, "DELETE")
       if (!res.ok && res.status !== 404) {
-        toast({ title: json?.error ?? "No pudimos borrar la opción", tone: "danger" })
+        toast({ title: json?.error ?? "No pudimos borrar el escalón", tone: "danger" })
         return
       }
-      setOpciones((prev) => prev.filter((o) => o.id !== borrar.id))
+      setEscalones((prev) => prev.filter((e) => e.id !== borrar.id))
       setBorrar(null)
-      if (res.ok) avisarGuardado("Opción borrada", json?.propagado)
+      if (res.ok) avisarGuardado("Escalón borrado", json?.propagado)
     } catch {
       toast({ title: "Error de conexión. Intentá de nuevo.", tone: "danger" })
     } finally {
@@ -217,218 +234,208 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
     }
   }
 
-  const abrirMedio = (form: MedioForm) => {
+  const abrirProveedor = (form: ProveedorForm) => {
     setErrores({})
-    setMedioForm(form)
+    setProveedorForm(form)
   }
-  const abrirOpcion = (form: OpcionForm) => {
+  const abrirEscalon = (form: EscalonForm) => {
     setErrores({})
-    setOpcionForm(form)
+    setEscalonForm(form)
   }
 
-  const setM = (patch: Partial<MedioForm>) => setMedioForm((f) => (f ? { ...f, ...patch } : f))
-  const setO = (patch: Partial<OpcionForm>) => setOpcionForm((f) => (f ? { ...f, ...patch } : f))
+  const setP = (patch: Partial<ProveedorForm>) => setProveedorForm((f) => (f ? { ...f, ...patch } : f))
+  const setE = (patch: Partial<EscalonForm>) => setEscalonForm((f) => (f ? { ...f, ...patch } : f))
+
+  const opcionesProveedor = proveedorForm?.id
+    ? PROVEEDORES.filter((p) => p.id === proveedorForm.proveedor)
+    : disponibles
+  const montoBorrar = borrar ? Number(borrar.montoMinimo) : 0
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card
-        title="Medios de pago"
-        description="Los medios que el Shop ofrece para pagar en cuotas. El código tiene que coincidir con el del proveedor (en Mercado Pago: visa, master, amex…)."
-      >
-        <div className="flex flex-col gap-3">
-          <Table<MedioDto>
-            rows={medios}
-            rowKey={(m) => m.id}
-            empty={<p className="text-sm py-4" style={{ color: "var(--ink-soft)" }}>Todavía no hay medios de pago.</p>}
-            columns={[
-              { key: "nombre", header: "Nombre", render: (m) => m.nombre },
-              { key: "codigo", header: "Proveedor / código", render: (m) => `${m.proveedor} / ${m.codigoProveedor}`, hideBelow: "sm" },
-              { key: "orden", header: "Orden", render: (m) => m.orden, align: "right", hideBelow: "sm" },
-              { key: "estado", header: "Estado", render: (m) => <EstadoBadge activo={m.activo} /> },
-              {
-                key: "acciones",
-                header: "",
-                align: "right",
-                render: (m) => (
-                  <div className="flex gap-1 justify-end">
-                    <Button size="sm" variant="ghost" onClick={() => abrirMedio({ ...m, orden: String(m.orden) })}>
-                      Editar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => alternarActivo("medios", m.id, !m.activo)}>
-                      {m.activo ? "Desactivar" : "Activar"}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      <div className="flex flex-col gap-4 lg:col-span-2 min-w-0">
+        <Card
+          title="Proveedores de pago"
+          description="Las cuotas se configuran por proveedor y aplican a todas las tarjetas de crédito."
+        >
+          <div className="flex flex-col gap-3">
+            <Table<ProveedorDto>
+              rows={proveedores}
+              rowKey={(p) => p.id}
+              empty={<p className="text-sm py-4" style={{ color: "var(--ink-soft)" }}>Todavía no hay proveedores: el Shop cobra en 1 pago.</p>}
+              columns={[
+                { key: "nombre", header: "Proveedor", render: (p) => p.nombre },
+                { key: "orden", header: "Orden", render: (p) => p.orden, align: "right", hideBelow: "sm" },
+                { key: "estado", header: "Estado", render: (p) => <EstadoBadge activo={p.activo} /> },
+                {
+                  key: "acciones",
+                  header: "",
+                  align: "right",
+                  render: (p) => (
+                    <div className="flex gap-1 justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => abrirProveedor({ id: p.id, proveedor: p.proveedor, orden: String(p.orden), activo: p.activo })}>
+                        Editar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => alternarActivo("proveedores", p.id, !p.activo)}>
+                        {p.activo ? "Desactivar" : "Activar"}
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+            {disponibles.length > 0 && (
+              <div>
+                <Button
+                  variant="secondary"
+                  onClick={() => abrirProveedor({ proveedor: disponibles[0]?.id ?? "", orden: String(proveedores.length), activo: true })}
+                >
+                  Agregar proveedor
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card
+          title="Cuotas por monto"
+          description="Desde cada monto mínimo (con IVA) el Shop ofrece hasta esa cantidad de cuotas. Se compara contra el precio final, el total del carrito o el del pedido. Si el monto no alcanza ningún escalón, se cobra en 1 pago."
+        >
+          <div className="flex flex-col gap-4">
+            {proveedores.length === 0 && (
+              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Agregá un proveedor para cargarle escalones de cuotas.</p>
+            )}
+
+            {proveedores.map((proveedor) => {
+              const filas = escalones.filter((e) => e.proveedorId === proveedor.id).sort(ordenarEscalones)
+              return (
+                <section key={proveedor.id} className="flex flex-col gap-2" aria-label={`Escalones de ${proveedor.nombre}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                      {proveedor.nombre} {!proveedor.activo && <Badge tone="neutral">Proveedor inactivo</Badge>}
+                    </h3>
+                    <Button size="sm" variant="secondary" onClick={() => abrirEscalon(escalonVacio(proveedor.id))}>
+                      Agregar escalón
                     </Button>
                   </div>
-                ),
-              },
-            ]}
-          />
-          <div>
-            <Button variant="secondary" onClick={() => abrirMedio(medioVacio(medios.length))}>
-              Agregar medio
-            </Button>
+                  <Table<EscalonDto>
+                    rows={filas}
+                    rowKey={(e) => e.id}
+                    empty={<p className="text-sm py-3" style={{ color: "var(--ink-soft)" }}>Sin escalones: sólo 1 pago.</p>}
+                    columns={[
+                      {
+                        key: "minimo",
+                        header: "Desde",
+                        render: (e) => (Number(e.montoMinimo) > 0 ? ars.format(Number(e.montoMinimo)) : "Cualquier monto"),
+                      },
+                      { key: "cuotas", header: "Hasta", render: (e) => textoCuotas(e.cuotasMax) },
+                      { key: "estado", header: "Estado", render: (e) => <EstadoBadge activo={e.activo} /> },
+                      {
+                        key: "acciones",
+                        header: "",
+                        align: "right",
+                        render: (e) => (
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                abrirEscalon({
+                                  id: e.id,
+                                  proveedorId: e.proveedorId,
+                                  cuotasMax: String(e.cuotasMax),
+                                  montoMinimo: Number(e.montoMinimo) > 0 ? e.montoMinimo : "",
+                                  activo: e.activo,
+                                })
+                              }
+                            >
+                              Editar
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => alternarActivo("escalones", e.id, !e.activo)}>
+                              {e.activo ? "Desactivar" : "Activar"}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setBorrar(e)}>
+                              Borrar
+                            </Button>
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                </section>
+              )
+            })}
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
-      <Card
-        title="Opciones de cuotas"
-        description="Aplican igual a todos los productos. El monto mínimo se compara con IVA contra el precio final (ficha), el total del carrito o el del pedido."
-      >
-        <div className="flex flex-col gap-4">
-          <Alert tone="warning" title="Sobre el sin interés">
-            {AVISO_SIN_INTERES}
-          </Alert>
-
-          {medios.length === 0 && (
-            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Agregá un medio de pago para cargarle opciones de cuotas.</p>
-          )}
-
-          {medios.map((medio) => {
-            const filas = opciones
-              .filter((o) => o.paymentMethodId === medio.id)
-              .sort((a, b) => a.cuotas - b.cuotas || (a.vigenteDesde ?? "").localeCompare(b.vigenteDesde ?? ""))
-            return (
-              <section key={medio.id} className="flex flex-col gap-2" aria-label={`Opciones de ${medio.nombre}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
-                    {medio.nombre} {!medio.activo && <Badge tone="neutral">Medio inactivo</Badge>}
-                  </h3>
-                  <Button size="sm" variant="secondary" onClick={() => abrirOpcion(opcionVacia(medio.id))}>
-                    Agregar opción
-                  </Button>
-                </div>
-                <Table<OpcionDto>
-                  rows={filas}
-                  rowKey={(o) => o.id}
-                  empty={<p className="text-sm py-3" style={{ color: "var(--ink-soft)" }}>Sin opciones: sólo 1 pago.</p>}
-                  columns={[
-                    {
-                      key: "cuotas",
-                      header: "Cuotas",
-                      render: (o) => (
-                        <span className="flex items-center gap-2">
-                          {o.cuotas} {o.sinInteres && <Badge tone="info">Sin interés</Badge>}
-                        </span>
-                      ),
-                    },
-                    { key: "minimo", header: "Monto mínimo", render: (o) => (Number(o.montoMinimo) > 0 ? ars.format(Number(o.montoMinimo)) : "Sin mínimo") },
-                    { key: "vigencia", header: "Vigencia", render: textoVigencia, hideBelow: "sm" },
-                    { key: "estado", header: "Estado", render: (o) => <EstadoBadge activo={o.activo} /> },
-                    {
-                      key: "acciones",
-                      header: "",
-                      align: "right",
-                      render: (o) => (
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              abrirOpcion({
-                                id: o.id,
-                                paymentMethodId: o.paymentMethodId,
-                                cuotas: String(o.cuotas),
-                                sinInteres: o.sinInteres,
-                                montoMinimo: Number(o.montoMinimo) > 0 ? o.montoMinimo : "",
-                                vigenteDesde: o.vigenteDesde ?? "",
-                                vigenteHasta: o.vigenteHasta ?? "",
-                                activo: o.activo,
-                              })
-                            }
-                          >
-                            Editar
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => alternarActivo("opciones", o.id, !o.activo)}>
-                            {o.activo ? "Desactivar" : "Activar"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setBorrar(o)}>
-                            Borrar
-                          </Button>
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
-              </section>
-            )
-          })}
-        </div>
-      </Card>
+      <TasasMercadoPago tasasMP={tasasMP} />
 
       <Dialog
-        open={medioForm !== null}
-        onOpenChange={(open) => { if (!open) setMedioForm(null) }}
-        title={medioForm?.id ? "Editar medio de pago" : "Agregar medio de pago"}
+        open={proveedorForm !== null}
+        onOpenChange={(open) => { if (!open) setProveedorForm(null) }}
+        title={proveedorForm?.id ? "Editar proveedor" : "Agregar proveedor"}
         footer={
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setMedioForm(null)}>Cancelar</Button>
-            <Button loading={guardando} disabled={guardando} onClick={guardarMedio}>Guardar</Button>
+            <Button variant="ghost" onClick={() => setProveedorForm(null)}>Cancelar</Button>
+            <Button loading={guardando} disabled={guardando} onClick={guardarProveedor}>Guardar</Button>
           </div>
         }
       >
-        {medioForm && (
+        {proveedorForm && (
           <div className="flex flex-col gap-3">
-            <Field label="Proveedor" hint="Por ahora sólo mercadopago." error={errores.proveedor}>
-              <Input value={medioForm.proveedor} onChange={(e) => setM({ proveedor: e.target.value })} aria-invalid={Boolean(errores.proveedor)} />
-            </Field>
-            <Field label="Código en el proveedor" hint="Ej. visa, master." error={errores.codigoProveedor}>
-              <Input value={medioForm.codigoProveedor} onChange={(e) => setM({ codigoProveedor: e.target.value })} aria-invalid={Boolean(errores.codigoProveedor)} />
-            </Field>
-            <Field label="Nombre" hint="Lo que ve el cliente, ej. Visa." error={errores.nombre}>
-              <Input value={medioForm.nombre} onChange={(e) => setM({ nombre: e.target.value })} aria-invalid={Boolean(errores.nombre)} />
+            <Field label="Proveedor" error={errores.proveedor}>
+              <Select
+                options={opcionesProveedor.map((p) => ({ value: p.id, label: p.nombre }))}
+                value={proveedorForm.proveedor}
+                onValueChange={(proveedor) => setP({ proveedor })}
+                disabled={Boolean(proveedorForm.id)}
+                aria-label="Proveedor"
+                aria-invalid={Boolean(errores.proveedor)}
+              />
             </Field>
             <Field label="Orden" hint="Menor primero." error={errores.orden}>
-              <Input type="number" min={0} step={1} value={medioForm.orden} onChange={(e) => setM({ orden: e.target.value })} aria-invalid={Boolean(errores.orden)} />
+              <Input type="number" min={0} step={1} value={proveedorForm.orden} onChange={(e) => setP({ orden: e.target.value })} aria-invalid={Boolean(errores.orden)} />
             </Field>
-            <CheckboxLabel id="medio-activo" checked={medioForm.activo} onChange={(activo) => setM({ activo })} label="Activo" />
+            <CheckboxLabel id="proveedor-activo" checked={proveedorForm.activo} onChange={(activo) => setP({ activo })} label="Activo" />
             {errores.general && <p className="text-sm" style={{ color: "var(--red)" }}>{errores.general}</p>}
           </div>
         )}
       </Dialog>
 
       <Dialog
-        open={opcionForm !== null}
-        onOpenChange={(open) => { if (!open) setOpcionForm(null) }}
-        title={opcionForm?.id ? "Editar opción de cuotas" : "Agregar opción de cuotas"}
-        description={opcionForm ? medios.find((m) => m.id === opcionForm.paymentMethodId)?.nombre : undefined}
+        open={escalonForm !== null}
+        onOpenChange={(open) => { if (!open) setEscalonForm(null) }}
+        title={escalonForm?.id ? "Editar escalón" : "Agregar escalón"}
+        description={escalonForm ? proveedores.find((p) => p.id === escalonForm.proveedorId)?.nombre : undefined}
         footer={
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setOpcionForm(null)}>Cancelar</Button>
-            <Button loading={guardando} disabled={guardando} onClick={guardarOpcion}>Guardar</Button>
+            <Button variant="ghost" onClick={() => setEscalonForm(null)}>Cancelar</Button>
+            <Button loading={guardando} disabled={guardando} onClick={guardarEscalon}>Guardar</Button>
           </div>
         }
       >
-        {opcionForm && (
+        {escalonForm && (
           <div className="flex flex-col gap-3">
-            <Field label="Cuotas" error={errores.cuotas}>
-              <Select
-                options={CUOTAS_OPCIONES}
-                value={opcionForm.cuotas}
-                onValueChange={(cuotas) => setO({ cuotas })}
-                aria-label="Cuotas"
-                aria-invalid={Boolean(errores.cuotas)}
-              />
-            </Field>
-            <CheckboxLabel id="opcion-sin-interes" checked={opcionForm.sinInteres} onChange={(sinInteres) => setO({ sinInteres })} label="Sin interés" />
-            {opcionForm.sinInteres && <Alert tone="warning">{AVISO_SIN_INTERES}</Alert>}
-            <Field label="Monto mínimo (con IVA)" hint="Vacío = sin mínimo." error={errores.montoMinimo}>
+            <Field label="Monto mínimo (con IVA)" hint="Vacío = cualquier monto." error={errores.montoMinimo}>
               <Input
                 inputMode="decimal"
-                placeholder="150000"
-                value={opcionForm.montoMinimo}
-                onChange={(e) => setO({ montoMinimo: e.target.value })}
+                placeholder="180000"
+                value={escalonForm.montoMinimo}
+                onChange={(e) => setE({ montoMinimo: e.target.value })}
                 aria-invalid={Boolean(errores.montoMinimo)}
               />
             </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Vigente desde" hint="Opcional, inclusive." error={errores.vigenteDesde}>
-                <Input type="date" value={opcionForm.vigenteDesde} onChange={(e) => setO({ vigenteDesde: e.target.value })} aria-invalid={Boolean(errores.vigenteDesde)} />
-              </Field>
-              <Field label="Vigente hasta" hint="Opcional, inclusive." error={errores.vigenteHasta}>
-                <Input type="date" value={opcionForm.vigenteHasta} onChange={(e) => setO({ vigenteHasta: e.target.value })} aria-invalid={Boolean(errores.vigenteHasta)} />
-              </Field>
-            </div>
-            <CheckboxLabel id="opcion-activa" checked={opcionForm.activo} onChange={(activo) => setO({ activo })} label="Activa" />
+            <Field label="Máximo de cuotas" error={errores.cuotasMax}>
+              <Select
+                options={CUOTAS_OPCIONES}
+                value={escalonForm.cuotasMax}
+                onValueChange={(cuotasMax) => setE({ cuotasMax })}
+                aria-label="Máximo de cuotas"
+                aria-invalid={Boolean(errores.cuotasMax)}
+              />
+            </Field>
+            <CheckboxLabel id="escalon-activo" checked={escalonForm.activo} onChange={(activo) => setE({ activo })} label="Activo" />
             {errores.general && <p className="text-sm" style={{ color: "var(--red)" }}>{errores.general}</p>}
           </div>
         )}
@@ -437,8 +444,8 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
       <Dialog
         open={borrar !== null}
         onOpenChange={(open) => { if (!open) setBorrar(null) }}
-        title="Borrar opción de cuotas"
-        description="Se borra definitivamente. Si sólo querés dejar de ofrecerla por un tiempo, desactivala."
+        title="Borrar escalón"
+        description="Se borra definitivamente. Si sólo querés dejar de ofrecerlo por un tiempo, desactivalo."
         headerBorder={false}
         footer={
           <div className="flex gap-2 justify-end">
@@ -449,7 +456,7 @@ export function CuotasTab({ initialMedios, initialOpciones }: Props) {
       >
         {borrar && (
           <p className="text-sm" style={{ color: "var(--ink)" }}>
-            ¿Borrar {borrar.cuotas} cuotas{borrar.sinInteres ? " sin interés" : ""}?
+            ¿Borrar &quot;{montoBorrar > 0 ? `desde ${ars.format(montoBorrar)}` : "cualquier monto"}, hasta {textoCuotas(borrar.cuotasMax)}&quot;?
           </p>
         )}
       </Dialog>

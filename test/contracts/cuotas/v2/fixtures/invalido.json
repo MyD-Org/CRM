@@ -1,0 +1,7 @@
+{
+  "version": "v1",
+  "tenant": "central-led",
+  "proveedores": [
+    { "id": "7b1f0c7e-0000-4000-8000-000000000001", "proveedor": "mercadopago", "nombre": "Mercado Pago", "activo": true, "orden": 0, "codigo": "visa", "escalones": [] }
+  ]
+}

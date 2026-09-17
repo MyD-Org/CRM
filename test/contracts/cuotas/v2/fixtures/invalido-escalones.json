@@ -1,0 +1,21 @@
+{
+  "version": "v2",
+  "tenant": "central-led",
+  "actualizadoEn": "2026-09-17T18:00:00.000Z",
+  "proveedores": [
+    {
+      "id": "7b1f0c7e-0000-4000-8000-000000000001",
+      "proveedor": "mercadopago",
+      "nombre": "Mercado Pago",
+      "activo": true,
+      "orden": 0,
+      "escalones": [
+        { "id": "9c2e1d8f-0000-4000-8000-000000000001", "cuotasMax": 0, "montoMinimo": 0 },
+        { "id": "9c2e1d8f-0000-4000-8000-000000000002", "cuotasMax": 25, "montoMinimo": 180000 },
+        { "id": "9c2e1d8f-0000-4000-8000-000000000003", "cuotasMax": 6, "montoMinimo": -1 },
+        { "id": "9c2e1d8f-0000-4000-8000-000000000004", "cuotasMax": "12", "montoMinimo": "500000" },
+        { "id": "9c2e1d8f-0000-4000-8000-000000000005", "cuotasMax": 6, "montoMinimo": 200000, "sinInteres": true }
+      ]
+    }
+  ]
+}
