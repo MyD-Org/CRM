@@ -445,3 +445,57 @@ export const paymentReceipts = pgTable(
     ),
   ],
 )
+
+// Medios de pago que el tenant ofrece en el Shop (Configuración → Medios de pago / Cuotas).
+// El CRM decide QUÉ se ofrece; las tasas reales las trae el Shop del proveedor (no viven acá).
+// Se exponen al Shop por GET /api/internal/shop/cuotas (contrato platform/contracts/cuotas/v1).
+export const paymentMethods = pgTable(
+  "payment_methods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    // Ej. "mercadopago".
+    proveedor: text("proveedor").notNull(),
+    // Código del medio en el proveedor, ej. "visa" | "master".
+    codigoProveedor: text("codigo_proveedor").notNull(),
+    nombre: text("nombre").notNull(),
+    activo: boolean("activo").notNull().default(true),
+    orden: integer("orden").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("payment_methods_tenant_proveedor_codigo_uniq").on(t.tenantId, t.proveedor, t.codigoProveedor)],
+)
+
+// Opciones de cuotas por medio. Aplican igual a TODOS los productos (modelo Tiendanube).
+// Sin unique (medio, cuotas): la misma cantidad puede repetirse en vigencias que NO se
+// superponen; esa regla se valida en src/lib/cuotas-repo.ts con advisory lock (D15).
+// El CHECK de cuotas 2..24 vive en la migración 0025.
+export const installmentOptions = pgTable(
+  "installment_options",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: text("tenant_id").notNull().references(() => tenants.id),
+    paymentMethodId: uuid("payment_method_id")
+      .notNull()
+      .references(() => paymentMethods.id, { onDelete: "cascade" }),
+    cuotas: integer("cuotas").notNull(),
+    // Lo que el tenant QUIERE ofrecer: el Shop sólo lo muestra sin interés si la tasa del
+    // proveedor para esas cuotas también es 0 (doble llave).
+    sinInteres: boolean("sin_interes").notNull().default(false),
+    // Con IVA, sobre el monto base (precio final, total del carrito o del pedido). String decimal.
+    montoMinimo: numeric("monto_minimo", { precision: 14, scale: 2 }).notNull().default("0"),
+    // "YYYY-MM-DD", inclusive, hora Argentina. null = sin límite de ese lado.
+    vigenteDesde: date("vigente_desde"),
+    vigenteHasta: date("vigente_hasta"),
+    activo: boolean("activo").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // Id del admin que hizo el último cambio (auditoría liviana).
+    updatedBy: text("updated_by"),
+  },
+  (t) => [
+    index("installment_options_tenant_idx").on(t.tenantId),
+    index("installment_options_method_cuotas_idx").on(t.paymentMethodId, t.cuotas),
+  ],
+)

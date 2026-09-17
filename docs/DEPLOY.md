@@ -52,8 +52,9 @@ openssl rand -hex 32      # CRON_SECRET
 actualizalos también allá.
 | Var | Nota |
 |---|---|
-| `INTERNAL_SECRET` | Compartido con ai-api |
+| `INTERNAL_SECRET` | Compartido con ai-api **y con el Shop** (GET `/api/internal/shop/cuotas` y ping de cuotas) |
 | `STAFF_TOKEN_SECRET` | Compartido con ai-api |
+| `SHOP_INTERNAL_URL` | Opcional. Base URL del Shop del mismo entorno (ej. `https://dev.centralled.com.ar`). Al guardar Medios de pago / Cuotas el CRM hace `POST {SHOP_INTERNAL_URL}/api/internal/cuotas/revalidar`; sin la var el ping es no-op y el Shop toma los cambios en su próximo cron. Contrato: `platform/contracts/cuotas/v1`. |
 | `RESEND_API_KEY` | Envío de emails (el `RESEND_FROM` debe ser un dominio verificado en Resend) |
 | `ADMIN_EMAIL` | Login del backoffice |
 | `ADMIN_PASSWORD` | Login del backoffice — usar una contraseña fuerte en prod |
