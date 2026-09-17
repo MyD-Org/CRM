@@ -8,16 +8,19 @@ import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { ConfiguracionShell } from "@/components/admin/ConfiguracionShell"
 import { normalizeSchedule, normalizeExceptions } from "@/lib/schedule"
 import { roleRank } from "@/lib/roles"
+import { listarMedios, listarOpciones, toMedioDto, toOpcionDto } from "@/lib/cuotas-repo"
 
 export const dynamic = "force-dynamic"
 
 // Página accesible a admin y superadmin. Los tabs se filtran adentro:
 // - Horarios → admin+superadmin.
 // - Catálogo → superadmin-only (es data de plataforma, ver src/lib/roles.ts).
+// - Medios de pago / Cuotas → admin+superadmin.
 export default async function ConfiguracionPage() {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (roleRank(session.role) < 1) notFound()
   const isSuperadmin = session.role === "superadmin"
+  const isAdminPlus = roleRank(session.role) >= 1
 
   const db = getDb()
 
@@ -46,7 +49,7 @@ export default async function ConfiguracionPage() {
   // Un COUNT agrupado en SQL, no una query por lista trayendo TODOS los ids para contarlos
   // en JS (con miles de ítems eso traía miles de filas solo para mostrar un número).
   const listIds = lists.map((l) => l.id)
-  const [counts, [tenant]] = await Promise.all([
+  const [counts, [tenant], medios, opciones] = await Promise.all([
     listIds.length
       ? db
           .select({ priceListId: catalogItems.priceListId, count: count() })
@@ -63,6 +66,8 @@ export default async function ConfiguracionPage() {
       })
       .from(tenants)
       .where(eq(tenants.id, session.tenantId)),
+    isAdminPlus ? listarMedios(session.tenantId) : Promise.resolve([]),
+    isAdminPlus ? listarOpciones(session.tenantId) : Promise.resolve([]),
   ])
   const countMap = Object.fromEntries(counts.map((c) => [c.priceListId, c.count]))
 
@@ -86,16 +91,21 @@ export default async function ConfiguracionPage() {
       <div className="mb-6 pl-10 md:pl-0">
         <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>Configuración</h1>
         <p className="text-sm mt-0.5" style={{ color: "var(--ink-soft)" }}>
-          {isSuperadmin ? "Catálogo, horarios y datos del negocio para el agente" : "Horarios del negocio para el agente"}
+          {isSuperadmin
+            ? "Catálogo, horarios, cuotas y datos del negocio"
+            : "Horarios del negocio, comprobantes y cuotas del Shop"}
         </p>
       </div>
       <ConfiguracionShell
         showCatalog={isSuperadmin}
-        showReceipts={roleRank(session.role) >= 1}
+        showReceipts={isAdminPlus}
+        showCuotas={isAdminPlus}
         initialLists={initialLists}
         initialPaymentConditions={initialPaymentConditions}
         initialSchedule={initialSchedule}
         initialReceiptsEmail={tenant?.receiptsEmail ?? ""}
+        initialMedios={medios.map(toMedioDto)}
+        initialOpciones={opciones.map(toOpcionDto)}
       />
     </div>
   )
