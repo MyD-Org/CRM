@@ -55,7 +55,8 @@ actualizalos también allá.
 | `INTERNAL_SECRET` | Compartido con ai-api. **No** dárselo al Shop: también abre `/api/agent/*` |
 | `SHOP_CRM_SECRET` | Llave propia Shop↔CRM, mismo valor en el proyecto del Shop. Protege GET `/api/internal/shop/cuotas` y la manda el ping de cuotas. Sin la var el endpoint rechaza todo y el ping es no-op |
 | `STAFF_TOKEN_SECRET` | Compartido con ai-api |
-| `SHOP_INTERNAL_URL` | Opcional. Base URL del Shop del mismo entorno (ej. `https://dev.centralled.com.ar`). Al guardar Medios de pago / Cuotas el CRM hace `POST {SHOP_INTERNAL_URL}/api/internal/cuotas/revalidar`; sin la var el ping es no-op y el Shop toma los cambios en su próximo cron. Contrato: `platform/contracts/cuotas/v1`. |
+| `SHOP_INTERNAL_URL` | Opcional. Base URL del Shop del mismo entorno (ej. `https://dev.centralled.com.ar`). Al guardar Medios de pago / Cuotas el CRM hace `POST {SHOP_INTERNAL_URL}/api/internal/cuotas/revalidar`; sin la var el ping es no-op y el Shop toma los cambios en su próximo cron. Contrato: `platform/contracts/cuotas/v2`. |
+| `MP_PUBLIC_KEY` | Opcional. Public key de Mercado Pago **del mismo entorno que el Shop** (TEST en Preview/dev, productiva en Production). Sólo se usa para mostrar en Configuración → Medios de pago / Cuotas las tasas reales por cantidad de cuotas (`GET api.mercadopago.com/v1/payment_methods/installments`, caché 1 h). Es pública (no es secreto). Sin la var el panel de tasas muestra un aviso; si Mercado Pago falla, la página carga igual. |
 | `RESEND_API_KEY` | Envío de emails (el `RESEND_FROM` debe ser un dominio verificado en Resend) |
 | `ADMIN_EMAIL` | Login del backoffice |
 | `ADMIN_PASSWORD` | Login del backoffice — usar una contraseña fuerte en prod |
@@ -167,3 +168,21 @@ del merge no rompe nada.
   código viejo no la toca).
 - **Apagar la feature sin revertir**: quitar las env vars `R2_*` y redeployar — el portal
   deja de mostrar el botón y las rutas responden 503; el resto no cambia.
+
+## Cuotas por proveedor (v2)
+
+Configuración → Medios de pago / Cuotas pasa a configurarse por proveedor (Mercado Pago) con
+escalones `{ monto mínimo, hasta N cuotas }`. Contrato con el Shop: `platform/contracts/cuotas/v2`
+(el GET `/api/internal/shop/cuotas` deja de servir v1: **deployar junto con el Shop que lee v2**).
+
+### Orden de la entrega (IMPORTANTE)
+1. **Antes de mergear**: aplicar `drizzle/0026_cuotas_por_proveedor.sql` en cada base
+   (`DATABASE_URL=… npm run db:migrate`). Relaja el CHECK de cuotas a 1..24 y crea
+   `payment_config_versions`; sin la tabla, guardar cuotas da 500. Es compatible con el código
+   anterior.
+2. Cargar `MP_PUBLIC_KEY` (opcional) en Production y Preview.
+3. Mergear junto con el PR del Shop. Los medios v1 por marca (visa, master) quedan en la tabla
+   pero se ignoran: hay que agregar el proveedor Mercado Pago y cargar los escalones de nuevo.
+
+### Rollback
+- Revertir el PR (y el del Shop). La migración `0026` no se revierte.

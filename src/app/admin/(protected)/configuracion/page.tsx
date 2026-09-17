@@ -8,14 +8,16 @@ import { adminSessionOptions, type AdminSessionData } from "@/lib/admin-session"
 import { ConfiguracionShell } from "@/components/admin/ConfiguracionShell"
 import { normalizeSchedule, normalizeExceptions } from "@/lib/schedule"
 import { roleRank } from "@/lib/roles"
-import { listarMedios, listarOpciones, toMedioDto, toOpcionDto } from "@/lib/cuotas-repo"
+import { listarEscalones, listarProveedores, toEscalonDto, toProveedorDto } from "@/lib/cuotas-repo"
+import { obtenerTasasMercadoPago, type TasasMP } from "@/lib/mp-tasas"
 
 export const dynamic = "force-dynamic"
 
 // Página accesible a admin y superadmin. Los tabs se filtran adentro:
 // - Horarios → admin+superadmin.
 // - Catálogo → superadmin-only (es data de plataforma, ver src/lib/roles.ts).
-// - Medios de pago / Cuotas → admin+superadmin.
+// - Medios de pago / Cuotas → admin+superadmin. Las tasas de Mercado Pago (MP_PUBLIC_KEY) se
+//   consultan acá con caché de 1 h; si MP falla la página carga igual con un aviso.
 export default async function ConfiguracionPage() {
   const session = await getIronSession<AdminSessionData>(await cookies(), adminSessionOptions)
   if (roleRank(session.role) < 1) notFound()
@@ -49,7 +51,7 @@ export default async function ConfiguracionPage() {
   // Un COUNT agrupado en SQL, no una query por lista trayendo TODOS los ids para contarlos
   // en JS (con miles de ítems eso traía miles de filas solo para mostrar un número).
   const listIds = lists.map((l) => l.id)
-  const [counts, [tenant], medios, opciones] = await Promise.all([
+  const [counts, [tenant], proveedores, escalones, tasasMP] = await Promise.all([
     listIds.length
       ? db
           .select({ priceListId: catalogItems.priceListId, count: count() })
@@ -66,8 +68,11 @@ export default async function ConfiguracionPage() {
       })
       .from(tenants)
       .where(eq(tenants.id, session.tenantId)),
-    isAdminPlus ? listarMedios(session.tenantId) : Promise.resolve([]),
-    isAdminPlus ? listarOpciones(session.tenantId) : Promise.resolve([]),
+    isAdminPlus ? listarProveedores(session.tenantId) : Promise.resolve([]),
+    isAdminPlus ? listarEscalones(session.tenantId) : Promise.resolve([]),
+    isAdminPlus
+      ? obtenerTasasMercadoPago({ publicKey: process.env.MP_PUBLIC_KEY }).catch((): TasasMP => ({ estado: "error" }))
+      : Promise.resolve<TasasMP>({ estado: "sin_clave" }),
   ])
   const countMap = Object.fromEntries(counts.map((c) => [c.priceListId, c.count]))
 
@@ -104,8 +109,9 @@ export default async function ConfiguracionPage() {
         initialPaymentConditions={initialPaymentConditions}
         initialSchedule={initialSchedule}
         initialReceiptsEmail={tenant?.receiptsEmail ?? ""}
-        initialMedios={medios.map(toMedioDto)}
-        initialOpciones={opciones.map(toOpcionDto)}
+        initialProveedores={proveedores.map(toProveedorDto)}
+        initialEscalones={escalones.map(toEscalonDto)}
+        tasasMP={tasasMP}
       />
     </div>
   )

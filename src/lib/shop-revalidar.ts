@@ -1,4 +1,4 @@
-// Ping al Shop para que vuelva a leer la config de cuotas (contrato platform/contracts/cuotas/v1,
+// Ping al Shop para que vuelva a leer la config de cuotas (contrato platform/contracts/cuotas/v2,
 // punto 2). SIN payload: el Shop re-hace el GET /api/internal/shop/cuotas, así un ping no puede
 // inyectar configuración.
 //

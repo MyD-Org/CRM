@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { Card, Tabs } from "@myd-org/ui"
-import type { MedioDto, OpcionDto } from "@/lib/cuotas-repo"
+import type { EscalonDto, ProveedorDto } from "@/lib/cuotas-repo"
+import type { TasasMP } from "@/lib/mp-tasas"
 import { CatalogManager } from "./CatalogManager"
 import { CuotasTab } from "./CuotasTab"
 import { ReceiptsEmailForm } from "./ReceiptsEmailForm"
@@ -36,8 +37,9 @@ interface Props {
   initialPaymentConditions: PaymentCondition[]
   initialSchedule: Schedule
   initialReceiptsEmail: string
-  initialMedios: MedioDto[]
-  initialOpciones: OpcionDto[]
+  initialProveedores: ProveedorDto[]
+  initialEscalones: EscalonDto[]
+  tasasMP: TasasMP
 }
 
 type Tab = "catalogo" | "comprobantes" | "cuotas" | "horarios"
@@ -50,8 +52,9 @@ export function ConfiguracionShell({
   initialPaymentConditions,
   initialSchedule,
   initialReceiptsEmail,
-  initialMedios,
-  initialOpciones,
+  initialProveedores,
+  initialEscalones,
+  tasasMP,
 }: Props) {
   const [tab, setTab] = useState<Tab>(showCatalog ? "catalogo" : "horarios")
 
@@ -77,7 +80,7 @@ export function ConfiguracionShell({
           <ReceiptsEmailForm initialReceiptsEmail={initialReceiptsEmail} />
         </Card>
       )}
-      {tab === "cuotas" && showCuotas && <CuotasTab initialMedios={initialMedios} initialOpciones={initialOpciones} />}
+      {tab === "cuotas" && showCuotas && <CuotasTab initialProveedores={initialProveedores} initialEscalones={initialEscalones} tasasMP={tasasMP} />}
       {tab === "horarios" && <ScheduleForm initialSchedule={initialSchedule} />}
     </div>
   )

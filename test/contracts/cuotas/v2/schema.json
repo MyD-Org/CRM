@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MyD-Org/platform/contracts/cuotas/v2/schema.json",
+  "title": "ContratoCuotasV2",
+  "description": "Respuesta 200 de GET {CRM}/api/internal/shop/cuotas?tenant=… — por proveedor de pago, escalones { cuotasMax, montoMinimo } que aplican a todas las tarjetas de crédito. Sólo viajan proveedores activos y escalones activos. Las tasas y el sin interés NO viajan: los informa el proveedor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "tenant", "actualizadoEn", "proveedores"],
+  "properties": {
+    "version": { "const": "v2" },
+    "tenant": { "type": "string", "minLength": 1 },
+    "actualizadoEn": {
+      "description": "ISO 8601 (UTC). Última modificación de la configuración de cuotas del tenant (proveedores, escalones o borrados); si nunca hubo cambios, el momento de la respuesta.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "proveedores": {
+      "description": "Ordenados por `orden` ascendente.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Proveedor" }
+    }
+  },
+  "$defs": {
+    "Proveedor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "proveedor", "nombre", "activo", "orden", "escalones"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "proveedor": { "description": "Identificador del proveedor. Hoy sólo \"mercadopago\".", "type": "string", "minLength": 1 },
+        "nombre": { "description": "Nombre para mostrar, ej. \"Mercado Pago\".", "type": "string", "minLength": 1 },
+        "activo": { "description": "Siempre true (sólo viajan activos).", "type": "boolean" },
+        "orden": { "type": "integer", "minimum": 0 },
+        "escalones": {
+          "description": "Sólo activos, ordenados por `montoMinimo` ascendente. Sin dos escalones con el mismo `montoMinimo`.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Escalon" }
+        }
+      }
+    },
+    "Escalon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cuotasMax", "montoMinimo"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "cuotasMax": { "description": "Máximo de cuotas habilitado desde `montoMinimo`.", "type": "integer", "minimum": 1, "maximum": 24 },
+        "montoMinimo": { "description": "ARS con IVA, hasta 2 decimales. 0 = cualquier monto.", "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}
