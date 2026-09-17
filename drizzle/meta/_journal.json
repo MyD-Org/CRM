@@ -176,6 +176,13 @@
       "when": 1789346536472,
       "tag": "0024_payment_receipts_alegra",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789617600000,
+      "tag": "0025_cuotas_configurables",
+      "breakpoints": true
     }
   ]
 }

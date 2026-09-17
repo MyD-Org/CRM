@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "tenant": "central-led",
+  "actualizadoEn": "2026-09-16T20:00:00.000Z",
+  "medios": [
+    { "id": "7b1f0c7e-0000-4000-8000-000000000001", "proveedor": "mercadopago", "codigo": "visa", "nombre": "Visa", "activo": true, "orden": 0 },
+    { "id": "7b1f0c7e-0000-4000-8000-000000000002", "proveedor": "mercadopago", "codigo": "master", "nombre": "Mastercard", "activo": true, "orden": 1 }
+  ],
+  "opciones": [
+    { "id": "9c2e1d8f-0000-4000-8000-000000000001", "medioId": "7b1f0c7e-0000-4000-8000-000000000001", "cuotas": 3, "sinInteres": true, "montoMinimo": 0, "vigenteDesde": null, "vigenteHasta": null, "activo": true },
+    { "id": "9c2e1d8f-0000-4000-8000-000000000002", "medioId": "7b1f0c7e-0000-4000-8000-000000000001", "cuotas": 6, "sinInteres": true, "montoMinimo": 150000, "vigenteDesde": "2026-09-01", "vigenteHasta": "2026-09-30", "activo": true },
+    { "id": "9c2e1d8f-0000-4000-8000-000000000003", "medioId": "7b1f0c7e-0000-4000-8000-000000000002", "cuotas": 12, "sinInteres": false, "montoMinimo": 50000.5, "vigenteDesde": null, "vigenteHasta": null, "activo": true }
+  ]
+}
