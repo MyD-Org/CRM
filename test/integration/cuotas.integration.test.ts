@@ -82,7 +82,7 @@ describe("cuotas: rutas admin e interna", () => {
     invalidateTenantRegistry()
     vi.stubGlobal("fetch", fetchMock)
     vi.stubEnv("SHOP_INTERNAL_URL", "")
-    vi.stubEnv("INTERNAL_SECRET", SECRET)
+    vi.stubEnv("SHOP_CRM_SECRET", SECRET)
     vi.spyOn(console, "warn").mockImplementation(() => {})
     login(adminA)
   })
@@ -267,6 +267,11 @@ describe("cuotas: rutas admin e interna", () => {
     it("401 sin secreto o con secreto incorrecto", async () => {
       expect((await interno.GET(internoReq(`?tenant=${TENANT_A}`, null))).status).toBe(401)
       expect((await interno.GET(internoReq(`?tenant=${TENANT_A}`, "Bearer otro"))).status).toBe(401)
+    })
+
+    it("401 con INTERNAL_SECRET: la llave de ai-api no abre el endpoint del Shop", async () => {
+      vi.stubEnv("INTERNAL_SECRET", "llave-de-ai-api")
+      expect((await interno.GET(internoReq(`?tenant=${TENANT_A}`, "Bearer llave-de-ai-api"))).status).toBe(401)
     })
 
     it("400 sin tenant; 404 tenant inexistente (busca por tenants.id, no aiTenantId)", async () => {

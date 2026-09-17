@@ -4,13 +4,13 @@
 //
 // Se llama DESPUÉS de persistir y NUNCA tira: si el Shop no responde, el guardado ya quedó y el
 // backoffice avisa "El Shop se actualizará en el próximo ciclo" (cron del Shop, ≤ 6 h).
-// Sin SHOP_INTERNAL_URL (ej. entornos sin Shop) es un no-op.
+// Sin SHOP_INTERNAL_URL o SHOP_CRM_SECRET (ej. entornos sin Shop) es un no-op.
 
 export const PING_TIMEOUT_MS = 5000
 
 export async function pingShopRevalidarCuotas(): Promise<{ propagado: boolean }> {
   const base = process.env.SHOP_INTERNAL_URL?.trim()
-  const secret = process.env.INTERNAL_SECRET
+  const secret = process.env.SHOP_CRM_SECRET
   if (!base || !secret) return { propagado: false }
 
   const url = `${base.replace(/\/+$/, "")}/api/internal/cuotas/revalidar`

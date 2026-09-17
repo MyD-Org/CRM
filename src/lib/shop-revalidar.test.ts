@@ -7,7 +7,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock)
   fetchMock.mockReset()
   vi.stubEnv("SHOP_INTERNAL_URL", "https://shop.test/")
-  vi.stubEnv("INTERNAL_SECRET", "s3cr3t")
+  vi.stubEnv("SHOP_CRM_SECRET", "s3cr3t")
   vi.spyOn(console, "warn").mockImplementation(() => {})
 })
 
@@ -62,8 +62,8 @@ describe("pingShopRevalidarCuotas", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("sin INTERNAL_SECRET → no-op (no manda un Bearer vacío)", async () => {
-    vi.stubEnv("INTERNAL_SECRET", "")
+  it("sin SHOP_CRM_SECRET → no-op (no manda un Bearer vacío)", async () => {
+    vi.stubEnv("SHOP_CRM_SECRET", "")
     await expect(pingShopRevalidarCuotas()).resolves.toEqual({ propagado: false })
     expect(fetchMock).not.toHaveBeenCalled()
   })
