@@ -4,6 +4,7 @@ import { getIronSession } from "iron-session"
 import { otpSessionOptions } from "@/lib/session"
 import { getTenantConfig } from "@/lib/tenant-context"
 import { getClienteByIdentifier } from "@/lib/erp"
+import { AlegraRateLimitError } from "@/lib/alegra"
 import { sendEmail, maskEmail } from "@/lib/email"
 import { buildOtpEmail } from "@/lib/otp-email"
 import type { OtpSessionData } from "@/types"
@@ -124,6 +125,15 @@ export async function POST(request: Request) {
       ...(isProd ? {} : { devCode: otp, delivered }),
     })
   } catch (err) {
+    // Alegra limita por requests/minuto. Es transitorio y no es culpa de quien escribió su
+    // CUIT: merece un mensaje que diga qué hacer, no un 500 genérico.
+    if (err instanceof AlegraRateLimitError) {
+      console.error("send-code: Alegra rate limit:", err.message)
+      return Response.json(
+        { error: "El sistema está con mucha demanda en este momento. Intente nuevamente en un minuto." },
+        { status: 503 },
+      )
+    }
     console.error("send-code error:", err)
     return Response.json({ error: "Error interno del servidor" }, { status: 500 })
   }

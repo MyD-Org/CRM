@@ -209,6 +209,40 @@ function authHeader(config: TenantConfig): string {
   return `Basic ${basic}`
 }
 
+/**
+ * Alegra contestó 429 (límite de requests por minuto) y los reintentos no alcanzaron.
+ *
+ * Tiene tipo propio para que quien llama pueda distinguir "el ERP nos está frenando"
+ * (transitorio, se reintenta más tarde) de un error real de datos, y contestarle al
+ * usuario algo mejor que "Error interno del servidor".
+ */
+export class AlegraRateLimitError extends Error {
+  readonly status = 429
+  constructor(path: string, detail: string) {
+    super(`Alegra rate limit (429) en ${path}${detail ? `: ${detail.slice(0, 300)}` : ""}`)
+    this.name = "AlegraRateLimitError"
+  }
+}
+
+// Alegra limita por requests/minuto y devuelve 429 sin avisar de antemano. Los listados
+// que paginan en paralelo (PAGE_CONCURRENCY) lo tocan fácil, y antes un solo 429 en
+// cualquier página tiraba toda la operación. Se reintenta esa request sola, con espera
+// creciente y respetando Retry-After si viene.
+const RATE_LIMIT_RETRIES = 3
+const RATE_LIMIT_BASE_DELAY_MS = 1000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Espera sugerida por el server (`Retry-After`, en segundos), acotada. */
+function retryAfterMs(res: Response, fallback: number): number {
+  const raw = res.headers.get("retry-after")
+  const secs = raw ? Number(raw) : NaN
+  if (Number.isFinite(secs) && secs > 0) return Math.min(secs * 1000, 10_000)
+  return fallback
+}
+
 async function alegraFetch(
   config: TenantConfig,
   path: string,
@@ -217,23 +251,36 @@ async function alegraFetch(
 ) {
   const url = new URL(`${ALEGRA_BASE}${path}`)
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  const res = await fetch(url.toString(), {
-    method: init?.method ?? "GET",
-    headers: {
-      Authorization: authHeader(config),
-      Accept: "application/json",
-      ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    // Alegra devuelve el motivo en el body (ej. validación de la cotización) — lo sumamos al error.
-    const detail = await res.text().catch(() => "")
-    throw new Error(`Alegra error ${res.status} en ${path}${detail ? `: ${detail.slice(0, 300)}` : ""}`)
+
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url.toString(), {
+      method: init?.method ?? "GET",
+      headers: {
+        Authorization: authHeader(config),
+        Accept: "application/json",
+        ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+      cache: "no-store",
+    })
+
+    if (res.status === 429) {
+      const detail = await res.text().catch(() => "")
+      if (attempt < RATE_LIMIT_RETRIES) {
+        await sleep(retryAfterMs(res, RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt))
+        continue
+      }
+      throw new AlegraRateLimitError(path, detail)
+    }
+
+    if (!res.ok) {
+      // Alegra devuelve el motivo en el body (ej. validación de la cotización) — lo sumamos al error.
+      const detail = await res.text().catch(() => "")
+      throw new Error(`Alegra error ${res.status} en ${path}${detail ? `: ${detail.slice(0, 300)}` : ""}`)
+    }
+    if (res.status === 204) return null
+    return res.json()
   }
-  if (res.status === 204) return null
-  return res.json()
 }
 
 // Pagina un endpoint de Alegra (start/limit) hasta agotar, mapeando cada fila a un tipo normalizado.
@@ -931,12 +978,28 @@ export async function findContactByIdentifier(
   const isDocumento = !isEmail && documento.length >= 6
 
   if (isEmail || isDocumento) {
-    const contacts = await listAllContacts(config)
-    const match = contacts.find((c) =>
+    const esExacto = (c: AlegraContact) =>
       isEmail
         ? (c.email ?? "").trim().toLowerCase() === email
-        : normalizeIdentification(c.identification) === documento,
-    )
+        : normalizeIdentification(c.identification) === documento
+
+    // Primero la búsqueda del propio Alegra (UNA request): su `query` matchea también
+    // email e identificación, no solo el nombre. El resultado NO se toma como bueno por
+    // venir en la lista — se le exige el mismo match exacto que al escaneo completo, así
+    // que un parcial no deja entrar a la cuenta equivocada.
+    // El escaneo de abajo baja ~6000 contactos de a 30 (cientos de requests en ráfaga) y es
+    // lo que hacía que Alegra devolviera 429 y el portal contestara "Error interno del
+    // servidor" en el login. Queda como fallback por si `query` no cubre algún caso.
+    const candidatos = await searchContacts(config, trimmed, PAGE_SIZE).catch((err) => {
+      // Si el 429 ya apareció acá, el escaneo completo solo empeora las cosas.
+      if (err instanceof AlegraRateLimitError) throw err
+      return [] as AlegraContact[]
+    })
+    const directo = candidatos.find(esExacto)
+    if (directo) return directo
+
+    const contacts = await listAllContacts(config)
+    const match = contacts.find(esExacto)
     if (match) return match
     // Sin match exacto no se intenta por nombre: un email nunca es el nombre de una
     // empresa, y un match parcial acá deja entrar a la cuenta equivocada.
